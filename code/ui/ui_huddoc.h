@@ -19,8 +19,8 @@ along with ioquakelive; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-#ifndef CG_HUDDOC_H
-#define CG_HUDDOC_H
+#ifndef UI_HUDDOC_H
+#define UI_HUDDOC_H
 
 #include "../qcommon/q_shared.h"
 

@@ -382,6 +382,8 @@ static const char* ST_TabAction(int tab) {
             return "Apply video settings";
         case ST_TAB_SOUND:
             return "Apply sound settings";
+        case ST_TAB_HUD:
+            return st.fromIngame ? NULL : "Edit HUD";
         default:
             return NULL;
     }
@@ -398,6 +400,15 @@ static void ST_DoTabAction(int tab) {
             break;
         case ST_TAB_SOUND:
             trap_Cmd_ExecuteText(EXEC_APPEND, "snd_restart\n");
+            break;
+        case ST_TAB_HUD:
+            if (!st.fromIngame) {
+                if (st.edit >= 0) {
+                    ST_Set(st.edit, st.values[st.edit]);
+                    st.edit = -1;
+                }
+                UI_HudEditor_Start();
+            }
             break;
         default:
             break;
@@ -1568,18 +1579,27 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
     }
 }
 
-static void ST_DrawAction(float y, const smRect_t* clip) {
+static qboolean ST_ActionOnTop(int tab) {
+    return tab == ST_TAB_HUD;
+}
+
+static void ST_DrawAction(float y, float sectionTop, const smRect_t* clip) {
     const char* action = ST_TabAction(st.tab);
-    float bw;
+    float bw, x;
 
     if (!action) {
         return;
     }
     bw = SM_WebButtonWidth(action);
-    SM_WebButton(st.left + STR_SECTION_PAD + SM_Len(15.0f), y + SM_Len(15.0f), bw, action, qfalse,
-                 SM_Over(ST_HIT_ACTION, 0), clip);
-    SM_Hit(st.left + STR_SECTION_PAD + SM_Len(15.0f), y + SM_Len(15.0f), bw, SM_WEB_BUTTON_H, ST_HIT_ACTION, 0,
-           clip);
+    if (ST_ActionOnTop(st.tab)) {
+        x = st.left + HM_CONTAINER_W - STR_BAR - STR_SECTION_PAD - SM_Len(15.0f) - bw;
+        y = sectionTop + STR_SECTION_PAD;
+    } else {
+        x = st.left + STR_SECTION_PAD + SM_Len(15.0f);
+        y += SM_Len(15.0f);
+    }
+    SM_WebButton(x, y, bw, action, qfalse, SM_Over(ST_HIT_ACTION, 0), clip);
+    SM_Hit(x, y, bw, SM_WEB_BUTTON_H, ST_HIT_ACTION, 0, clip);
 }
 
 static void ST_DrawPage(void) {
@@ -1602,7 +1622,8 @@ static void ST_DrawPage(void) {
     st.view = bottom - frameTop;
     ST_Layout();
     st.listTop = frameTop + STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + STR_SECTION_PAD;
-    sectionH = st.listBottom + 2 * STR_SECTION_PAD + (ST_TabAction(st.tab) ? 2 * SM_Len(15.0f) + SM_WEB_BUTTON_H : 0);
+    sectionH = st.listBottom + 2 * STR_SECTION_PAD +
+               (ST_TabAction(st.tab) && !ST_ActionOnTop(st.tab) ? 2 * SM_Len(15.0f) + SM_WEB_BUTTON_H : 0);
     st.content = STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + sectionH;
     st.scroll[st.tab] = ST_ClampScroll(st.scroll[st.tab]);
 
@@ -1624,7 +1645,7 @@ static void ST_DrawPage(void) {
         }
         ST_DrawRow(i, ry, &clip);
     }
-    ST_DrawAction(st.listTop + st.listBottom - st.scroll[st.tab], &clip);
+    ST_DrawAction(st.listTop + st.listBottom - st.scroll[st.tab], sectionTop, &clip);
 
     if (st.tab == ST_TAB_TEAM) {
         int k;

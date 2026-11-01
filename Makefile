@@ -1918,7 +1918,7 @@ Q3CGOBJ_ = \
   $(B)/$(BASEGAME)/cgame/bg_slidemove.o \
   $(B)/$(BASEGAME)/cgame/cg_consolecmds.o \
   $(B)/$(BASEGAME)/cgame/cg_newdraw.o \
-  $(B)/$(BASEGAME)/cgame/cg_huddoc.o \
+  $(B)/$(BASEGAME)/ui/ui_huddoc.o \
   $(B)/$(BASEGAME)/cgame/cg_hudedit.o \
   $(B)/$(BASEGAME)/cgame/cg_draw.o \
   $(B)/$(BASEGAME)/cgame/cg_drawtools.o \
@@ -2020,6 +2020,9 @@ Q3UIOBJ_ = \
   $(B)/$(BASEGAME)/ui/ui_stats.o \
   $(B)/$(BASEGAME)/ui/ui_matches.o \
   $(B)/$(BASEGAME)/ui/ui_legal.o \
+  $(B)/$(BASEGAME)/ui/ui_huddoc.o \
+  $(B)/$(BASEGAME)/ui/ui_hudview.o \
+  $(B)/$(BASEGAME)/ui/ui_hudeditor.o \
   $(B)/$(BASEGAME)/ui/ui_settings.o \
   $(B)/$(BASEGAME)/ui/ui_startmatch.o \
   $(B)/$(BASEGAME)/ui/ui_players.o \

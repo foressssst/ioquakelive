@@ -1,0 +1,1636 @@
+/*
+===========================================================================
+Copyright (C) 1999-2005 Id Software, Inc.
+
+This file is part of Quake III Arena source code.
+
+Quake III Arena source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License,
+or (at your option) any later version.
+
+Quake III Arena source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Quake III Arena source code; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+===========================================================================
+*/
+#include "ui_hudview.h"
+
+void Item_Paint(itemDef_t* item);
+
+hvScene_t hvScene = {GT_CA, TEAM_RED, qfalse, qfalse};
+
+static menuDef_t hvMenu[HV_MAX_MENUS];
+static int hvCount;
+static qboolean hvLoaded;
+static uiMemMark_t hvMark;
+static int hvEnd;
+static displayContextDef_t hvDC;
+static cachedAssets_t hvAssets;
+static float hvX, hvY, hvW = 640.0f, hvH = 480.0f;
+static int hvAnchor;
+static displayContextDef_t* hvSaved;
+
+#define HV_MAX_BOUNDS 1024
+
+static struct {
+    const itemDef_t* item;
+    float b[4];
+} hvBounds[HV_MAX_BOUNDS];
+static int hvNumBounds;
+static int hvCur = -1;
+
+static void HV_Extend(float x, float y, float w, float h) {
+    float* b;
+
+    if (hvCur < 0 || w <= 0.0f || h <= 0.0f) {
+        return;
+    }
+    b = hvBounds[hvCur].b;
+    if (b[2] <= b[0]) {
+        b[0] = x;
+        b[1] = y;
+        b[2] = x + w;
+        b[3] = y + h;
+        return;
+    }
+    if (x < b[0]) {
+        b[0] = x;
+    }
+    if (y < b[1]) {
+        b[1] = y;
+    }
+    if (x + w > b[2]) {
+        b[2] = x + w;
+    }
+    if (y + h > b[3]) {
+        b[3] = y + h;
+    }
+}
+
+static void HV_TrackBegin(int ownerDraw, float y, float w, float h) {
+    int m, i;
+
+    hvCur = -1;
+    if (hvNumBounds >= HV_MAX_BOUNDS) {
+        return;
+    }
+    for (m = 0; m < hvCount; m++) {
+        for (i = 0; i < hvMenu[m].itemCount; i++) {
+            const itemDef_t* it = hvMenu[m].items[i];
+
+            if (it->window.ownerDraw == ownerDraw && it->window.rect.y == y && it->window.rect.w == w &&
+                it->window.rect.h == h) {
+                int k;
+
+                for (k = 0; k < hvNumBounds; k++) {
+                    if (hvBounds[k].item == it) {
+                        hvCur = k;
+                        return;
+                    }
+                }
+                hvCur = hvNumBounds++;
+                hvBounds[hvCur].item = it;
+                hvBounds[hvCur].b[0] = hvBounds[hvCur].b[1] = hvBounds[hvCur].b[2] = hvBounds[hvCur].b[3] = 0.0f;
+                return;
+            }
+        }
+    }
+}
+
+static qboolean HV_PaintedRect(const itemDef_t* item, float* out) {
+    int k;
+
+    for (k = 0; k < hvNumBounds; k++) {
+        if (hvBounds[k].item == item && hvBounds[k].b[2] > hvBounds[k].b[0]) {
+            out[0] = hvBounds[k].b[0];
+            out[1] = hvBounds[k].b[1];
+            out[2] = hvBounds[k].b[2] - hvBounds[k].b[0];
+            out[3] = hvBounds[k].b[3] - hvBounds[k].b[1];
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+static const vec3_t hvTeamFree = {1.0f, 0.8f, 0.2f};
+static const vec3_t hvTeamRed = {1.0f, 0.2f, 0.1f};
+static const vec3_t hvTeamBlue = {0.2f, 0.4f, 1.0f};
+
+static int HV_ArmorType(void) {
+    return 1;
+}
+
+static int HV_Health(void) {
+    return 125;
+}
+
+static int HV_Armor(void) {
+    return 100;
+}
+
+static int HV_Ammo(void) {
+    return 25;
+}
+
+static qboolean HV_TeamGame(void) {
+    return hvScene.gametype >= GT_TEAM ? qtrue : qfalse;
+}
+
+static qboolean HV_RoundGame(void) {
+    return hvScene.gametype == GT_CA || hvScene.gametype == GT_FREEZE || hvScene.gametype == GT_AD ||
+           hvScene.gametype == GT_RR;
+}
+
+static qboolean HV_FlagGame(void) {
+    return hvScene.gametype == GT_CTF || hvScene.gametype == GT_1FCTF || hvScene.gametype == GT_AD;
+}
+
+static int HV_Score(int which) {
+    switch (hvScene.gametype) {
+        case GT_TEAM:
+            return which ? 48 : 63;
+        case GT_CTF:
+        case GT_1FCTF:
+            return which ? 2 : 3;
+        case GT_CA:
+        case GT_FREEZE:
+        case GT_AD:
+        case GT_RR:
+            return which ? 5 : 7;
+        default:
+            return which ? 17 : 23;
+    }
+}
+
+static int HV_PlayerScore(void) {
+    return hvScene.gametype == GT_TEAM || hvScene.gametype >= GT_CA ? 17 : 23;
+}
+
+static const float* HV_TeamRGB(void) {
+    switch (hvScene.team) {
+        case TEAM_RED:
+            return hvTeamRed;
+        case TEAM_BLUE:
+            return hvTeamBlue;
+        default:
+            return hvTeamFree;
+    }
+}
+
+static float HV_Bias(void) {
+    float bias = (hvW - hvH * 4.0f / 3.0f) * 0.5f;
+
+    return bias > 0.5f ? bias : 0.0f;
+}
+
+static float HV_XScale(int anchor) {
+    if (anchor != WIDESCREEN_STRETCH && HV_Bias() > 0.0f) {
+        return hvH * 4.0f / 3.0f / 640.0f;
+    }
+    return hvW / 640.0f;
+}
+
+static float HV_XOffset(int anchor) {
+    float bias = HV_Bias();
+
+    if (bias <= 0.0f) {
+        return 0.0f;
+    }
+    if (anchor == WIDESCREEN_CENTER) {
+        return bias;
+    }
+    if (anchor == WIDESCREEN_RIGHT) {
+        return bias * 2.0f;
+    }
+    return 0.0f;
+}
+
+void HV_ToScreen(int anchor, float* x, float* y, float* w, float* h) {
+    float xs = HV_XScale(anchor);
+    float ys = hvH / 480.0f;
+
+    if (x) {
+        *x = hvX + HV_XOffset(anchor) + *x * xs;
+    }
+    if (y) {
+        *y = hvY + *y * ys;
+    }
+    if (w) {
+        *w *= xs;
+    }
+    if (h) {
+        *h *= ys;
+    }
+}
+
+void HV_FromScreen(int anchor, float* x, float* y) {
+    float xs = HV_XScale(anchor);
+    float ys = hvH / 480.0f;
+
+    if (x) {
+        *x = (*x - hvX - HV_XOffset(anchor)) / xs;
+    }
+    if (y) {
+        *y = (*y - hvY) / ys;
+    }
+}
+
+float HV_UnitsPerPixel(int anchor) {
+    return 1.0f / HV_XScale(anchor);
+}
+
+void HV_SetCanvas(float x, float y, float w, float h) {
+    hvX = x;
+    hvY = y;
+    hvW = w > 1.0f ? w : 1.0f;
+    hvH = h > 1.0f ? h : 1.0f;
+}
+
+static void HV_DrawPic(float x, float y, float w, float h, qhandle_t asset) {
+    HV_ToScreen(hvAnchor, &x, &y, &w, &h);
+    HV_Extend(x, y, w, h);
+    trap_R_DrawStretchPic(x, y, w, h, 0, 0, 1, 1, asset);
+}
+
+static void HV_DrawStretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2,
+                              qhandle_t shader) {
+    float sx = hvW / (float)uiInfo.uiDC.glconfig.vidWidth;
+    float sy = hvH / (float)uiInfo.uiDC.glconfig.vidHeight;
+
+    HV_Extend(hvX + x * sx, hvY + y * sy, w * sx, h * sy);
+    trap_R_DrawStretchPic(hvX + x * sx, hvY + y * sy, w * sx, h * sy, s1, t1, s2, t2, shader);
+}
+
+static void HV_FillRect(float x, float y, float w, float h, const vec4_t color) {
+    trap_R_SetColor(color);
+    HV_ToScreen(hvAnchor, &x, &y, &w, &h);
+    HV_Extend(x, y, w, h);
+    trap_R_DrawStretchPic(x, y, w, h, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+    trap_R_SetColor(NULL);
+}
+
+static void HV_DrawSides(float x, float y, float w, float h, float size) {
+    HV_ToScreen(hvAnchor, &x, &y, &w, &h);
+    size *= hvW / 640.0f;
+    trap_R_DrawStretchPic(x, y, size, h, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+    trap_R_DrawStretchPic(x + w - size, y, size, h, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+}
+
+static void HV_DrawTopBottom(float x, float y, float w, float h, float size) {
+    HV_ToScreen(hvAnchor, &x, &y, &w, &h);
+    size *= hvH / 480.0f;
+    trap_R_DrawStretchPic(x, y, w, size, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+    trap_R_DrawStretchPic(x, y + h - size, w, size, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+}
+
+static void HV_DrawRect(float x, float y, float w, float h, float size, const vec4_t color) {
+    trap_R_SetColor(color);
+    HV_DrawTopBottom(x, y, w, h, size);
+    HV_DrawSides(x, y + size, w, h - size * 2, size);
+    trap_R_SetColor(NULL);
+}
+
+static float HV_FontPx(float scale) {
+    return hvH / 768.0f * 96.0f * scale;
+}
+
+static int HV_Font(int fontIndex) {
+    return fontIndex >= 0 && fontIndex < 3 ? fontIndex : 0;
+}
+
+static void HV_PaintText(float x, float y, int font, float scale, const float* color, const char* text, int limit,
+                         int style) {
+    float sx = x, sy = y;
+    float size = HV_FontPx(scale);
+    int lim = limit > 0 ? limit : -1;
+
+    if (!text || !*text) {
+        return;
+    }
+    font = HV_Font(font);
+    HV_ToScreen(hvAnchor, &sx, &sy, NULL, NULL);
+    if (hvCur >= 0) {
+        float ext[5];
+
+        trap_R_Font_TextExtents(text, 0, font, size, lim, ext);
+        HV_Extend(sx + ext[0], sy + ext[1], ext[2] - ext[0], ext[3] - ext[1]);
+    }
+    if (style == ITEM_TEXTSTYLE_SHADOWED || style == ITEM_TEXTSTYLE_SHADOWEDMORE) {
+        float ofs = style == ITEM_TEXTSTYLE_SHADOWED ? 1.0f : 2.0f;
+        float shx = x + ofs, shy = y + ofs;
+        vec4_t shadow;
+
+        shadow[0] = shadow[1] = shadow[2] = 0.0f;
+        shadow[3] = color ? color[3] : 1.0f;
+        HV_ToScreen(hvAnchor, &shx, &shy, NULL, NULL);
+        trap_R_SetColor(shadow);
+        trap_R_Font_DrawString((int)shx, (int)shy, text, font, size, lim, NULL, TEXT_NORECOLOR);
+    }
+    trap_R_SetColor(color);
+    trap_R_Font_DrawString((int)sx, (int)sy, text, font, size, lim, NULL, 0);
+    trap_R_SetColor(NULL);
+}
+
+static void HV_Measure(const char* text, float scale, int font, int limit, float* w, float* h) {
+    float ext[5];
+    float xs = HV_XScale(hvAnchor);
+    float ys = hvH / 480.0f;
+
+    trap_R_Font_TextExtents(text, 0, HV_Font(font), HV_FontPx(scale), limit > 0 ? limit : -1, ext);
+    if (w) {
+        *w = (float)(int)((ext[2] - ext[0]) / xs);
+    }
+    if (h) {
+        *h = (float)(int)(ext[4] / ys);
+    }
+}
+
+static float HV_Width(const char* text, float scale, int font) {
+    float w = 0;
+
+    HV_Measure(text, scale, font, 0, &w, NULL);
+    return w;
+}
+
+static float HV_Height(const char* text, float scale, int font) {
+    float h = 0;
+
+    HV_Measure(text, scale, font, 0, NULL, &h);
+    return h;
+}
+
+static float HV_LineHeight(float scale, int font) {
+    float ext[5];
+    float ys = hvH / 480.0f;
+
+    trap_R_Font_TextExtents("Ag", 0, HV_Font(font), HV_FontPx(scale), -1, ext);
+    return (float)(int)((ext[4] + (ext[3] > 0.0f ? ext[3] : 0.0f)) / ys);
+}
+
+static float HV_CapHeight(float scale, int font) {
+    float ext[5];
+    float ys = hvH / 480.0f;
+
+    trap_R_Font_TextExtents("H", 0, HV_Font(font), HV_FontPx(scale), -1, ext);
+    return ext[1] < 0.0f ? -ext[1] / ys : 0.0f;
+}
+
+static void HV_DrawText_DC(float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit,
+                           int style, int fontIndex) {
+    (void)adjust;
+    HV_PaintText(x, y, fontIndex, scale, color, text, limit, style);
+}
+
+static float HV_TextWidth_DC(const char* text, float scale, int limit, int fontIndex) {
+    float w = 0;
+
+    HV_Measure(text, scale, fontIndex, limit, &w, NULL);
+    return w;
+}
+
+static float HV_TextHeight_DC(const char* text, float scale, int limit, int fontIndex) {
+    float h = 0;
+
+    HV_Measure(text, scale, fontIndex, limit, NULL, &h);
+    return h;
+}
+
+static void HV_DrawTextWithCursor_DC(float x, float y, float scale, vec4_t color, const char* text, int cursorPos,
+                                     char cursor, int limit, int style, int fontIndex) {
+    (void)cursorPos;
+    (void)cursor;
+    HV_PaintText(x, y, fontIndex, scale, color, text, limit, style);
+}
+
+static float HV_AlignX(const rectDef_t* r, const char* s, float scale, int font, int align) {
+    float x = r->x;
+
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= HV_Width(s, scale, font) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= HV_Width(s, scale, font);
+    }
+    return x;
+}
+
+static void HV_Pic(float x, float y, float w, float h, const char* shader, const float* color) {
+    trap_R_SetColor(color);
+    HV_DrawPic(x, y, w, h, trap_R_RegisterShaderNoMip(shader));
+    trap_R_SetColor(NULL);
+}
+
+static void HV_Value(const rectDef_t* r, const char* s, float scale, const float* color, qhandle_t shader, int style,
+                     int align, int font) {
+    float x;
+
+    if (shader) {
+        trap_R_SetColor(color);
+        HV_DrawPic(r->x, r->y, r->w, r->h, shader);
+        trap_R_SetColor(NULL);
+        return;
+    }
+    x = HV_AlignX(r, s, scale, font, align);
+    HV_PaintText(x, r->y + HV_Height(s, scale, font), font, scale, color, s, 0, style);
+}
+
+static void HV_Line(const rectDef_t* r, const char* s, float scale, const float* color, int style, int align,
+                    int font) {
+    HV_PaintText(HV_AlignX(r, s, scale, font, align), r->y, font, scale, color, s, 0, style);
+}
+
+static void HV_PlaceScore(const rectDef_t* r, int which, float scale, const float* color, int style) {
+    int s1 = HV_Score(0), s2 = HV_Score(1);
+    const char* num;
+
+    if (!HV_TeamGame() || hvScene.gametype == GT_RR) {
+        const char* place = which ? "2. " : "1. ";
+        const char* score = va(" %d", which ? s2 : s1);
+        float x = r->x + HV_Width(place, scale, 0);
+        float right = r->x + r->w - HV_Width(score, scale, 0);
+
+        HV_PaintText(r->x, r->y, 0, scale, color, place, 0, style);
+        HV_PaintText(x, r->y, 0, scale, color, which ? "Sarge" : "Visor", 0, style);
+        HV_PaintText(right, r->y, 0, scale, color, score, 0, style);
+        return;
+    }
+    if ((which == 0) == (s1 >= s2)) {
+        HV_PaintText(r->x, r->y, 0, scale, color, "      Red Team^7", 0, style);
+        num = va("%d", s1);
+    } else {
+        HV_PaintText(r->x, r->y, 0, scale, color, "      Blue Team^7", 0, style);
+        num = va("%d", s2);
+    }
+    HV_PaintText(r->x + r->w - HV_Width(num, scale, 0), r->y, 0, scale, color, num, 0, style);
+}
+
+static void HV_Tinted(const rectDef_t* r, const float* rgb, const float* color, qhandle_t shader) {
+    vec4_t c;
+
+    if (!shader) {
+        return;
+    }
+    VectorCopy(rgb, c);
+    c[3] = color[3];
+    trap_R_SetColor(c);
+    HV_DrawPic(r->x, r->y, r->w, r->h, shader);
+    trap_R_SetColor(NULL);
+}
+
+static void HV_Bar(const rectDef_t* r, qhandle_t shader, float frac) {
+    float x = r->x, y = r->y, w, h = r->h;
+    vec4_t c;
+
+    if (frac <= 0.0f || !shader) {
+        return;
+    }
+    if (frac > 1.0f) {
+        frac = 1.0f;
+    }
+    w = r->w * frac;
+    VectorCopy(HV_TeamRGB(), c);
+    c[3] = 1.0f;
+    trap_R_SetColor(c);
+    HV_ToScreen(hvAnchor, &x, &y, &w, &h);
+    trap_R_DrawStretchPic(x, y, w, h, 0, 0, frac, 1.0f, shader);
+    trap_R_SetColor(NULL);
+}
+
+static void HV_Obits(const rectDef_t* r, float scale) {
+    static const char* rows[3][3] = {
+        {"Visor", "icons/iconw_rocket", "Sarge"},
+        {"Anarki", "icons/iconw_railgun", "Klesk"},
+        {"Doom", "icons/iconw_lightning", "Major"},
+    };
+    static const vec3_t attackerRGB = {1.0f, 0.5f, 0.5f};
+    static const vec3_t victimRGB = {0.5f, 0.75f, 1.0f};
+    float asc, lineH, capH, bandH, pitch, iconSize, gapX, left, bandTop;
+    int i;
+
+    scale *= 0.85f;
+    asc = HV_Height("H", scale, 0);
+    lineH = HV_LineHeight(scale, 0);
+    capH = HV_CapHeight(scale, 0);
+    bandH = lineH + 5.0f;
+    pitch = lineH + 6.5f;
+    iconSize = asc * 1.3f;
+    gapX = asc * 0.7f;
+    left = (float)(int)r->x + 8.0f;
+    bandTop = (float)(int)r->y + 14.0f - asc - 2.5f;
+
+    for (i = 0; i < 3; i++) {
+        vec4_t band = {0.0f, 0.0f, 0.0f, 0.45f};
+        vec4_t c;
+        float baseline = bandTop + (bandH + capH) * 0.5f;
+        float attackerW = HV_Width(rows[i][0], scale, 0);
+        float victimW = HV_Width(rows[i][2], scale, 0);
+        float iconX = left + attackerW + gapX;
+
+        HV_FillRect(left - 4.5f, bandTop, attackerW + gapX + iconSize + gapX + victimW + 9.0f, bandH, band);
+        VectorCopy(attackerRGB, c);
+        c[3] = 1.0f;
+        HV_PaintText(left, baseline, 0, scale, c, rows[i][0], 0, 0);
+        HV_Pic(iconX, bandTop + (bandH - iconSize) * 0.5f, iconSize, iconSize, rows[i][1], NULL);
+        VectorCopy(victimRGB, c);
+        HV_PaintText(iconX + iconSize + gapX, baseline, 0, scale, c, rows[i][2], 0, 0);
+        bandTop += pitch;
+    }
+}
+
+static void HV_Chat(const rectDef_t* r, float scale) {
+    static const char* lines[3] = {"^7Anarki^7: rematch?", "^1Sarge^7: nice shot", "^7Visor^7: gg"};
+    float bottom = r->y + r->h;
+    int saved = hvAnchor;
+    int n;
+
+    if (scale < 0.1f) {
+        scale = 0.1f;
+    } else if (scale > 0.22f) {
+        scale = 0.22f;
+    }
+    hvAnchor = WIDESCREEN_LEFT;
+    for (n = 0; n < 3; n++) {
+        HV_PaintText(r->x, bottom - 13.0f * (2 - n), 0, scale, colorWhite, lines[n], 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    }
+    hvAnchor = saved;
+}
+
+static void HV_Powerups(const rectDef_t* r, int align, float special, float scale, const float* color) {
+    static const char* icons[2] = {"icons/quad", "icons/regen"};
+    static const int secs[2] = {12, 24};
+    rectDef_t r2 = *r;
+    float* inc = align == HUD_VERTICAL ? &r2.y : &r2.x;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        HV_Pic(r2.x, r2.y, r2.w * 0.75f, r2.h, icons[i], NULL);
+        HV_PaintText(r2.x + r2.w * 0.75f + 3, r2.y + r2.h, 0, scale, color, va("%i", secs[i]), 0, 0);
+        *inc += r2.w + special;
+    }
+}
+
+static void HV_LocalTime(const rectDef_t* r, int font, float scale, const float* color, int style, int align) {
+    static const char* months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    qtime_t ct;
+    const char* s;
+
+    trap_RealTime(&ct);
+    s = va("%02d:%02d (%s %02d, %d)", ct.tm_hour, ct.tm_min, months[ct.tm_mon], ct.tm_mday, ct.tm_year + 1900);
+    HV_Line(r, s, scale, color, style, align, font);
+}
+
+static const char* HV_GametypeName(void) {
+    switch (hvScene.gametype) {
+        case GT_FFA:
+            return "Free For All";
+        case GT_DUEL:
+            return "Duel";
+        case GT_RACE:
+            return "Race";
+        case GT_TEAM:
+            return "Team Deathmatch";
+        case GT_CA:
+            return "Clan Arena";
+        case GT_CTF:
+            return "Capture The Flag";
+        case GT_1FCTF:
+            return "One Flag CTF";
+        case GT_HARVESTER:
+            return "Harvester";
+        case GT_FREEZE:
+            return "Freeze Tag";
+        case GT_DOMINATION:
+            return "Domination";
+        case GT_AD:
+            return "Attack & Defend";
+        case GT_RR:
+            return "Red Rover";
+        default:
+            return "";
+    }
+}
+
+static const char* HV_GametypeIcon(void) {
+    switch (hvScene.gametype) {
+        case GT_FFA:
+            return "ui/assets/hud/ffa";
+        case GT_DUEL:
+            return "ui/assets/hud/duel";
+        case GT_RACE:
+            return "ui/assets/hud/race";
+        case GT_TEAM:
+            return "ui/assets/hud/tdm";
+        case GT_CA:
+            return "ui/assets/hud/ca";
+        case GT_CTF:
+            return "ui/assets/hud/ctf";
+        case GT_1FCTF:
+            return "ui/assets/hud/1f";
+        case GT_HARVESTER:
+            return "ui/assets/hud/har";
+        case GT_FREEZE:
+            return "ui/assets/hud/ft";
+        case GT_DOMINATION:
+            return "ui/assets/hud/dom";
+        case GT_AD:
+            return "ui/assets/hud/ad";
+        default:
+            return "ui/assets/hud/rr";
+    }
+}
+
+static void HV_OwnerDrawBody(rectDef_t* rp, int ownerDraw, int ownerDrawFlags, int align, float special, float scale,
+                             vec4_t color, qhandle_t shader, int textStyle, int font);
+
+static void HV_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw,
+                         int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader,
+                         int textStyle, int fontIndex) {
+    rectDef_t r;
+    int font = fontIndex;
+
+    (void)text_x;
+    (void)text_y;
+    r.x = x;
+    r.y = y;
+    r.w = w;
+    r.h = h;
+    HV_TrackBegin(ownerDraw, y, w, h);
+    HV_OwnerDrawBody(&r, ownerDraw, ownerDrawFlags, align, special, scale, color, shader, textStyle, font);
+    hvCur = -1;
+}
+
+static void HV_OwnerDrawBody(rectDef_t* rp, int ownerDraw, int ownerDrawFlags, int align, float special, float scale,
+                             vec4_t color, qhandle_t shader, int textStyle, int font) {
+    rectDef_t r = *rp;
+    char buf[64];
+
+    switch (ownerDraw) {
+        case CG_PLAYER_HEALTH:
+            HV_Value(&r, va("%i", HV_Health()), scale, color, shader, textStyle, align, font);
+            break;
+        case CG_PLAYER_ARMOR_VALUE:
+            HV_Value(&r, va("%i", HV_Armor()), scale, color, shader, textStyle, align, font);
+            break;
+        case CG_PLAYER_AMMO_VALUE:
+            HV_Value(&r, va("%i", HV_Ammo()), scale, color, shader, textStyle, align, font);
+            break;
+        case CG_PLAYER_ARMOR_ICON:
+        case CG_PLAYER_ARMOR_ICON2D:
+            HV_Pic(r.x, r.y + r.h / 2 + 1, r.w, r.h, "icons/iconr_yellow", NULL);
+            break;
+        case CG_PLAYER_AMMO_ICON:
+        case CG_PLAYER_AMMO_ICON2D:
+            HV_Pic(r.x, r.y, r.w, r.h, "icons/icona_rocket", NULL);
+            break;
+        case CG_PLAYER_ITEM:
+            HV_Pic(r.x, r.y, r.w, r.h, "icons/medkit", NULL);
+            break;
+        case CG_PLAYER_HEAD:
+            HV_Pic(r.x, r.y, r.w, r.h, "models/players/sarge/icon_default", NULL);
+            break;
+        case CG_PLAYER_SCORE:
+            HV_Line(&r, va("%i", HV_PlayerScore()), scale, color, textStyle, align, font);
+            break;
+        case CG_1STPLACE:
+            HV_Line(&r, va("1. Visor %i", HV_Score(0)), scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            break;
+        case CG_2NDPLACE:
+            HV_Line(&r, va("2. Sarge %i", HV_Score(1)), scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            break;
+        case CG_1ST_PLACE_SCORE:
+            HV_PlaceScore(&r, 0, scale, color, textStyle);
+            break;
+        case CG_2ND_PLACE_SCORE:
+            HV_PlaceScore(&r, 1, scale, color, textStyle);
+            break;
+        case CG_RED_SCORE:
+            HV_Line(&r, va("%i", HV_Score(0)), scale, color, textStyle, align, font);
+            break;
+        case CG_BLUE_SCORE:
+            HV_Line(&r, va("%i", HV_Score(1)), scale, color, textStyle, align, font);
+            break;
+        case CG_RED_NAME:
+            HV_Line(&r, "Red Team", scale, color, textStyle, align, 0);
+            break;
+        case CG_BLUE_NAME:
+            HV_Line(&r, "Blue Team", scale, color, textStyle, align, 0);
+            break;
+        case CG_LEVELTIMER:
+            HV_Line(&r, "4:27", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            break;
+        case CG_ROUNDTIMER:
+            if (HV_RoundGame()) {
+                HV_Line(&r, "1:12", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            }
+            break;
+        case CG_ROUND:
+            if (HV_RoundGame()) {
+                HV_Line(&r, "Round 7", scale, color, textStyle, ITEM_ALIGN_LEFT, font);
+            }
+            break;
+        case CG_CAPFRAGLIMIT:
+            HV_Line(&r, HV_RoundGame() ? "10" : HV_FlagGame() ? "8" : "50", scale, color, textStyle, align, 0);
+            break;
+        case CG_LOCALTIME:
+            HV_LocalTime(&r, font, scale, color, textStyle, align);
+            break;
+        case CG_MAP_NAME:
+            HV_Line(&r, "Campgrounds", scale, color, textStyle, ITEM_ALIGN_LEFT, font);
+            break;
+        case CG_GAME_TYPE:
+            HV_Line(&r, HV_GametypeName(), scale, color, textStyle, ITEM_ALIGN_LEFT, font);
+            break;
+        case CG_GAME_TYPE_ICON:
+            HV_Pic(r.x, r.y, r.w, r.h, HV_GametypeIcon(), NULL);
+            break;
+        case CG_PLAYER_COUNTS:
+            HV_Line(&r, "8 Players", scale, color, textStyle, ITEM_ALIGN_LEFT, font);
+            break;
+        case CG_RED_PLAYER_COUNT:
+        case CG_BLUE_PLAYER_COUNT:
+            HV_Line(&r, HV_TeamGame() ? "(4/4)" : "4 Players", scale, color, textStyle, align, 0);
+            break;
+        case CG_RED_AVG_PING:
+            HV_Line(&r, "32", scale, color, textStyle, align, font);
+            break;
+        case CG_BLUE_AVG_PING:
+            HV_Line(&r, "41", scale, color, textStyle, align, font);
+            break;
+        case CG_RED_CLAN_PLYRS:
+            if (HV_RoundGame()) {
+                HV_Line(&r, "4", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            }
+            break;
+        case CG_BLUE_CLAN_PLYRS:
+            if (HV_RoundGame()) {
+                HV_Line(&r, "3", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            }
+            break;
+        case CG_TEAM_PLYR_COUNT:
+            if (HV_RoundGame()) {
+                HV_Line(&r, hvScene.team == TEAM_BLUE ? "3" : "4", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            }
+            break;
+        case CG_ENEMY_PLYR_COUNT:
+            if (HV_RoundGame()) {
+                HV_Line(&r, hvScene.team == TEAM_BLUE ? "4" : "3", scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            }
+            break;
+        case CG_RED_TIMEOUT_COUNT:
+        case CG_BLUE_TIMEOUT_COUNT:
+            HV_Line(&r, "1", scale, color, textStyle, align, 0);
+            break;
+        case CG_TEAM_COLORIZED:
+            HV_Tinted(&r, HV_TeamRGB(), color, shader);
+            break;
+        case CG_ARMORTIERED_COLORIZED: {
+            vec3_t rgb;
+
+            rgb[0] = HV_ArmorType() == 0 ? 0.0f : 1.0f;
+            rgb[1] = HV_ArmorType() == 2 ? 0.0f : 1.0f;
+            rgb[2] = 0.0f;
+            HV_Tinted(&r, rgb, color, shader);
+            break;
+        }
+        case CG_HEALTH_COLORIZED:
+            HV_Tinted(&r, color, color, shader);
+            break;
+        case CG_TEAM_COLOR:
+        case CG_SELECTED_PLYR_TEAM_COLOR:
+            if (hvScene.team == TEAM_RED || hvScene.team == TEAM_BLUE) {
+                vec4_t c;
+
+                c[0] = hvScene.team == TEAM_RED ? 1.0f : 0.0f;
+                c[1] = 0.0f;
+                c[2] = hvScene.team == TEAM_BLUE ? 1.0f : 0.0f;
+                c[3] = ownerDraw == CG_TEAM_COLOR ? color[3] : 0.33f;
+                HV_Pic(r.x, r.y, r.w, r.h, "gfx/2d/colorbar", c);
+            }
+            break;
+        case CG_PLAYER_HEALTH_BAR_100:
+            HV_Bar(&r, shader, HV_Health() / 100.0f);
+            break;
+        case CG_PLAYER_HEALTH_BAR_200:
+            HV_Bar(&r, shader, (HV_Health() - 100) / 100.0f);
+            break;
+        case CG_PLAYER_ARMOR_BAR_100:
+            HV_Bar(&r, shader, HV_Armor() / 100.0f);
+            break;
+        case CG_PLAYER_ARMOR_BAR_200:
+            HV_Bar(&r, shader, (HV_Armor() - 100) / 100.0f);
+            break;
+        case CG_PLAYER_OBIT:
+            HV_Obits(&r, scale);
+            break;
+        case CG_AREA_NEW_CHAT:
+            HV_Chat(&r, scale);
+            break;
+        case CG_AREA_POWERUP:
+            HV_Powerups(&r, align, special, scale, color);
+            break;
+        case CG_CTF_POWERUP:
+            if (HV_FlagGame()) {
+                HV_Pic(r.x, r.y, r.w, r.h, "icons/guard", NULL);
+            }
+            break;
+        case CG_PLAYER_HASFLAG:
+        case CG_PLAYER_HASFLAG2D:
+            if (HV_FlagGame() && hvScene.hasFlag) {
+                HV_Pic(r.x, r.y, r.w, r.h,
+                       hvScene.team == TEAM_BLUE ? "gfx/2d/flag_status/red_flag_taken.tga"
+                                                 : "gfx/2d/flag_status/blue_flag_taken.tga",
+                       NULL);
+            }
+            break;
+        case CG_RED_FLAGSTATUS:
+        case CG_RED_BASESTATUS:
+            if (hvScene.gametype == GT_CTF) {
+                HV_Pic(r.x, r.y, r.w, r.h, "gfx/2d/flag_status/red_flag_at_base.tga", colorWhite);
+            }
+            break;
+        case CG_BLUE_FLAGSTATUS:
+        case CG_BLUE_BASESTATUS:
+            if (hvScene.gametype == GT_CTF) {
+                HV_Pic(r.x, r.y, r.w, r.h, "gfx/2d/flag_status/blue_flag_taken.tga", colorWhite);
+            }
+            break;
+        case CG_ONEFLAG_STATUS:
+            if (hvScene.gametype == GT_1FCTF) {
+                HV_Pic(r.x, r.y, r.w, r.h, "gfx/2d/flag_status/flag_at_base.tga", colorWhite);
+            }
+            break;
+        case CG_SPECTATORS:
+            HV_PaintText(r.x, r.y + r.h - 3.0f, font, scale, color, "Spectators: Klesk Major", 0, 0);
+            break;
+        case CG_KILLER:
+            Com_sprintf(buf, sizeof(buf), "Fragged by %s", "Sarge");
+            HV_Line(&r, buf, scale, color, textStyle, align, 0);
+            break;
+        case CG_FOLLOW_PLAYER_NAME:
+        case CG_FOLLOW_PLAYER_NAME_EX:
+            HV_Line(&r, "Visor", scale, color, textStyle, align, font);
+            break;
+        case CG_ACCURACY:
+        case CG_ASSISTS:
+        case CG_CAPTURES:
+        case CG_DEFEND:
+        case CG_EXCELLENT:
+        case CG_GAUNTLET:
+        case CG_IMPRESSIVE:
+        case CG_PERFECT: {
+            vec4_t c;
+
+            Vector4Copy(color, c);
+            if (shader) {
+                trap_R_SetColor(c);
+                HV_DrawPic(r.x, r.y, r.w, r.h, shader);
+                trap_R_SetColor(NULL);
+            }
+            if (ownerDraw != CG_PERFECT) {
+                const char* s = ownerDraw == CG_ACCURACY ? "47%" : "3";
+                HV_PaintText(r.x + (r.w - HV_Width(s, scale, 0)) * 0.5f, r.y + r.h + HV_Height(s, scale, 0) + 2, 0,
+                             scale, c, s, 0, 0);
+            }
+            break;
+        }
+        case UI_ADVERT:
+            if (shader) {
+                trap_R_SetColor(color);
+                HV_DrawPic(r.x, r.y, r.w, r.h, shader);
+                trap_R_SetColor(NULL);
+            }
+            break;
+        default:
+            (void)ownerDrawFlags;
+            break;
+    }
+}
+
+static float HV_GetValue(int ownerDraw) {
+    switch (ownerDraw) {
+        case CG_PLAYER_ARMOR_VALUE:
+            return (float)HV_Armor();
+        case CG_PLAYER_AMMO_VALUE:
+            return (float)HV_Ammo();
+        case CG_PLAYER_SCORE:
+            return (float)HV_PlayerScore();
+        case CG_PLAYER_HEALTH:
+            return (float)HV_Health();
+        case CG_RED_SCORE:
+            return (float)HV_Score(0);
+        case CG_BLUE_SCORE:
+            return (float)HV_Score(1);
+        default:
+            return -1.0f;
+    }
+}
+
+static qboolean HV_OwnerDrawVisible(int flags, int flags2) {
+    int gt = hvScene.gametype;
+
+    if (flags & CG_SHOW_TEAMINFO) {
+        return qfalse;
+    }
+    if (flags & CG_SHOW_NOTEAMINFO) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_OTHERTEAMHASFLAG) {
+        return HV_FlagGame() && gt != GT_1FCTF;
+    }
+    if (flags & CG_SHOW_YOURTEAMHASENEMYFLAG) {
+        return HV_FlagGame() && hvScene.hasFlag;
+    }
+    if (flags & (CG_SHOW_BLUE_TEAM_HAS_REDFLAG | CG_SHOW_RED_TEAM_HAS_BLUEFLAG)) {
+        if (gt == GT_CTF) {
+            return (flags & CG_SHOW_RED_TEAM_HAS_BLUEFLAG) ? qtrue : qfalse;
+        }
+        if (gt != GT_1FCTF) {
+            return qfalse;
+        }
+    }
+    if ((flags & CG_SHOW_PLAYERS_REMAINING) && HV_RoundGame()) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_DUEL) && gt == GT_DUEL) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_CLAN_ARENA) {
+        return gt == GT_CA;
+    }
+    if ((flags & CG_SHOW_CTF) && gt == GT_CTF) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_ONEFLAG) {
+        return gt == GT_1FCTF;
+    }
+    if (flags & CG_SHOW_HARVESTER) {
+        return gt == GT_HARVESTER;
+    }
+    if (flags & CG_SHOW_DOMINATION) {
+        return gt == GT_DOMINATION;
+    }
+    if ((flags & CG_SHOW_ANYNONTEAMGAME) && gt < GT_TEAM) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_ANYTEAMGAME) && gt >= GT_TEAM) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_HEALTHCRITICAL) && HV_Health() < 25) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_IF_PLAYER_HAS_FLAG) && HV_FlagGame() && hvScene.hasFlag) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_NOTINTERMISSION) {
+        return qtrue;
+    }
+    if (flags & (CG_SHOW_IF_MSG_PRESENT | CG_SHOW_IF_NOTICE_PRESENT | CG_SHOW_IF_CHAT_VISIBLE)) {
+        return qfalse;
+    }
+    if (flags & CG_SHOW_IF_PLYR_IS_FIRST_PLACE) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_IF_PLYR_IS_NOT_FIRST_PLACE) {
+        return qfalse;
+    }
+    if (flags & CG_SHOW_IF_RED_IS_FIRST_PLACE) {
+        return qtrue;
+    }
+    if (flags & CG_SHOW_IF_BLUE_IS_FIRST_PLACE) {
+        return qfalse;
+    }
+    if ((flags & CG_SHOW_IF_PLYR_IS_ON_RED) && hvScene.team == TEAM_RED) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_IF_PLYR_IS_ON_BLUE) && hvScene.team == TEAM_BLUE) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_IF_WARMUP) && hvScene.warmup) {
+        return qtrue;
+    }
+    if ((flags & CG_SHOW_IF_NOT_WARMUP) && !hvScene.warmup) {
+        return qtrue;
+    }
+    if ((flags2 & (CG_SHOW_IF_PLYR_IS_ON_RED_OR_SPEC | CG_SHOW_IF_PLYR_IS_ON_RED_NO_SPEC)) &&
+        hvScene.team == TEAM_RED) {
+        return qtrue;
+    }
+    if ((flags2 & (CG_SHOW_IF_PLYR_IS_ON_BLUE_OR_SPEC | CG_SHOW_IF_PLYR_IS_ON_BLUE_NO_SPEC)) &&
+        hvScene.team == TEAM_BLUE) {
+        return qtrue;
+    }
+    if ((flags2 & CG_SHOW_IF_PLYR1) && gt == GT_DUEL) {
+        return qtrue;
+    }
+    if (flags2 & CG_SHOW_IF_LOADOUT_DISABLED) {
+        return qtrue;
+    }
+    return qfalse;
+}
+
+static void HV_GetTeamColor(vec4_t* color) {
+    (*color)[0] = hvScene.team == TEAM_RED ? 1.0f : 0.0f;
+    (*color)[1] = hvScene.team == TEAM_RED || hvScene.team == TEAM_BLUE ? 0.0f : 0.17f;
+    (*color)[2] = hvScene.team == TEAM_BLUE ? 1.0f : 0.0f;
+    (*color)[3] = 0.25f;
+}
+
+static void HV_SetWidescreen(int mode) {
+    hvAnchor = mode;
+}
+
+static int HV_OwnerDrawWidth(int ownerDraw, float scale) {
+    (void)ownerDraw;
+    (void)scale;
+    return 0;
+}
+
+static void HV_RunScript(char** p) {
+    (void)p;
+}
+
+static void HV_StartLocalSound(sfxHandle_t sfx, int channel) {
+    (void)sfx;
+    (void)channel;
+}
+
+static sfxHandle_t HV_RegisterSound(const char* name, qboolean compressed) {
+    (void)name;
+    (void)compressed;
+    return 0;
+}
+
+static int HV_FeederCount(float feederID) {
+    (void)feederID;
+    return 0;
+}
+
+static const char* HV_FeederItemText(float feederID, int index, int column, qhandle_t* handle) {
+    (void)feederID;
+    (void)index;
+    (void)column;
+    if (handle) {
+        *handle = -1;
+    }
+    return "";
+}
+
+static qhandle_t HV_FeederItemImage(float feederID, int index) {
+    (void)feederID;
+    (void)index;
+    return 0;
+}
+
+static void HV_FeederSelection(float feederID, int index) {
+    (void)feederID;
+    (void)index;
+}
+
+static void HV_ExecuteText(int when, const char* text) {
+    (void)when;
+    (void)text;
+}
+
+static int HV_PlayCinematic(const char* name, float x, float y, float w, float h) {
+    (void)name;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    return -1;
+}
+
+static void HV_StopCinematic(int handle) {
+    (void)handle;
+}
+
+static void HV_DrawCinematic(int handle, float x, float y, float w, float h) {
+    (void)handle;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+}
+
+static void HV_RunCinematicFrame(int handle) {
+    (void)handle;
+}
+
+static void HV_StartBackgroundTrack(const char* intro, const char* loop) {
+    (void)intro;
+    (void)loop;
+}
+
+static void HV_StopBackgroundTrack(void) {
+}
+
+static void HV_Begin(void) {
+    hvSaved = Display_GetContext();
+    hvDC = *hvSaved;
+    hvDC.drawHandlePic = HV_DrawPic;
+    hvDC.drawStretchPic = HV_DrawStretchPic;
+    hvDC.drawText = HV_DrawText_DC;
+    hvDC.textWidth = HV_TextWidth_DC;
+    hvDC.textHeight = HV_TextHeight_DC;
+    hvDC.fillRect = HV_FillRect;
+    hvDC.drawRect = HV_DrawRect;
+    hvDC.drawSides = HV_DrawSides;
+    hvDC.drawTopBottom = HV_DrawTopBottom;
+    hvDC.ownerDrawItem = HV_OwnerDraw;
+    hvDC.getValue = HV_GetValue;
+    hvDC.ownerDrawVisible = HV_OwnerDrawVisible;
+    hvDC.runScript = HV_RunScript;
+    hvDC.getTeamColor = HV_GetTeamColor;
+    hvDC.drawTextWithCursor = HV_DrawTextWithCursor_DC;
+    hvDC.startLocalSound = HV_StartLocalSound;
+    hvDC.registerSound = HV_RegisterSound;
+    hvDC.feederCount = HV_FeederCount;
+    hvDC.feederItemText = HV_FeederItemText;
+    hvDC.feederItemImage = HV_FeederItemImage;
+    hvDC.feederSelection = HV_FeederSelection;
+    hvDC.executeText = HV_ExecuteText;
+    hvDC.ownerDrawWidth = HV_OwnerDrawWidth;
+    hvDC.playCinematic = HV_PlayCinematic;
+    hvDC.stopCinematic = HV_StopCinematic;
+    hvDC.drawCinematic = HV_DrawCinematic;
+    hvDC.runCinematicFrame = HV_RunCinematicFrame;
+    hvDC.startBackgroundTrack = HV_StartBackgroundTrack;
+    hvDC.stopBackgroundTrack = HV_StopBackgroundTrack;
+    hvDC.setWidescreen = HV_SetWidescreen;
+    hvDC.Assets = hvAssets;
+    hvAnchor = WIDESCREEN_STRETCH;
+    Init_Display(&hvDC);
+}
+
+static void HV_End(void) {
+    hvAssets = hvDC.Assets;
+    Init_Display(hvSaved);
+}
+
+int HV_ReadList(const char* listFile, char (*files)[MAX_QPATH], int max) {
+    static char buf[MAX_MENUDEFFILE];
+    fileHandle_t f;
+    char* p;
+    char* token;
+    int len, count = 0;
+
+    len = trap_FS_FOpenFile(listFile, &f, FS_READ);
+    if (!f) {
+        return 0;
+    }
+    if (len >= MAX_MENUDEFFILE) {
+        trap_FS_FCloseFile(f);
+        return 0;
+    }
+    trap_FS_Read(buf, len, f);
+    buf[len] = 0;
+    trap_FS_FCloseFile(f);
+    COM_Compress(buf);
+    p = buf;
+    while (1) {
+        token = COM_ParseExt(&p, qtrue);
+        if (!token[0] || token[0] == '}') {
+            break;
+        }
+        if (Q_stricmp(token, "loadmenu") != 0) {
+            continue;
+        }
+        token = COM_ParseExt(&p, qtrue);
+        if (token[0] != '{') {
+            break;
+        }
+        while (1) {
+            token = COM_ParseExt(&p, qtrue);
+            if (!token[0] || token[0] == '}') {
+                break;
+            }
+            if (count < max) {
+                Q_strncpyz(files[count++], token, MAX_QPATH);
+            }
+        }
+    }
+    return count;
+}
+
+static qboolean HV_AssetParse(int handle) {
+    pc_token_t token;
+    const char* s;
+    int n;
+
+    if (!trap_PC_ReadToken(handle, &token) || Q_stricmp(token.string, "{") != 0) {
+        return qfalse;
+    }
+    while (1) {
+        if (!trap_PC_ReadToken(handle, &token)) {
+            return qfalse;
+        }
+        if (Q_stricmp(token.string, "}") == 0) {
+            return qtrue;
+        }
+        if (!Q_stricmp(token.string, "font") || !Q_stricmp(token.string, "smallFont") ||
+            !Q_stricmp(token.string, "bigfont")) {
+            if (!PC_String_Parse(handle, &s) || !PC_Int_Parse(handle, &n)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "gradientbar")) {
+            if (!PC_String_Parse(handle, &s)) {
+                return qfalse;
+            }
+            hvDC.Assets.gradientBar = trap_R_RegisterShaderNoMip(s);
+        } else if (!Q_stricmp(token.string, "menuEnterSound") || !Q_stricmp(token.string, "menuExitSound") ||
+                   !Q_stricmp(token.string, "itemFocusSound") || !Q_stricmp(token.string, "menuBuzzSound")) {
+            if (!PC_String_Parse(handle, &s)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "cursor")) {
+            if (!PC_String_Parse(handle, &s)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "fadeClamp")) {
+            if (!PC_Float_Parse(handle, &hvDC.Assets.fadeClamp)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "fadeCycle")) {
+            if (!PC_Int_Parse(handle, &hvDC.Assets.fadeCycle)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "fadeAmount")) {
+            if (!PC_Float_Parse(handle, &hvDC.Assets.fadeAmount)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "shadowX")) {
+            if (!PC_Float_Parse(handle, &hvDC.Assets.shadowX)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "shadowY")) {
+            if (!PC_Float_Parse(handle, &hvDC.Assets.shadowY)) {
+                return qfalse;
+            }
+        } else if (!Q_stricmp(token.string, "shadowColor")) {
+            if (!PC_Color_Parse(handle, &hvDC.Assets.shadowColor)) {
+                return qfalse;
+            }
+            hvDC.Assets.shadowFadeClamp = hvDC.Assets.shadowColor[3];
+        }
+    }
+}
+
+static int HV_ParseFile(const char* file) {
+    pc_token_t token;
+    int handle, before = hvCount;
+
+    handle = trap_PC_LoadSource(file);
+    if (!handle) {
+        return -1;
+    }
+    while (trap_PC_ReadToken(handle, &token)) {
+        if (token.string[0] == '}') {
+            break;
+        }
+        if (!Q_stricmp(token.string, "assetGlobalDef")) {
+            if (!HV_AssetParse(handle)) {
+                break;
+            }
+            continue;
+        }
+        if (!Q_stricmp(token.string, "menudef")) {
+            if (hvCount >= HV_MAX_MENUS) {
+                break;
+            }
+            if (Menu_NewInto(handle, &hvMenu[hvCount])) {
+                hvCount++;
+            }
+        }
+    }
+    trap_PC_FreeSource(handle);
+    return hvCount - before;
+}
+
+void HV_Unload(void) {
+    if (hvLoaded && UI_MemUsed() == hvEnd) {
+        UI_MemRelease(&hvMark);
+    }
+    hvLoaded = qfalse;
+    hvCount = 0;
+}
+
+qboolean HV_Load(char (*files)[MAX_QPATH], int numFiles, int* menusPerFile) {
+    int i;
+
+    HV_Unload();
+    UI_MemMark(&hvMark);
+    memset(&hvAssets, 0, sizeof(hvAssets));
+    hvAssets.fadeClamp = 1.0f;
+    hvAssets.fadeCycle = 1;
+    hvAssets.fadeAmount = 0.1f;
+    hvAssets.shadowColor[3] = 0.25f;
+    hvAssets.shadowX = 2;
+    hvAssets.shadowY = 2;
+    HV_Begin();
+    for (i = 0; i < numFiles; i++) {
+        int n = HV_ParseFile(files[i]);
+
+        if (menusPerFile) {
+            menusPerFile[i] = n;
+        }
+    }
+    HV_End();
+    hvEnd = UI_MemUsed();
+    hvLoaded = qtrue;
+    return hvCount > 0;
+}
+
+qboolean HV_Loaded(void) {
+    return hvLoaded;
+}
+
+int HV_MenuCount(void) {
+    return hvCount;
+}
+
+menuDef_t* HV_Menu(int index) {
+    return index >= 0 && index < hvCount ? &hvMenu[index] : NULL;
+}
+
+void HV_Paint(void) {
+    int i;
+
+    if (!hvLoaded) {
+        return;
+    }
+    hvNumBounds = 0;
+    HV_Begin();
+    for (i = 0; i < hvCount; i++) {
+        Menu_Paint(&hvMenu[i], qfalse);
+    }
+    HV_End();
+}
+
+void HV_PaintItem(itemDef_t* item) {
+    int flags;
+
+    if (!hvLoaded || !item) {
+        return;
+    }
+    HV_Begin();
+    flags = item->window.flags;
+    item->window.flags |= WINDOW_VISIBLE;
+    if (item->parent) {
+        hvAnchor = ((menuDef_t*)item->parent)->widescreen;
+    }
+    Item_Paint(item);
+    item->window.flags = flags;
+    HV_End();
+}
+
+int HV_ItemAnchor(const itemDef_t* item) {
+    if (item->widescreenFlag) {
+        return item->widescreen;
+    }
+    return item->parent ? ((const menuDef_t*)item->parent)->widescreen : WIDESCREEN_STRETCH;
+}
+
+void HV_ItemScreenRect(itemDef_t* item, float* out) {
+    float x = item->window.rect.x, y = item->window.rect.y;
+    float w = item->window.rect.w, h = item->window.rect.h;
+
+    if (w < 4.0f || h < 4.0f) {
+        if (item->textRect.w > 0.0f && item->textRect.h > 0.0f) {
+            x = item->textRect.x;
+            y = item->textRect.y - item->textRect.h;
+            w = item->textRect.w;
+            h = item->textRect.h;
+        }
+        if (w < 4.0f) {
+            w = 24.0f;
+        }
+        if (h < 4.0f) {
+            y -= 12.0f;
+            h = 16.0f;
+        }
+    }
+    HV_ToScreen(HV_ItemAnchor(item), &x, &y, &w, &h);
+    out[0] = x;
+    out[1] = y;
+    out[2] = w;
+    out[3] = h;
+}
+
+qboolean HV_ItemPaintRect(const itemDef_t* item, float* out) {
+    return HV_PaintedRect(item, out);
+}
+
+void HV_ItemHitRect(itemDef_t* item, float* out) {
+    float p[4], x1, y1;
+
+    HV_ItemScreenRect(item, out);
+    if (!HV_PaintedRect(item, p)) {
+        return;
+    }
+    x1 = out[0] + out[2] > p[0] + p[2] ? out[0] + out[2] : p[0] + p[2];
+    y1 = out[1] + out[3] > p[1] + p[3] ? out[1] + out[3] : p[1] + p[3];
+    out[0] = out[0] < p[0] ? out[0] : p[0];
+    out[1] = out[1] < p[1] ? out[1] : p[1];
+    out[2] = x1 - out[0];
+    out[3] = y1 - out[1];
+}
+
+qboolean HV_ItemShown(const itemDef_t* item) {
+    const menuDef_t* menu = (const menuDef_t*)item->parent;
+
+    if (!(item->window.flags & WINDOW_VISIBLE)) {
+        return qfalse;
+    }
+    if (menu && !(menu->window.flags & WINDOW_VISIBLE)) {
+        return qfalse;
+    }
+    if (menu && (menu->window.ownerDrawFlags || menu->window.ownerDrawFlags2) &&
+        !HV_OwnerDrawVisible(menu->window.ownerDrawFlags, menu->window.ownerDrawFlags2)) {
+        return qfalse;
+    }
+    if ((item->window.ownerDrawFlags || item->window.ownerDrawFlags2) &&
+        !HV_OwnerDrawVisible(item->window.ownerDrawFlags, item->window.ownerDrawFlags2)) {
+        return qfalse;
+    }
+    return qtrue;
+}
+
+typedef struct {
+    int id;
+    const char* name;
+} hvName_t;
+
+static const hvName_t hvNames[] = {
+    {CG_PLAYER_HEALTH, "Health"},
+    {CG_PLAYER_ARMOR_VALUE, "Armor"},
+    {CG_PLAYER_AMMO_VALUE, "Ammo"},
+    {CG_PLAYER_ARMOR_ICON, "Armor icon"},
+    {CG_PLAYER_ARMOR_ICON2D, "Armor icon"},
+    {CG_PLAYER_AMMO_ICON, "Ammo icon"},
+    {CG_PLAYER_AMMO_ICON2D, "Ammo icon"},
+    {CG_PLAYER_ITEM, "Holdable item"},
+    {CG_PLAYER_HEAD, "Player head"},
+    {CG_PLAYER_SCORE, "Score"},
+    {CG_1STPLACE, "First place"},
+    {CG_2NDPLACE, "Second place"},
+    {CG_1ST_PLACE_SCORE, "First place score"},
+    {CG_2ND_PLACE_SCORE, "Second place score"},
+    {CG_RED_SCORE, "Red score"},
+    {CG_BLUE_SCORE, "Blue score"},
+    {CG_RED_NAME, "Red team name"},
+    {CG_BLUE_NAME, "Blue team name"},
+    {CG_LEVELTIMER, "Match timer"},
+    {CG_ROUNDTIMER, "Round timer"},
+    {CG_ROUND, "Round"},
+    {CG_CAPFRAGLIMIT, "Score limit"},
+    {CG_LOCALTIME, "Local time"},
+    {CG_MAP_NAME, "Map name"},
+    {CG_GAME_TYPE, "Game type"},
+    {CG_GAME_TYPE_ICON, "Game type icon"},
+    {CG_PLAYER_COUNTS, "Player count"},
+    {CG_RED_PLAYER_COUNT, "Red players"},
+    {CG_BLUE_PLAYER_COUNT, "Blue players"},
+    {CG_RED_AVG_PING, "Red ping"},
+    {CG_BLUE_AVG_PING, "Blue ping"},
+    {CG_RED_CLAN_PLYRS, "Red alive"},
+    {CG_BLUE_CLAN_PLYRS, "Blue alive"},
+    {CG_TEAM_PLYR_COUNT, "Team alive"},
+    {CG_ENEMY_PLYR_COUNT, "Enemies alive"},
+    {CG_RED_TIMEOUT_COUNT, "Red timeouts"},
+    {CG_BLUE_TIMEOUT_COUNT, "Blue timeouts"},
+    {CG_TEAM_COLORIZED, "Team colored image"},
+    {CG_ARMORTIERED_COLORIZED, "Armor colored image"},
+    {CG_HEALTH_COLORIZED, "Health colored image"},
+    {CG_TEAM_COLOR, "Team color"},
+    {CG_SELECTED_PLYR_TEAM_COLOR, "Team color"},
+    {CG_PLAYER_HEALTH_BAR_100, "Health bar"},
+    {CG_PLAYER_HEALTH_BAR_200, "Health bar 200"},
+    {CG_PLAYER_ARMOR_BAR_100, "Armor bar"},
+    {CG_PLAYER_ARMOR_BAR_200, "Armor bar 200"},
+    {CG_PLAYER_OBIT, "Kill feed"},
+    {CG_AREA_NEW_CHAT, "Chat"},
+    {CG_AREA_POWERUP, "Powerups"},
+    {CG_CTF_POWERUP, "Rune"},
+    {CG_PLAYER_HASFLAG, "Carried flag"},
+    {CG_PLAYER_HASFLAG2D, "Carried flag"},
+    {CG_RED_FLAGSTATUS, "Red flag"},
+    {CG_BLUE_FLAGSTATUS, "Blue flag"},
+    {CG_RED_BASESTATUS, "Red base"},
+    {CG_BLUE_BASESTATUS, "Blue base"},
+    {CG_ONEFLAG_STATUS, "Flag"},
+    {CG_SPECTATORS, "Spectators"},
+    {CG_KILLER, "Fragged by"},
+    {CG_FOLLOW_PLAYER_NAME, "Followed player"},
+    {CG_FOLLOW_PLAYER_NAME_EX, "Followed player"},
+    {CG_ACCURACY, "Accuracy"},
+    {CG_IMPRESSIVE, "Impressive"},
+    {CG_EXCELLENT, "Excellent"},
+    {CG_GAUNTLET, "Humiliation"},
+    {CG_RED_OWNED_FLAGS, "Red points"},
+    {CG_BLUE_OWNED_FLAGS, "Blue points"},
+    {CG_HARVESTER_SKULLS, "Skulls"},
+    {CG_PLAYER_HASKEY, "Keys"},
+    {CG_SPEC_MESSAGES, "Spectator help"},
+    {CG_RACE_STATUS, "Race status"},
+    {CG_RACE_TIMES, "Race times"},
+    {CG_OVERTIME, "Overtime"},
+    {CG_MATCH_STATE, "Match state"},
+    {UI_ADVERT, "Advert"},
+};
+
+const char* HV_OwnerDrawName(int ownerDraw) {
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(hvNames); i++) {
+        if (hvNames[i].id == ownerDraw) {
+            return hvNames[i].name;
+        }
+    }
+    return NULL;
+}
+
+static qboolean HV_Lower(char c) {
+    return c >= 'a' && c <= 'z';
+}
+
+static qboolean HV_Upper(char c) {
+    return c >= 'A' && c <= 'Z';
+}
+
+static qboolean HV_Digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static const char* HV_Humanize(const char* s) {
+    static char out[2][80];
+    static int which;
+    char* o = out[which ^= 1];
+    int n = 0;
+
+    for (; *s && n < (int)sizeof(out[0]) - 3; s++) {
+        char c = *s;
+
+        if (c == '_' || c == '-') {
+            c = ' ';
+        }
+        if (n > 0 && c != ' ' && o[n - 1] != ' ') {
+            char p = s[-1];
+            qboolean ordinal = HV_Digit(p) && (!Q_stricmpn(s, "st", 2) || !Q_stricmpn(s, "nd", 2) ||
+                                               !Q_stricmpn(s, "rd", 2) || !Q_stricmpn(s, "th", 2));
+
+            if ((HV_Lower(p) && HV_Upper(c)) || (HV_Upper(p) && HV_Upper(c) && HV_Lower(s[1])) ||
+                (!HV_Digit(p) && HV_Digit(c)) || (HV_Digit(p) && !HV_Digit(c) && !ordinal)) {
+                o[n++] = ' ';
+            }
+        }
+        if (n == 0 && HV_Lower(c)) {
+            c = (char)(c - 'a' + 'A');
+        } else if (n > 0 && HV_Upper(c) && HV_Lower(s[1])) {
+            c = (char)(c - 'A' + 'a');
+        }
+        o[n++] = c;
+    }
+    o[n] = 0;
+    return o;
+}
+
+const char* HV_ItemKind(const itemDef_t* item) {
+    const char* od;
+
+    if (item->window.ownerDraw && (od = HV_OwnerDrawName(item->window.ownerDraw)) != NULL) {
+        return od;
+    }
+    if (item->text && item->text[0]) {
+        return "Text";
+    }
+    if (item->window.background) {
+        return "Image";
+    }
+    if (item->window.ownerDraw) {
+        return "Game element";
+    }
+    return "Box";
+}
+
+const char* HV_MenuLabel(const menuDef_t* menu) {
+    if (menu->window.name && menu->window.name[0]) {
+        return HV_Humanize(menu->window.name);
+    }
+    return "Group";
+}
+
+const char* HV_ItemLabel(const itemDef_t* item) {
+    if (item->window.name && strlen(item->window.name) > 2) {
+        return HV_Humanize(item->window.name);
+    }
+    if (item->text && item->text[0]) {
+        return item->text;
+    }
+    return HV_ItemKind(item);
+}

@@ -2103,6 +2103,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_LEGAL:
             UI_Legal_Paint();
             break;
+        case UI_HUDEDITOR:
+            UI_HudEditor_Paint();
+            break;
         default:
             break;
     }
@@ -2639,6 +2642,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Matches_HandleKey(key);
         case UI_LEGAL:
             return UI_Legal_HandleKey(key);
+        case UI_HUDEDITOR:
+            return UI_HudEditor_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3046,6 +3051,10 @@ static void UI_RunMenuScript(char** args) {
             UI_Matches_Open();
         } else if (Q_stricmp(name, "legalOpen") == 0) {
             UI_Legal_Open();
+        } else if (Q_stricmp(name, "hudEditorOpen") == 0) {
+            UI_HudEditor_Open();
+        } else if (Q_stricmp(name, "hudEditorEscape") == 0) {
+            UI_HudEditor_Escape();
         } else if (Q_stricmp(name, "homeEscape") == 0) {
             if (UI_Home_InMatch()) {
                 _UI_SetActiveMenu(UIMENU_INGAME);

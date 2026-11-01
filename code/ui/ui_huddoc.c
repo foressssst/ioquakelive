@@ -19,7 +19,7 @@ along with ioquakelive; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-#include "cg_huddoc.h"
+#include "ui_huddoc.h"
 
 #define HDA_BLOCK -1
 #define HDA_COLUMNS -2

@@ -105,6 +105,10 @@ qboolean UI_OutOfMemory(void) {
     return outOfMemory;
 }
 
+int UI_MemUsed(void) {
+    return allocPoint;
+}
+
 #define HASH_TABLE_SIZE 2048
 static unsigned hashForString(const char* str) {
     int i;
@@ -184,6 +188,37 @@ const char* String_Alloc(const char* p) {
         return &strPool[ph];
     }
     return NULL;
+}
+
+void UI_MemMark(uiMemMark_t* mark) {
+    mark->alloc = allocPoint;
+    mark->strings = strPoolIndex;
+}
+
+void UI_MemRelease(const uiMemMark_t* mark) {
+    const char* cut = &memoryPool[mark->alloc];
+    int i;
+
+    if (mark->alloc > allocPoint || mark->strings > strPoolIndex) {
+        return;
+    }
+    for (i = 0; i < HASH_TABLE_SIZE; i++) {
+        stringDef_t* prev = NULL;
+        stringDef_t* str = strHandle[i];
+
+        while (str && (const char*)str < cut) {
+            prev = str;
+            str = str->next;
+        }
+        if (prev) {
+            prev->next = NULL;
+        } else {
+            strHandle[i] = NULL;
+        }
+    }
+    allocPoint = mark->alloc;
+    strPoolIndex = mark->strings;
+    outOfMemory = qfalse;
 }
 
 void String_Report(void) {
@@ -6071,6 +6106,16 @@ void Menu_New(int handle) {
             menuCount++;
         }
     }
+}
+
+qboolean Menu_NewInto(int handle, menuDef_t* menu) {
+    Menu_Init(menu);
+    if (!Menu_Parse(handle, menu)) {
+        return qfalse;
+    }
+    Menu_PostParse(menu);
+    Menu_SetupAdverts(menu);
+    return qtrue;
 }
 
 int Menu_Count(void) {

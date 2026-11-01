@@ -145,6 +145,26 @@
     }
 
     menuDef {
+        name "hudeditor"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup
+
+        onOpen { uiScript hudEditorOpen }
+        onESC { uiScript hudEditorEscape }
+
+        itemDef {
+            name hudeditor
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 609
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    menuDef {
         name "matches"
         fullScreen MENU_TRUE
         rect 0 0 640 480

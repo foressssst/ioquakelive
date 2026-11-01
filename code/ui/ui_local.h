@@ -953,6 +953,13 @@ void UI_Legal_Open(void);
 void UI_Legal_Paint(void);
 qboolean UI_Legal_HandleKey(int key);
 
+#define UI_HUDEDITOR 609
+void UI_HudEditor_Open(void);
+void UI_HudEditor_Start(void);
+void UI_HudEditor_Paint(void);
+qboolean UI_HudEditor_HandleKey(int key);
+void UI_HudEditor_Escape(void);
+
 #define UI_MATCHES 607
 void UI_Matches_Open(void);
 void UI_Matches_Paint(void);
