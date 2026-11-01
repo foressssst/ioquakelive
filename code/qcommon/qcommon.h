@@ -256,6 +256,7 @@ void VM_Free(vm_t* vm);
 void VM_Clear(void);
 void VM_Forced_Unload_Start(void);
 void VM_Forced_Unload_Done(void);
+void VM_FreePendingUnloads(void);
 vm_t* VM_Restart(vm_t* vm, qboolean unpure);
 
 intptr_t QDECL VM_Call(vm_t* vm, int callNum, ...);

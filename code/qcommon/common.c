@@ -2653,6 +2653,8 @@ void Com_Frame(void) {
         return;
     }
 
+    VM_FreePendingUnloads();
+
     timeBeforeFirstEvents = 0;
     timeBeforeServer = 0;
     timeBeforeEvents = 0;

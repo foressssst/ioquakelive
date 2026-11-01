@@ -27,6 +27,16 @@ int vm_debugLevel;
 
 static int forced_unload;
 
+#define VM_MAX_PENDING_UNLOADS 8
+static void* vmPendingUnloads[VM_MAX_PENDING_UNLOADS];
+static int vmNumPendingUnloads;
+
+void VM_FreePendingUnloads(void) {
+    while (vmNumPendingUnloads > 0) {
+        Sys_UnloadDll(vmPendingUnloads[--vmNumPendingUnloads]);
+    }
+}
+
 #define MAX_VM 3
 vm_t vmTable[MAX_VM];
 
@@ -140,7 +150,11 @@ void VM_Free(vm_t* vm) {
         vm->destroy(vm);
 
     if (vm->dllHandle) {
-        Sys_UnloadDll(vm->dllHandle);
+        if (vm->callLevel && vmNumPendingUnloads < VM_MAX_PENDING_UNLOADS) {
+            vmPendingUnloads[vmNumPendingUnloads++] = vm->dllHandle;
+        } else {
+            Sys_UnloadDll(vm->dllHandle);
+        }
     }
 
     Com_Memset(vm, 0, sizeof(*vm));
