@@ -28,6 +28,8 @@
 #define CL_CLUB_MAX 256
 #define CL_CLUB_BATCH 32
 #define CL_CLUB_WAIT 4000
+#define CL_CLUB_TRIES 4
+#define CL_CLUB_RETRY 1000
 #define CL_CLUB_IMAGE_MAX 0x40000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
@@ -858,6 +860,23 @@ qboolean CL_ClubActive(void) {
                       CL_ServerVerified(&clc.serverAddress));
 }
 
+static qboolean CL_ClubImage(const char* url, char* pic, int size, int* w, int* h) {
+    int i;
+
+    if (Q_strncmp(url, CL_CLUB_IMAGES, (int)strlen(CL_CLUB_IMAGES))) {
+        return qfalse;
+    }
+    for (i = 0; i < CL_CLUB_TRIES; i++) {
+        if (i) {
+            Sys_Sleep(CL_CLUB_RETRY);
+        }
+        if (CL_SiteImage(url, CL_CLUB_IMAGES, clClubDir, "club", clClubImage, sizeof(clClubImage), pic, size, w, h)) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
 static void CL_ClubThread(void* unused) {
     char address[1024];
     char pic[MAX_QPATH];
@@ -877,7 +896,13 @@ static void CL_ClubThread(void* unused) {
         n += Com_sprintf(address + n, sizeof(address) - n, "%s%llu", i ? "," : "",
                          (unsigned long long)clClub[clClubAsk[i]].steamId);
     }
-    ok = CL_UpdateFetch(address, clClubText, sizeof(clClubText));
+    ok = qfalse;
+    for (i = 0; i < CL_CLUB_TRIES && !ok; i++) {
+        if (i) {
+            Sys_Sleep(CL_CLUB_RETRY);
+        }
+        ok = CL_UpdateFetch(address, clClubText, sizeof(clClubText));
+    }
     for (line = clClubText; ok && *line; line = next) {
         next = strchr(line, '\n');
         next = next ? next + 1 : line + strlen(line);
@@ -890,16 +915,13 @@ static void CL_ClubThread(void* unused) {
             if (c->steamId != steamId) {
                 continue;
             }
-            if (CL_SiteImage(avatar, CL_CLUB_IMAGES, clClubDir, "club", clClubImage, sizeof(clClubImage), pic,
-                             sizeof(pic), &w, &h) &&
-                w == h) {
+            if (CL_ClubImage(avatar, pic, sizeof(pic), &w, &h) && w == h) {
                 Q_strncpyz(c->avatar, pic, sizeof(c->avatar));
             }
-            if (CL_SiteImage(flag, CL_CLUB_IMAGES, clClubDir, "club", clClubImage, sizeof(clClubImage), pic,
-                             sizeof(pic), &w, &h) &&
-                w == 2 * h) {
+            if (CL_ClubImage(flag, pic, sizeof(pic), &w, &h) && w == 2 * h) {
                 Q_strncpyz(c->flag, pic, sizeof(c->flag));
             }
+            CL_UpdateSet(&c->state, CLC_READY);
         }
     }
     for (i = 0; i < clClubAskCount; i++) {
