@@ -1771,6 +1771,7 @@ extern vmCvar_t ch_drawKeys;
 extern vmCvar_t cg_autoAction;
 extern vmCvar_t ch_autoStats;
 extern vmCvar_t cg_demoKeys;
+extern vmCvar_t cg_videoRecording;
 extern vmCvar_t ch_followKiller;
 extern vmCvar_t ch_recordingDemo;
 extern vmCvar_t cg_ambient;

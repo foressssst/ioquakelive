@@ -55,7 +55,8 @@ cvar_t* cl_showSend;
 cvar_t* cl_timedemo;
 cvar_t* cl_timedemoLog;
 cvar_t* cl_autoRecordDemo;
-cvar_t* cl_aviFrameRate;
+cvar_t* cl_videoFrameRate;
+cvar_t* cl_videoCrf;
 cvar_t* cl_aviMotionJpeg;
 cvar_t* cl_forceavidemo;
 static cvar_t* cl_avidemo;
@@ -2882,9 +2883,9 @@ void CL_Frame(int msec) {
         }
     }
 
-    if (CL_VideoRecording() && cl_aviFrameRate->integer && msec) {
+    if (CL_VideoRecording() && cl_videoFrameRate->integer && msec) {
         if (clc.state == CA_ACTIVE || cl_forceavidemo->integer) {
-            float fps = MIN(cl_aviFrameRate->value * com_timescale->value, 1000.0f);
+            float fps = MIN(cl_videoFrameRate->value * com_timescale->value, 1000.0f);
             float frameDuration = MAX(1000.0f / fps, 1.0f) + clc.aviVideoFrameRemainder;
 
             CL_TakeVideoFrame();
@@ -3499,7 +3500,9 @@ void CL_Init(void) {
     cl_timedemo = Cvar_Get("timedemo", "0", 0);
     cl_timedemoLog = Cvar_Get("cl_timedemoLog", "", CVAR_ARCHIVE);
     cl_autoRecordDemo = Cvar_Get("cl_autoRecordDemo", "0", CVAR_ARCHIVE);
-    cl_aviFrameRate = Cvar_Get("cl_aviFrameRate", "25", CVAR_ARCHIVE);
+    cl_videoFrameRate = Cvar_Get("cl_videoFrameRate", "60", CVAR_ARCHIVE);
+    cl_videoCrf = Cvar_Get("cl_videoCrf", "16", CVAR_ARCHIVE);
+    Cvar_Get("cl_videoRecording", "0", CVAR_ROM);
     cl_aviMotionJpeg = Cvar_Get("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
     cl_forceavidemo = Cvar_Get("cl_forceavidemo", "0", 0);
     cl_avidemo = Cvar_Get("cl_avidemo", "0", 0);
@@ -3613,6 +3616,8 @@ void CL_Init(void) {
     Cmd_AddCommand("vid_restart", CL_Vid_Restart_f);
     Cmd_AddCommand("disconnect", CL_Disconnect_f);
     Cmd_AddCommand("record", CL_Record_f);
+    Cmd_AddCommand("video", CL_Video_f);
+    Cmd_AddCommand("stopvideo", CL_StopVideo_f);
     Cmd_AddCommand("demo", CL_PlayDemo_f);
     Cmd_SetCommandCompletionFunc("demo", CL_CompleteDemoName);
     Cmd_AddCommand("rewind", CL_Rewind_f);
@@ -3699,6 +3704,8 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     Cmd_RemoveCommand("vid_restart");
     Cmd_RemoveCommand("disconnect");
     Cmd_RemoveCommand("record");
+    Cmd_RemoveCommand("video");
+    Cmd_RemoveCommand("stopvideo");
     Cmd_RemoveCommand("demo");
     Cmd_RemoveCommand("rewind");
     Cmd_RemoveCommand("fastforward");

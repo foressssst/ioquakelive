@@ -3276,7 +3276,7 @@ static int CG_DemoCursorTime(void) {
 }
 
 void CG_DemoCursorFrame(void) {
-	qboolean	want = cg.demoPlayback && cg_drawDemoHUD.integer && cg_draw2D.integer &&
+	qboolean	want = cg.demoPlayback && cg_drawDemoHUD.integer && !cg_videoRecording.integer && cg_draw2D.integer &&
 		!cg_freecam.integer ? qtrue : qfalse;
 	int			catcher = trap_Key_GetCatcher();
 
@@ -3628,7 +3628,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_SetWidescreen(WIDESCREEN_STRETCH);
 	}
 
-	if (cg.demoPlayback && cg_drawDemoHUD.integer) {
+	if (cg.demoPlayback && cg_drawDemoHUD.integer && !cg_videoRecording.integer) {
 		CG_DrawDemoHUD();
 	}
 

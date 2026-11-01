@@ -446,6 +446,102 @@ done:
     return ok;
 }
 
+typedef struct {
+    HANDLE process;
+    HANDLE input;
+} sysPipe_t;
+
+void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
+    SECURITY_ATTRIBUTES sa;
+    STARTUPINFOEXA si;
+    PROCESS_INFORMATION pi;
+    HANDLE readEnd, writeEnd, log;
+    HANDLE inherit[2];
+    SIZE_T attrSize = 0;
+    char line[2048];
+    sysPipe_t* p = NULL;
+    BOOL ok = FALSE;
+
+    Com_Memset(&sa, 0, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    if (!CreatePipe(&readEnd, &writeEnd, &sa, 1 << 20)) {
+        return NULL;
+    }
+    SetHandleInformation(writeEnd, HANDLE_FLAG_INHERIT, 0);
+    log = CreateFileA(logPath, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (log == INVALID_HANDLE_VALUE) {
+        CloseHandle(readEnd);
+        CloseHandle(writeEnd);
+        return NULL;
+    }
+    inherit[0] = readEnd;
+    inherit[1] = log;
+    Com_Memset(&si, 0, sizeof(si));
+    si.StartupInfo.cb = sizeof(si);
+    si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    si.StartupInfo.hStdInput = readEnd;
+    si.StartupInfo.hStdOutput = log;
+    si.StartupInfo.hStdError = log;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &attrSize);
+    si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(attrSize);
+    if (si.lpAttributeList && InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &attrSize)) {
+        if (UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit, sizeof(inherit),
+                                      NULL, NULL)) {
+            Com_sprintf(line, sizeof(line), "\"%s\" %s", exe, args);
+            ok = CreateProcessA(NULL, line, NULL, NULL, TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, NULL, NULL,
+                                &si.StartupInfo, &pi);
+        }
+        DeleteProcThreadAttributeList(si.lpAttributeList);
+    }
+    free(si.lpAttributeList);
+    CloseHandle(readEnd);
+    CloseHandle(log);
+    if (ok) {
+        CloseHandle(pi.hThread);
+        p = (sysPipe_t*)malloc(sizeof(*p));
+    }
+    if (!p) {
+        if (ok) {
+            CloseHandle(pi.hProcess);
+        }
+        CloseHandle(writeEnd);
+        DeleteFileA(logPath);
+        return NULL;
+    }
+    p->process = pi.hProcess;
+    p->input = writeEnd;
+    return p;
+}
+
+qboolean Sys_PipeWrite(void* pipe, const void* data, int size) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+    const char* c = (const char*)data;
+
+    while (size > 0) {
+        DWORD written = 0;
+
+        if (!WriteFile(p->input, c, (DWORD)size, &written, NULL) || !written) {
+            return qfalse;
+        }
+        c += written;
+        size -= (int)written;
+    }
+    return qtrue;
+}
+
+int Sys_PipeClose(void* pipe) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+    DWORD code = 1;
+
+    CloseHandle(p->input);
+    WaitForSingleObject(p->process, INFINITE);
+    GetExitCodeProcess(p->process, &code);
+    CloseHandle(p->process);
+    free(p);
+    return (int)code;
+}
+
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];
     static int next;

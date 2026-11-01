@@ -319,6 +319,7 @@ vmCvar_t ch_drawTargetStatus;
 vmCvar_t ch_drawKeys;
 vmCvar_t ch_autoStats;
 vmCvar_t cg_demoKeys;
+vmCvar_t cg_videoRecording;
 vmCvar_t ch_followKiller;
 vmCvar_t ch_recordingDemo;
 vmCvar_t cg_ambient;
@@ -699,6 +700,7 @@ static cvarTable_t cvarTable[] = {
     {&ch_drawKeys, "ch_drawKeys", "0", CVAR_ARCHIVE},
     {&ch_autoStats, "ch_autoStats", "0", CVAR_ARCHIVE},
     {&cg_demoKeys, "cg_demoKeys", "0", CVAR_ARCHIVE},
+    {&cg_videoRecording, "cl_videoRecording", "0", CVAR_ROM},
     {&ch_followKiller, "ch_followKiller", "0", CVAR_ARCHIVE},
     {&ch_recordingDemo, "ch_recordingDemo", "0", CVAR_ARCHIVE},
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},

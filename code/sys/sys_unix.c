@@ -281,6 +281,119 @@ qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes) {
     return qfalse;
 }
 
+typedef struct {
+    pid_t process;
+    int input;
+} sysPipe_t;
+
+void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
+    char line[2048];
+    int fds[2];
+    int err[2];
+    int log;
+    char failed = 0;
+    pid_t pid;
+    sysPipe_t* p;
+
+    Com_sprintf(line, sizeof(line), "exec \"%s\" %s", exe, args);
+    if (pipe(fds)) {
+        return NULL;
+    }
+    log = open(logPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (log < 0 || pipe(err)) {
+        if (log >= 0) {
+            close(log);
+        }
+        close(fds[0]);
+        close(fds[1]);
+        return NULL;
+    }
+    pid = fork();
+    if (pid == 0) {
+        dup2(fds[0], 0);
+        dup2(log, 1);
+        dup2(log, 2);
+        close(fds[0]);
+        close(fds[1]);
+        close(log);
+        close(err[0]);
+        fcntl(err[1], F_SETFD, FD_CLOEXEC);
+        execlp(exe, exe, "-version", (char*)NULL);
+        failed = 1;
+        if (write(err[1], &failed, 1) < 0) {
+            _exit(127);
+        }
+        _exit(127);
+    }
+    close(err[1]);
+    if (pid > 0) {
+        int status;
+
+        if (read(err[0], &failed, 1) < 0) {
+            failed = 1;
+        }
+        waitpid(pid, &status, 0);
+    }
+    close(err[0]);
+    if (pid < 0 || failed) {
+        close(log);
+        close(fds[0]);
+        close(fds[1]);
+        unlink(logPath);
+        return NULL;
+    }
+    pid = fork();
+    if (pid == 0) {
+        dup2(fds[0], 0);
+        dup2(log, 1);
+        dup2(log, 2);
+        close(fds[0]);
+        close(fds[1]);
+        close(log);
+        execl("/bin/sh", "sh", "-c", line, (char*)NULL);
+        _exit(127);
+    }
+    close(fds[0]);
+    close(log);
+    p = (sysPipe_t*)malloc(sizeof(*p));
+    if (pid < 0 || !p) {
+        close(fds[1]);
+        free(p);
+        return NULL;
+    }
+    fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+    signal(SIGPIPE, SIG_IGN);
+    p->process = pid;
+    p->input = fds[1];
+    return p;
+}
+
+qboolean Sys_PipeWrite(void* pipe, const void* data, int size) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+    const char* c = (const char*)data;
+
+    while (size > 0) {
+        ssize_t written = write(p->input, c, (size_t)size);
+
+        if (written <= 0) {
+            return qfalse;
+        }
+        c += written;
+        size -= (int)written;
+    }
+    return qtrue;
+}
+
+int Sys_PipeClose(void* pipe) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+    int status = 0;
+
+    close(p->input);
+    waitpid(p->process, &status, 0);
+    free(p);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+}
+
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];
     static int next;

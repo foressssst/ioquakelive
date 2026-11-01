@@ -61,6 +61,7 @@ cvar_t* com_fixedtime;
 cvar_t* com_journal;
 cvar_t* com_maxfps;
 cvar_t* com_timedemo;
+qboolean com_uncappedFrames;
 cvar_t* com_sv_running;
 cvar_t* com_cl_running;
 cvar_t* com_logfile;
@@ -2668,7 +2669,7 @@ void Com_Frame(void) {
     }
 
     capUs = 0;
-    if (!com_timedemo->integer) {
+    if (!com_timedemo->integer && !com_uncappedFrames) {
         if (com_dedicated->integer)
             minMsec = SV_FrameMsec();
         else {

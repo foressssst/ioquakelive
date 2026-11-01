@@ -808,6 +808,10 @@ qboolean Sys_SleepMicroseconds(int64_t usec);
 qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes);
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
+void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath);
+qboolean Sys_PipeWrite(void* pipe, const void* data, int size);
+int Sys_PipeClose(void* pipe);
+extern qboolean com_uncappedFrames;
 void* Sys_MutexCreate(void);
 void Sys_MutexLock(void* mutex);
 void Sys_MutexUnlock(void* mutex);
