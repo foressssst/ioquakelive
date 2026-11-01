@@ -2458,6 +2458,9 @@ qboolean CG_Load_Menu(char** p) {
     return qfalse;
 }
 
+char cg_hudListFile[MAX_QPATH];
+int cg_hudMenuCount;
+
 void CG_LoadMenus(const char* menuFile) {
     char* token;
     char* p;
@@ -2468,9 +2471,11 @@ void CG_LoadMenus(const char* menuFile) {
     start = trap_Milliseconds();
 
     len = trap_FS_FOpenFile(menuFile, &f, FS_READ);
+    Q_strncpyz(cg_hudListFile, menuFile, sizeof(cg_hudListFile));
     if (!f) {
         Com_Printf(S_COLOR_YELLOW "menu file not found: %s, using default\n", menuFile);
         len = trap_FS_FOpenFile("ui/hud.txt", &f, FS_READ);
+        Q_strncpyz(cg_hudListFile, "ui/hud.txt", sizeof(cg_hudListFile));
         if (!f) {
             CG_Error(S_COLOR_RED "default menu file not found: ui/hud.txt, unable to continue!");
         }
@@ -2511,6 +2516,7 @@ void CG_LoadMenus(const char* menuFile) {
         }
     }
 
+    cg_hudMenuCount = Menu_Count();
     Com_Printf("UI menu load time = %d milli seconds\n", trap_Milliseconds() - start);
 }
 

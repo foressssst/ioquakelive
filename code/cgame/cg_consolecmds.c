@@ -948,6 +948,7 @@ static consoleCommand_t commands[] = {
     {"vtell_attacker", CG_VoiceTellAttacker_f},
     {"tcmd", CG_TargetCommand_f},
     {"loadhud", CG_LoadHud_f},
+    {"hudedit_check", CG_HudEdit_Check_f},
     {"nextTeamMember", CG_NextTeamMember_f},
     {"prevTeamMember", CG_PrevTeamMember_f},
     {"nextOrder", CG_NextOrder_f},
