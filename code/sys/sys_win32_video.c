@@ -450,11 +450,154 @@ qboolean Sys_VideoAudio(void* video, const short* pcm, int count) {
     return qtrue;
 }
 
+static unsigned int Sys_VideoGet32(const byte* p) {
+    return ((unsigned int)p[0] << 24) | ((unsigned int)p[1] << 16) | ((unsigned int)p[2] << 8) | p[3];
+}
+
+static void Sys_VideoPut32(byte* p, unsigned int x) {
+    p[0] = (byte)(x >> 24);
+    p[1] = (byte)(x >> 16);
+    p[2] = (byte)(x >> 8);
+    p[3] = (byte)x;
+}
+
+static qboolean Sys_VideoShiftChunks(byte* box, unsigned int size, unsigned int shift) {
+    unsigned int at = 8;
+
+    while (at + 8 <= size) {
+        byte* child = box + at;
+        unsigned int len = Sys_VideoGet32(child);
+        unsigned int n, i;
+
+        if (len < 8 || len > size - at) {
+            return qfalse;
+        }
+        if (!memcmp(child + 4, "trak", 4) || !memcmp(child + 4, "mdia", 4) || !memcmp(child + 4, "minf", 4) ||
+            !memcmp(child + 4, "stbl", 4)) {
+            if (!Sys_VideoShiftChunks(child, len, shift)) {
+                return qfalse;
+            }
+        } else if (!memcmp(child + 4, "stco", 4)) {
+            n = len >= 16 ? Sys_VideoGet32(child + 12) : 0;
+            if (len < 16 || n > (len - 16) / 4) {
+                return qfalse;
+            }
+            for (i = 0; i < n; i++) {
+                UINT64 offset = (UINT64)Sys_VideoGet32(child + 16 + i * 4) + shift;
+
+                if (offset > 0xffffffffu) {
+                    return qfalse;
+                }
+                Sys_VideoPut32(child + 16 + i * 4, (unsigned int)offset);
+            }
+        } else if (!memcmp(child + 4, "co64", 4)) {
+            n = len >= 16 ? Sys_VideoGet32(child + 12) : 0;
+            if (len < 16 || n > (len - 16) / 8) {
+                return qfalse;
+            }
+            for (i = 0; i < n; i++) {
+                byte* e = child + 16 + i * 8;
+                UINT64 offset = (((UINT64)Sys_VideoGet32(e) << 32) | Sys_VideoGet32(e + 4)) + shift;
+
+                Sys_VideoPut32(e, (unsigned int)(offset >> 32));
+                Sys_VideoPut32(e + 4, (unsigned int)offset);
+            }
+        }
+        at += len;
+    }
+    return qtrue;
+}
+
+static qboolean Sys_VideoCopy(FILE* in, FILE* out, __int64 from, __int64 to, byte* buffer, int size) {
+    if (_fseeki64(in, from, SEEK_SET)) {
+        return qfalse;
+    }
+    while (from < to) {
+        int n = (int)MIN(to - from, (__int64)size);
+
+        if ((int)fread(buffer, 1, n, in) != n || (int)fwrite(buffer, 1, n, out) != n) {
+            return qfalse;
+        }
+        from += n;
+    }
+    return qtrue;
+}
+
+static void Sys_VideoFastStart(const WCHAR* path) {
+    WCHAR temp[MAX_OSPATH + 8];
+    __int64 total, at = 0, moovAt = -1, mdatAt = -1;
+    unsigned int moovSize = 0;
+    byte head[16];
+    byte* moov = NULL;
+    byte* buffer = NULL;
+    FILE* in;
+    FILE* out = NULL;
+    qboolean ok = qfalse;
+
+    in = _wfopen(path, L"rb");
+    if (!in) {
+        return;
+    }
+    _fseeki64(in, 0, SEEK_END);
+    total = _ftelli64(in);
+    while (at + 8 <= total) {
+        __int64 len;
+
+        if (_fseeki64(in, at, SEEK_SET) || fread(head, 1, 8, in) != 8) {
+            break;
+        }
+        len = Sys_VideoGet32(head);
+        if (len == 1) {
+            if (fread(head + 8, 1, 8, in) != 8) {
+                break;
+            }
+            len = ((__int64)Sys_VideoGet32(head + 8) << 32) | Sys_VideoGet32(head + 12);
+        } else if (len == 0) {
+            len = total - at;
+        }
+        if (len < 8 || len > total - at) {
+            break;
+        }
+        if (!memcmp(head + 4, "moov", 4) && Sys_VideoGet32(head) > 1) {
+            moovAt = at;
+            moovSize = Sys_VideoGet32(head);
+        } else if (!memcmp(head + 4, "mdat", 4) && mdatAt < 0) {
+            mdatAt = at;
+        }
+        at += len;
+    }
+    if (at != total || moovAt < 0 || mdatAt < 0 || moovAt < mdatAt || moovSize > 0x4000000) {
+        fclose(in);
+        return;
+    }
+    moov = malloc(moovSize);
+    buffer = malloc(0x100000);
+    _snwprintf(temp, ARRAY_LEN(temp), L"%ls.tmp", path);
+    temp[ARRAY_LEN(temp) - 1] = 0;
+    if (moov && buffer && !_fseeki64(in, moovAt, SEEK_SET) && fread(moov, 1, moovSize, in) == moovSize &&
+        Sys_VideoShiftChunks(moov, moovSize, moovSize) && (out = _wfopen(temp, L"wb")) != NULL) {
+        ok = (qboolean)(Sys_VideoCopy(in, out, 0, mdatAt, buffer, 0x100000) &&
+                        fwrite(moov, 1, moovSize, out) == moovSize &&
+                        Sys_VideoCopy(in, out, mdatAt, moovAt, buffer, 0x100000) &&
+                        Sys_VideoCopy(in, out, moovAt + moovSize, total, buffer, 0x100000));
+        ok = (qboolean)(!fclose(out) && ok);
+    }
+    fclose(in);
+    free(buffer);
+    free(moov);
+    if (out && (!ok || !MoveFileExW(temp, path, MOVEFILE_REPLACE_EXISTING))) {
+        DeleteFileW(temp);
+    }
+}
+
 int Sys_VideoClose(void* video) {
     sysVideo_t* v = video;
     HRESULT hr = v->frames ? IMFSinkWriter_Finalize(v->writer) : E_ABORT;
 
     IMFSinkWriter_Release(v->writer);
+    if (SUCCEEDED(hr) && SUCCEEDED(v->error)) {
+        Sys_VideoFastStart(v->path);
+    }
     pMFShutdown();
     if (v->com) {
         CoUninitialize();
