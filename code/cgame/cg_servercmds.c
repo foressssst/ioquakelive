@@ -1407,6 +1407,15 @@ static int CG_ChatSender(const char* arg) {
     return (p > arg && *p == ' ') ? atoi(arg) : -1;
 }
 
+static qboolean CG_ChatMuted(const char* arg) {
+    int sender = atoi(arg);
+
+    if (sender < 0 || sender >= MAX_CLIENTS) {
+        return qtrue;
+    }
+    return trap_VoiceIsIgnored(cgs.clientinfo[sender].steamId);
+}
+
 static void CG_ChatConsoleAvatar(int sender) {
     const clientInfo_t* ci;
 
@@ -1605,7 +1614,7 @@ static void CG_ServerCommand(void) {
     }
 
     if (!strcmp(cmd, "chat")) {
-        if (cgs.gametype >= GT_TEAM && cg_teamChatsOnly.integer) {
+        if (cg_teamChatsOnly.integer || CG_ChatMuted(CG_Argv(1))) {
             return;
         }
         if (cg_chatbeep.integer) {
@@ -1665,6 +1674,9 @@ static void CG_ServerCommand(void) {
     }
 
     if (!strcmp(cmd, "tchat")) {
+        if (CG_ChatMuted(CG_Argv(1))) {
+            return;
+        }
         if (cg_teamChatBeep.integer) {
             trap_S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
         }
