@@ -1281,7 +1281,9 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_spScores5", "set by the game: the single player scores at skill 5"},
     {"g_spAwards", "set by the game: the medals won in single player"},
     {"g_spVideos", "set by the game: the single player videos already seen"},
-    {"g_autoAction", "records a demo of every match on the server (no effect in this build)"},
+    {"g_autoAction", "does at every match for every player, on top of their " HC("cg_autoAction") "; add the values\n"
+                     HV("1") "Records a demo\n"
+                     HV("2") "Takes a screenshot at the end"},
     {"g_forceSendConfigstring", "sends every configstring again, even the ones that did not change (no effect in this build)"},
     {"g_forceSmallScoreboardMessage", "sends the scores in the short form (no effect in this build)"},
     {"g_enableDebugTrace", "prints the traces the game makes (no effect in this build)"},
