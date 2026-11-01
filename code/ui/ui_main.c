@@ -4832,6 +4832,26 @@ static void UI_BuildQ3Model_List(void) {
     }
 }
 
+static void UI_IngameTeamChoice(void) {
+    menuDef_t* menu = Menus_FindByName("ingame_about");
+    int i, kept;
+
+    if (!menu) {
+        return;
+    }
+    kept = 0;
+    for (i = 0; i < menu->itemCount; i++) {
+        itemDef_t* item = menu->items[i];
+
+        if (item->window.ownerDrawFlags & UI_SHOW_IF_NOT_WARMUP) {
+            continue;
+        }
+        item->window.ownerDrawFlags &= ~UI_SHOW_IF_WARMUP;
+        menu->items[kept++] = item;
+    }
+    menu->itemCount = kept;
+}
+
 void _UI_Init(qboolean inGameLoad) {
     const char* menuSet;
 
@@ -4925,6 +4945,7 @@ void _UI_Init(qboolean inGameLoad) {
 
     UI_LoadMenus(menuSet, qtrue);
     UI_LoadMenus("ui/ingame.txt", qfalse);
+    UI_IngameTeamChoice();
 
     Menus_CloseAll();
 
