@@ -1,331 +1,47 @@
 # ioquakelive
 
-`ioquakelive` es una implementación del juego **Quake Live** basada en el motor de código abierto [ioquake3](https://ioquake3.org/). El objetivo de este proyecto es reproducir el comportamiento del cliente y del servidor de la última versión original **v1069**, y desarrollar mejoras propias sin perder compatibilidad con el juego.
+Una implementación de código abierto de Quake Live, desarrollada por el equipo de [Quake Club](https://quakeclub.com). Reproduce la última versión original del juego (la build 1069) utilizando [ioquake3](https://ioquake3.org/) como motor, incorporando mejoras propias sin perder la compatibilidad con el Juego original.
 
-El proyecto parte del gran trabajo de [Thomas Jones](https://github.com/tjone270/ioquakelive), quien reconstruyó partes del protocolo de red y de los módulos del juego, y consiguió compilar el cliente y el servidor sobre ioquake3, este repositorio continúa ese trabajo.
+El proyecto parte del trabajo de [Thomas Jones](https://github.com/tjone270/ioquakelive), cuya implementación fue el punto de partida y la inspiración para continuar su desarrollo.
 
-ioquakelive se desarrolla en [Quake Club](https://quakeclub.com), la comunidad donde se juega y se pone a prueba cada versión. Si quieres jugar, encontrar partidas o contarnos algo, ahí nos encuentras.
+## Cómo jugar
 
-<sub>Desarrollado con apoyo de [Claude Code](https://claude.com/claude-code).</sub>
+Necesitaras tener una copia legitima de Quake Live (https://store.steampowered.com/app/282440/Quake_Live/). ioquakelive no incluye los archivos originales del juego, utiliza los de tu propia instalación, luego:
 
-## Cómo lo pruebo?
+1. Descarga la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases).
+2. Extrae el juego en cualquier carpeta, en donde sea.
+3. Ejecuta `ioquakelive.x86_64.exe` o `ioquakelive-vulkan.x86_64.exe` si quieres utilizar Vulkan.
 
-Para probar ioquakelive necesitaras una copia legítima de **Quake Live en Steam**, ya que este proyecto no incluye los archivos originales, sino que utiliza los recursos de tu propia instalación.
-
-Pasos:
-
-1. Descarga la última versión de ioquakelive desde [Releases](https://github.com/foressssst/ioquakelive/releases).
-2. Extrae el archivo en una carpeta cualquiera.
-3. Y ejecuta `ioquakelive.x86_64.exe`, para usar la versión de vulkan ejecuta `ioquakelive-vulkan.x86_64.exe`.
-
-### Antes de empezar
-
-- En Windows, el juego intentara localizar Quake Live en tu biblioteca de Steam y copiar el archivo `pak00.pk3` a la carpeta `baseq3`, en caso de que no lo encuentre, tendrás que copiar ese archivo manualmente desde tu instalación.
-- Los ejecutables no están firmados digitalmente, asi que es probable (poco probable en realidad) que Windows Defender muestre una advertencia o bloquee su ejecución.
-- Desde parches recientes cuando se publica una versión nueva en la franja inferior del menú la descarga e instala con un clic y reinicia el juego. En macOS, o si prefieres hacerlo a mano, descarga la nueva versión y extrae su contenido sobre la carpeta existente.
-- Las versiones experimentales (pre-releases) también tendran versiones para Windows, Linux y macOS.
-- De igual forma si quieres usar o probar alguna version BETA anterior a la 1.0, desde la 0.1.0 hasta la 0.3.13, estaran disponibles en [ioquakelive-betas](https://github.com/foressssst/ioquakelive-betas/releases).
+En Sistemas operativos Windows, el juego detecta automáticamente tu instalación de Quake Live y copia el `pak00.pk3`, caso contrario puedes copiarlo manualmente a la carpeta `baseq3`.
 
 
-## Novedades
+## Que es lo novedoso?
 
-- **Tres renderers:** OpenGL clásico, OpenGL 2 y Vulkan.
-- **NVIDIA Reflex y AMD Anti-Lag 2:** opciones de baja latencia en Vulkan, con el estado de compatibilidad indicado en la sección de renderizado.
-- **Carga en paralelo:** imágenes y sonidos se procesan en varios hilos para reducir los tiempos de carga.
-- **Demo Player renovado:** interfaz y reproducción de demos actualizadas.
-- **Visión a través de paredes:** `cg_xray` permite ver jugadores durante la reproducción de demos y al observar una partida.
-- **Búsqueda y ayuda en consola:** `help <comando o cvar>` muestra información sobre un comando o una cvar, mientras que `searchconsole` permite buscar texto en la consola.
-- **Herramientas de diagnóstico:** `frametimes` mide el tiempo entre cuadros e `inputrate` muestra la frecuencia de los datos enviados por el mouse.
-- **Consola animada:** `con_animate 0` desactiva la animación al abrirla.
-- **Flecha del sistema:** utilizada en los menús, la consola y el reproductor de demos.
+- Compatibilidad con OpenGL, OpenGL 2 y Vulkan, soporte para NVIDIA Reflex y AMD Anti-Lag 2 en Vulkan.
+- Carga de recursos en varios hilos y desbloqueo de FPS.
+- Un demo player renovado que incluye`cg_xray`(wallhack) durante la reproducción de demos y al espectear (no funciona al entrar a jugar).
+- Integración con Quake Club.
+- Nuevos comandos de consola: `help <comando o cvar>` y `searchconsole`.
 
-## Rendimiento
+## Para compilar
 
-Se hicieron mediciones el dia 16 de octubre de 2026 en Quake Live y en ioquakelive, con la configuración por defecto de cada uno y la versión en desarrollo posterior a la 1.0.1. Los resultados dependen del equipo y de los drivers.
-
-### Equipo modesto
-
-Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM, a 1920x1080 en pantalla completa: mediana de seis pasadas, sin contar la primera de cada ronda, que incluye la carga.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/notebook-fps-oscuro.svg">
-  <img alt="Cuadros por segundo en la notebook: Quake Live 224, ioquakelive OpenGL 2 241, OpenGL 326 y Vulkan 430" src="docs/rendimiento/notebook-fps-claro.svg">
-</picture>
-
-<details><summary>Ver los números</summary>
-
-| | Quake Live | ioquakelive OpenGL | ioquakelive OpenGL 2 | ioquakelive Vulkan |
-|---|---:|---:|---:|---:|
-| Cuadros por segundo | 224 | 326 (+46 %) | 241 (+8 %) | 430 (+92 %) |
-| Duración de la prueba, con la carga | 48 a 57 s | 23 a 26 s | 31 a 37 s | 19 a 21 s |
-
-</details>
-
-### Equipo de gama media
-
-AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los momentos más lentos y menos trabajo por cuadro, más parejo se siente.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/torre-cuadros-lentos-oscuro.svg">
-  <img alt="Cuadros por segundo del 1 % y del 0,1 % más lento: Quake Live 110 y 105, ioquakelive OpenGL 118 y 114, OpenGL 2 120 y 117, Vulkan 121 y 118" src="docs/rendimiento/torre-cuadros-lentos-claro.svg">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/torre-gpu-oscuro.svg">
-  <img alt="Milisegundos de GPU por cuadro: Quake Live 0,94, ioquakelive Vulkan 0,76, OpenGL 1,18 y OpenGL 2 2,32" src="docs/rendimiento/torre-gpu-claro.svg">
-</picture>
-
-<details><summary>Ver los números</summary>
-
-| | Quake Live | ioquakelive Vulkan | ioquakelive OpenGL | ioquakelive OpenGL 2 |
-|---|---:|---:|---:|---:|
-| 1 % de cuadros más lentos | 109 a 110 fps | 121 fps | 118 a 119 fps | 120 fps |
-| 0,1 % de cuadros más lentos | 104 a 106 fps | 118 fps | 113 a 114 fps | 117 fps |
-| Tiempo de cuadro, percentil 99 | 9,0 ms | 8,15 ms | 8,3 ms | 8,25 ms |
-| Tiempo de GPU por cuadro | 0,94 ms | 0,76 ms | 1,18 ms | 2,32 ms |
-
-</details>
-
-Sin límite de cuadros, ioquakelive llega en ese equipo al tope de 1000 cuadros por segundo del motor tanto en Vulkan como en OpenGL.
-
-## Estado del proyecto
-
-Los tres módulos principales del juego `qagame`, `cgame` y `ui` se han reconstruido a partir de los binarios de Quake Live build 1069. Las direcciones de las funciones examinadas con Ghidra están documentadas en los mensajes de commit correspondientes.
-
-La siguiente tabla compara los nombres de las cvars y los archivos presentes en el código con los del juego original. **La coincidencia de nombres no garantiza que el comportamiento sea idéntico**; esa equivalencia se comprueba por separado.
-
-| Módulo | Cvars | Archivos |
-|---|---:|---:|
-| `qagame` | 406/406 | 115/115 |
-| `cgame` | 365/365 | 427/427 |
-| `ui` | 210/211 | 120/120 |
-
-La única cvar del módulo `ui` que no se ha incorporado es `ui_cdkeyvalid`, heredada del sistema de clave de CD de Quake 3 y no utilizada por Quake Live.
-
-En el recuento también se consideran presentes los archivos que se cargan con otra extensión y las cvars cuyo nombre cambia, pero que el motor trata de forma equivalente. Existe además una diferencia interna en `vmCvar_t`: la estructura tiene un campo menos que en el original. Esto solo sería relevante para cargar un módulo original y no afecta al juego en su estado actual.
-
-### Detalle de implementación
-
-Las siguientes tablas documentan las áreas portadas y su estado actual. Los nombres de funciones, estructuras, cvars y componentes se mantienen tal como aparecen en el código.
-
-#### Protocolo de red
-
-| Área | Estado | Notas |
-|---|---|---|
-| Netchan format | Hecho | Sin `GENCHECKSUM`, como en la cabecera de paquetes de Quake Live. |
-| Client message parsing | Hecho | Incluye el byte adicional después de los tres enteros de cabecera. |
-| `entityStateFields` | Hecho | 58 campos reordenados; gravedad como `int32`. |
-| `playerStateFields` | Hecho | 58 campos, `pm_flags` de 24 bits, `weaponPrimary` y nueve campos nuevos. |
-| `usercmd_t` deltas | Hecho | Offsets 21 a 25 reordenados y dos campos adicionales de tipo byte. |
-| Configstrings | Hecho | Al conectar, solo se reenvían las que han cambiado. |
-| XOR netchan encoding | Hecho | La clave se obtiene de `challenge ^ serverId ^ messageAcknowledge`. |
-| Huffman on OOB data | Hecho | Los paquetes de conexión se comprimen a partir del byte 12. |
-
-#### Motor: cliente
-
-| Área | Estado | Notas |
-|---|---|---|
-| `cgame` cvars | Hecho | Se registran al iniciar, antes de leer la configuración. |
-| Connection protocol | Hecho | Ticket de Steam en `getchallenge` y cvar `cl_steamId`. |
-| Game modules | Hecho | `iobin.pk3` contiene los módulos para cada arquitectura y funciona con servidores puros. |
-| Sound system | Hecho | Registro, canales y conjunto de sonidos de Quake Live. |
-| Frame timing | Hecho | Con `com_preciseFrameTiming`, la variación a 125 FPS baja de 0,34 a 0,01 ms. |
-| Threaded loading | Hecho | Imágenes y sonidos se cargan en paralelo; `campgrounds` tarda cerca de un segundo. |
-| Borderless fullscreen | Hecho | Disponible mediante `r_fullscreen 2`. |
-| Demos | Hecho | Compatibilidad bidireccional con el cliente original. |
-| Workshop | Hecho | Descarga los recursos que faltan antes de entrar a una partida. |
-| Server advertisements | Hecho | Los cambios procedentes del Workshop se aplican únicamente en el servidor correspondiente. |
-| Steam voice | Hecho | Comunicación entre pares mediante Steam; el módulo de juego determina quién puede escuchar a cada jugador. |
-| Console auto-complete | Hecho | Incluye `callvote`, mapas, factories, nombres de jugadores y comandos de `cgame`. |
-| Screenshots | Hecho | Mantiene las rutas y los nombres del original, incluidos los `levelshots`. |
-| Safe mode | Hecho | Tras un cierre anormal, ofrece iniciar con los ajustes de sistema predeterminados. |
-| 64-bit client | Hecho | `Release\\x64` es la compilación principal. |
-
-#### Motor: servidor
-
-| Área | Estado | Notas |
-|---|---|---|
-| Snapshots | Hecho | La serialización de entidades y jugadores coincide con Quake Live. |
-| Bots | Hecho | Implementación en `sv_bot.c`. |
-| Steam auth | Hecho | Valida el ticket mediante `BeginAuthSession`. Si el servidor no tiene Steam, permite conexiones de red local. |
-| Game module loading | Hecho | DLL nativa mediante la tabla `gameImport_t`. |
-| Ban system | Hecho | Gestión por Steam ID mediante `access.txt`; `ban`, `tempban` y `unban` actualizan el archivo. |
-| ZMQ stats/rcon | Hecho | Incluye las cvars `zmq_*` del original. El RCON sin contraseña solo acepta conexiones locales. |
-| Server browser | Hecho | Gestionada por Steam, como en el original. |
-| Master server heartbeat | Hecho | Utiliza el game server de Steam. `sv_master 0` lo retira de la lista. |
-| `sv_fps` | Hecho | Fijado en 40, como en el original. |
-| Flood protection | Hecho | Incluye `sv_floodProtect` y el contador de `userinfo` del módulo de juego. |
-| Full server redirect | Hecho | `sv_fullRedirect` deriva a los jugadores de ioquakelive a otro servidor con espacio. |
-| Linux ARM | Hecho | Compilado y ejecutándose en `aarch64`. |
-
-#### `cgame`
-
-| Área | Estado | Notas |
-|---|---|---|
-| Event system | Hecho | 100 manejadores `EV_`, incluidos Race, infección y premios. |
-| Widescreen | Hecho | `CG_AdjustFrom640` admite los modos estirado, izquierda, centro y derecha. |
-| Owner-draw text | Hecho | Cerca de 70 funciones pasan por `CG_DrawText`. |
-| `serverinfo` | Hecho | Incluye los 29 campos de `CG_ParseServerinfo`. |
-| Scoreboards | Hecho | FFA, Duel, TDM y marcador final con el modelo del ganador. |
-| HUD | Hecho | Disposición del original, con temporizadores de ítems y tarjeta del TAB. |
-| Announcer, medals and rounds | Hecho | Las seis medallas animadas utilizan 24 cuadros de CPMA. |
-| Damage plums | Hecho | Implementación completa de `CG_DrawDamagePlums`. |
-| Crosshair | Hecho | Incluye la regla de ocultarla en múltiplos de 30. |
-| Obituary feed | Hecho | Mensajes del original con atacante, víctima e icono del arma. |
-| Prediction/pmove | Hecho | `pmove` reconstruido a partir del binario. |
-| `cl_timeNudge` | Hecho | Incluye la extrapolación de jugadores y el adelanto de proyectiles del original. |
-| Clan tags | Hecho | Clave `cn` con sus 26 colores. |
-| Weapon effects | Hecho | Chispas de impacto, estilos de arma, zoom y viñeta mediante sus cvars. |
-| Freeze Tag | Hecho | Tres shaders de hielo según avanza el descongelamiento; incluye fragmentos con estela. |
-| Infection | Hecho | Punto de interés, nombres de Red Rover y aspecto del jugador infectado. |
-| Chat beeps | Hecho | `cg_chatbeep` y `cg_teamChatBeep`. |
-| Intermission camera | Hecho | Incluye mapas sin `info_player_intermission`. |
-| Followed player corpse | Hecho | Al morir sin desintegrarse, el espectador puede ver el cuerpo. |
-| Spectator count | Hecho | Novedad de ioquakelive: con `ch_drawSpectators 1`, un ojo abajo a la derecha muestra cuántos te están mirando, contando a los compañeros muertos de Clan Arena. El número lo manda el servidor solo a quien lo pide, así que a un cliente de retail le llega lo mismo de siempre. Apagado por defecto. |
-
-#### Menús (`ui`)
-
-| Área | Estado | Notas |
-|---|---|---|
-| New exports | Hecho | `UI_REGISTER_CVARS`, `UI_CHECK_ACTIVE_MENU`, `UI_WALK_MENUS` y `UI_DRAW_ADVERTISEMENT`. |
-| `fontIndex` support | Hecho | Los puntos de dibujo reciben `item->fontIndex`. |
-| Menu file loading | Hecho | Los archivos de ioquakelive se incluyen en `pak01.pk3`, dentro de `ui/ioql/`, y funcionan en servidores puros. |
-| UI scaling | Hecho | Se basa en la altura de pantalla y respeta las reglas del original para formatos 4:3 y 5:4. |
-| Home | Hecho | Menú en columna, fondo, avisos legales y lista de amigos; dentro de una partida, incorpora la barra verde. |
-| Start Match | Hecho | Factories, selección de mapa y bots. |
-| Server browser | Hecho | Datos de Steam, columnas ordenables, filtros, imagen del mapa y ventana con información de la partida. |
-| Settings | Hecho | 220 opciones en el orden del original, también accesibles durante una partida. |
-| Training | Hecho | Crash Course, Accelerate y Elevate, además de la sala de tracking propia de ioquakelive. |
-| Replays | Hecho | Cada demo grabada durante una partida aparece asociada a esa partida. |
-| Career Stats | Hecho | Statistics y Medals a partir de las estadísticas de Steam. |
-| Recent Matches | Hecho | El servidor envía el reporte de la partida mediante Steam y el cliente lo guarda. |
-| Legal notices | Hecho | El texto se obtiene del `web.pak` del jugador. |
-| Scoreboards (`.menu`) | Hecho | Marcadores individuales y por equipos. |
-| UI script actions | Hecho | Las 13 acciones, incluidas `clientViewProfile`, `modPlayer`, `putspec` y `banPlayer`. |
-| Menu voting | Hecho | El voto de mapa utiliza el modo elegido en el menú, como en el original. |
-| Player profile | Hecho | Career Stats, avatar de Steam y perfil en la superposición de Steam. |
-| Friends | Hecho | Lista de Steam, colores y opciones del original, como Join Match, Send Message y Send Invite. |
-| End-of-match map voting | Hecho | Requiere `mappool.txt`, como en el original. |
-
-#### Módulo de juego (`qagame`)
-
-| Área | Estado | Notas |
-|---|---|---|
-| Game types | Hecho | FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race y RR. |
-| Physics | Hecho | Control de aire, doble salto, deslizamiento agachado, auto-hop y escaleras. |
-| Grapple hook | Hecho | Tracción hacia paredes y enemigos, frenado a corta distancia y amortiguación bajo el agua. |
-| Weapons | Hecho | Todas las armas de Quake Live, con sus tiempos de recarga. |
-| Damage and splash | Hecho | |
-| Key/door system | Hecho | Llaves plateada, dorada y maestra. |
-| Warmup | Hecho | `g_gameState`, porcentaje de jugadores listos y abandono. |
-| Voting system | Hecho | Incluye el voto de mapa al terminar la partida. |
-| Cvars | Hecho | Las 406 cvars del original, con sus funciones de cambio. |
-| Factories | Hecho | Ejecutar `map` sin una factory muestra el uso, como en el original. |
-| Race | Hecho | Checkpoints, cronometraje y HUD. |
-| Unlagged (`lagHax`) | Hecho | Historial de posiciones y rebobinado. |
-| Armor and damage | Hecho | Armadura por niveles, perdigones en anillos y reducción del daño con la distancia. |
-| Training mode | Hecho | Implementado en `g_training.c`. |
-| Loadouts | Hecho | Se aplican desde el menú al aparecer en la partida, incluida la munición. |
-| JSON stats | Hecho | Genera los mismos documentos que el original mediante ZeroMQ. |
-| Premium | No aplica | La build 1069 no tiene suscripciones. |
-| Access control | Hecho | `access.txt` gestiona los permisos de ban, mod y admin por Steam ID. |
-| Admin commands | Hecho | Privilegios y comandos reconstruidos a partir del binario. |
-| Map entities override | Hecho | `sv_altEntDir` lee `<mapa>.ent` y `sv_dumpEntities` las escribe. |
-
-#### Renderers
-
-| Área | Estado | Notas |
-|---|---|---|
-| Classic OpenGL (`opengl1`) | Hecho | Basado en Quake3e, con las modificaciones de Quake Live. Es el renderer predeterminado. |
-| Vulkan | Hecho | Basado en Quake3e, con el bloom y la corrección de color de Quake Live. |
-| OpenGL 2 (`opengl2`) | Hecho | Renderer de respaldo basado en ioquake3. |
-| Reflex and Anti-Lag 2 | Parcial | Disponibles en Vulkan mediante `r_lowLatency`. Reflex se ha medido en NVIDIA; Anti-Lag 2 aún no se ha probado en AMD. |
-| Quake Live shaders | Hecho | Las 134 palabras del parser original. |
-| Duplicate shaders | Hecho | Prevalece la primera definición, como en el original. |
-| Advertisements | Hecho | El renderer añade la superficie correspondiente a cada cartel del mapa. |
-| Grapple hook chain | Hecho | Utiliza `RT_RAIL_CORE`. |
-| Freeze/thaw effects | Hecho | Los tres shaders se aplican al modelo congelado. |
-| Bloom | Hecho | Utiliza los valores del original. |
-| Threaded textures | Hecho | Carga de imágenes JPEG, TGA y PNG. |
-| Queued frames | Hecho | Control mediante `r_maxQueuedFrames`, con valor predeterminado de 0. |
-| Multithreaded rendering | Hecho | `r_smp 1` dibuja cada cuadro en un hilo propio mientras se prepara el siguiente, en OpenGL y en Vulkan: más FPS a cambio de un cuadro de latencia. En Vulkan, con `r_lowLatency` activo, el juego espera a ese hilo antes de leer la entrada. Apagado por defecto; no disponible en macOS. |
-| Pixel format | Hecho | Como en el original, en Windows se descarta el OpenGL por software (GDI Generic) salvo con `r_allowSoftwareGL 1`. Un `r_depthBits 32`, común en las configs viejas, baja a 24 cuando la placa no lo tiene, en vez de dejar el juego a 10 FPS. |
-
-## Compilar
-
-El proyecto genera el cliente `ioquakelive`.
-
-Antes de compilar, inicializa los submódulos:
+Primero que nada, inicializa los submódulos:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### Windows
-
-Se requiere Visual Studio 2026 o sus Build Tools, con el toolset v145.
-
-```bat
-cd misc\msvc
-MSBuild ioquakelive.sln -p:Configuration=Release -p:Platform=x64
-```
-
-Los binarios se generan en `build\Release\x64\`.
-
-Las plataformas disponibles son `x64`, `Win32` y `ARM64`. Para compilar en ARM64, ejecuta antes `code\tools\Build-SDL3.ps1`.
-
-Si modificas una estructura (`struct`) en un archivo de cabecera, utiliza `-t:Rebuild`: una compilación incremental puede conservar objetos desactualizados.
-
-### Linux y macOS
-
-```bash
-make release
-```
-
-Se utiliza el Makefile de ioquake3. SDL3 debe estar instalado y disponible mediante `pkg-config`.
-
-Los binarios generados son `ioquakelive` e `ioquakelive-vulkan`.
-
-## Estructura del repositorio
-
-```text
-code/
-  cgame/           Módulo de juego del cliente: HUD, marcadores, efectos y predicción
-  game/             Módulo de juego del servidor: reglas, entidades y físicas
-  ui/               Menús
-  client/           Cliente del motor
-  server/           Servidor del motor
-  qcommon/          Código compartido: red, sistema de archivos, comandos y Steam
-  renderercommon/   Código compartido entre renderers
-  renderergl1/      OpenGL clásico
-  renderergl2/      OpenGL 2
-  renderervk/       Vulkan
-  sdl/, sys/        Ventana, entrada y sistema operativo
-  SDL3/             Submódulo
-  tools/            Scripts de compilación y empaquetado
-
-misc/msvc/          Solución y proyectos de Visual Studio
-content/pak01/      Recursos propios de ioquakelive para generar pak01.pk3
-docs/rendimiento/   Gráficos de la sección de rendimiento
-```
+- **Windows:** Visual Studio 2026 (toolset v145), se compila con:
+  `MSBuild misc\msvc\ioquakelive.sln -p:Configuration=Release -p:Platform=x64`
+- **Linux y macOS:** ejecuta `make release`, este requiere tener SDL3 instalado.
 
 ## Créditos y licencia
 
-Desarrollado por [Quake Club](https://quakeclub.com) y su comunidad.
-
-Este proyecto se apoya en el trabajo de:
+Este proyecto utiliza y toma como referencia el y los trabajo de:
 
 - [Thomas Jones — ioquakelive](https://github.com/tjone270/ioquakelive)
 - [ioquake3](https://github.com/ioquake/ioq3)
 - [Quake3e](https://github.com/ec-/Quake3e)
 - [CPMA](https://playmorepromode.com/)
 
-Otras dependencias y recursos:
-
-- Emojis: Noto Emoji.
-- Fuentes: `sans-serif` y Liberation Sans.
-- SDL3, MoltenVK en macOS y fontstash con stb_truetype para la representación de texto.
-
-Quake Live y sus recursos pertenecen a id Software. Este repositorio no incluye ni redistribuye los archivos originales del juego.
-
-El código de este proyecto se distribuye bajo la licencia GPL v2.
+Quake Live y sus recursos pertenecen a id Software, el código fuente se distribuye bajo la licencia GPL v2.
