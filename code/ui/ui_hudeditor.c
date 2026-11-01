@@ -202,7 +202,9 @@ typedef enum {
     HE_HIT_OPTROW,
     HE_HIT_LTAB,
     HE_HIT_ADD,
-    HE_HIT_DELETE
+    HE_HIT_DELETE,
+    HE_HIT_HUDACT,
+    HE_HIT_SAVEAS
 } heHit_t;
 
 typedef enum {
@@ -274,6 +276,8 @@ static struct {
     char pending[MAX_QPATH];
     qboolean hudMenu;
     float hudMenuX;
+    qboolean saveAs;
+    char saveName[33];
     char huds[HE_MAX_HUDS][MAX_QPATH];
     int numHuds;
     int rightTab;
@@ -459,7 +463,12 @@ static qboolean HE_Load(const char* listFile) {
     int f, base = 0;
 
     Q_strncpyz(he.list, listFile, sizeof(he.list));
-    he.numFiles = HV_ReadList(listFile, he.files, HV_MAX_FILES);
+    if (!Q_stricmp(COM_GetExtension(listFile), "menu")) {
+        Q_strncpyz(he.files[0], listFile, MAX_QPATH);
+        he.numFiles = 1;
+    } else {
+        he.numFiles = HV_ReadList(listFile, he.files, HV_MAX_FILES);
+    }
     if (he.numFiles <= 0 && Q_stricmp(listFile, "ui/hud.txt")) {
         Q_strncpyz(he.list, "ui/hud.txt", sizeof(he.list));
         he.numFiles = HV_ReadList(he.list, he.files, HV_MAX_FILES);
@@ -514,8 +523,10 @@ static const char* HE_HudName(const char* list) {
 
 static void HE_ScanHuds(void) {
     static char buf[8192];
+    static char used[HE_MAX_HUDS * 4][MAX_QPATH];
+    char files[HV_MAX_FILES][MAX_QPATH];
     const char* p;
-    int i, n;
+    int i, k, n, numUsed = 0, lists;
 
     he.numHuds = 0;
     for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
@@ -525,6 +536,28 @@ static void HE_ScanHuds(void) {
     for (p = buf, i = 0; i < n && he.numHuds < HE_MAX_HUDS; i++, p += strlen(p) + 1) {
         if (p[0]) {
             Com_sprintf(he.huds[he.numHuds++], MAX_QPATH, "hud/%s", p);
+        }
+    }
+    lists = he.numHuds;
+    for (i = (int)ARRAY_LEN(heRetailHuds); i < lists; i++) {
+        int m = HV_ReadList(he.huds[i], files, HV_MAX_FILES);
+
+        for (k = 0; k < m && numUsed < (int)ARRAY_LEN(used); k++) {
+            Q_strncpyz(used[numUsed++], files[k], MAX_QPATH);
+        }
+    }
+    n = trap_FS_GetFileList("hud", ".menu", buf, sizeof(buf));
+    for (p = buf, i = 0; i < n && he.numHuds < HE_MAX_HUDS; i++, p += strlen(p) + 1) {
+        char path[MAX_QPATH];
+
+        if (!p[0]) {
+            continue;
+        }
+        Com_sprintf(path, sizeof(path), "hud/%s", p);
+        for (k = 0; k < numUsed && Q_stricmp(used[k], path); k++) {
+        }
+        if (k == numUsed) {
+            Q_strncpyz(he.huds[he.numHuds++], path, MAX_QPATH);
         }
     }
 }
@@ -889,16 +922,20 @@ static int HE_SaveNew(void) {
     return HD_Insert(&heDocs[0], heDocs[0].endFrom, wrap) ? 0 : -2;
 }
 
-static qboolean HE_Save(void) {
+static qboolean HE_SaveNamed(const char* as) {
     char name[64], path[MAX_QPATH], listPath[MAX_QPATH], list[MAX_MENUDEFFILE];
     char paths[HV_MAX_FILES][MAX_QPATH];
     qboolean changed[HE_MAX_DOCS];
     int i, k, len, written = 0, keepSel = he.selected;
 
-    HE_DefaultName(name, sizeof(name));
+    if (as) {
+        Q_strncpyz(name, as, sizeof(name));
+    } else {
+        HE_DefaultName(name, sizeof(name));
+    }
     for (k = 0; k < he.numDocs; k++) {
         HD_ClearEdits(&heDocs[k]);
-        changed[k] = qfalse;
+        changed[k] = as != NULL;
     }
     for (i = 0; i < he.numItems; i++) {
         heItem_t* e = &he.items[i];
@@ -977,6 +1014,60 @@ static qboolean HE_Save(void) {
         he.selected = keepSel;
     }
     HE_Status(va("Saved as %s", listPath));
+    return qtrue;
+}
+
+static qboolean HE_Save(void) {
+    return HE_SaveNamed(NULL);
+}
+
+static void HE_OpenSaveAs(void) {
+    HE_DefaultName(he.saveName, sizeof(he.saveName));
+    he.hudMenu = qfalse;
+    he.colorKey = -1;
+    he.saveAs = qtrue;
+}
+
+static void HE_DoSaveAs(void) {
+    if (!HE_ValidName(he.saveName)) {
+        HE_Status("Use letters, numbers, - and _ in the name.");
+        return;
+    }
+    he.saveAs = qfalse;
+    HE_SaveNamed(he.saveName);
+}
+
+static qboolean HE_SaveAsKey(int key) {
+    int len = (int)strlen(he.saveName);
+
+    if (key & K_CHAR_FLAG) {
+        int ch = key & ~K_CHAR_FLAG;
+
+        if (((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+             ch == '-') &&
+            len < (int)sizeof(he.saveName) - 1) {
+            he.saveName[len] = (char)ch;
+            he.saveName[len + 1] = 0;
+        } else if (ch == ' ' && len < (int)sizeof(he.saveName) - 1) {
+            he.saveName[len] = '_';
+            he.saveName[len + 1] = 0;
+        }
+        return qtrue;
+    }
+    if (key == K_BACKSPACE) {
+        if (len > 0) {
+            he.saveName[len - 1] = 0;
+        }
+        return qtrue;
+    }
+    if (key == K_ENTER || key == K_KP_ENTER) {
+        HE_DoSaveAs();
+        return qtrue;
+    }
+    if (key == K_ESCAPE) {
+        he.saveAs = qfalse;
+        return qtrue;
+    }
     return qtrue;
 }
 
@@ -2831,7 +2922,8 @@ static void HE_PaintHudMenu(void) {
     if (!he.hudMenu) {
         return;
     }
-    h = pad * 2.0f + head * 2.0f + row * (float)retail + row * (float)(he.numHuds > retail ? he.numHuds - retail : 1);
+    h = pad * 2.0f + head * 2.0f + row * (float)retail + row * (float)(he.numHuds > retail ? he.numHuds - retail : 1) +
+        13.0f + row * 2.0f;
     if (y + h > smBottom - 8.0f) {
         h = smBottom - 8.0f - y;
     }
@@ -2846,7 +2938,7 @@ static void HE_PaintHudMenu(void) {
             HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, i == 0 ? "Quake Live" : "Your HUDs");
             ry += head;
         }
-        if (ry + row > y + h - pad) {
+        if (ry + row > y + h - pad - 13.0f - row * 2.0f) {
             break;
         }
         if (SM_Over(HE_HIT_HUDITEM, i)) {
@@ -2867,6 +2959,47 @@ static void HE_PaintHudMenu(void) {
         }
         HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs you save appear here.", qfalse);
     }
+    ry = y + h - pad - row * 2.0f;
+    SM_Fill(x + 16.0f, ry - 7.0f, w - 32.0f, 1.0f, heEdge, NULL);
+    for (i = 0; i < 2; i++) {
+        if (SM_Over(HE_HIT_HUDACT, i)) {
+            HE_Round(x + 6.0f, ry, w - 12.0f, row, 9.0f, heRowHover);
+        }
+        HE_Icon(x + 18.0f, ry, row, 13.0f, heMd, i ? HE_FA_FOLDER : HE_FA_COPY);
+        HE_Text(x + 44.0f, ry, row, 14.0f, heMd, i ? "Open HUD folder" : "Save as...", qfalse);
+        SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_HUDACT, i, NULL);
+        ry += row;
+    }
+}
+
+static void HE_PaintSaveAs(void) {
+    float w = 500.0f, h = 230.0f, x = (smVW - w) * 0.5f, y = (smBottom - h) * 0.5f, bx, by, fx, fy, fw, fh, tw;
+
+    if (!he.saveAs) {
+        return;
+    }
+    SM_Fill(0, 0, smVW, smBottom, heShade, NULL);
+    SM_Hit(0, 0, smVW, smBottom, HE_HIT_POPUP, 0, NULL);
+    HE_Floating(x, y, w, h, HE_R_PANEL, hePanel);
+    SM_Hit(x, y, w, h, HE_HIT_POPUP, 0, NULL);
+    HE_Text(x + 28.0f, y + 24.0f, 30.0f, 20.0f, heHi, "Save as", qtrue);
+    HE_Text(x + 28.0f, y + 62.0f, 22.0f, 15.0f, heMd, "Name your HUD. It goes to your HUD folder.", qfalse);
+    fx = x + 28.0f;
+    fy = y + 98.0f;
+    fw = w - 56.0f;
+    fh = 46.0f;
+    HE_Round(fx, fy, fw, fh, 10.0f, heGold);
+    HE_Round(fx + 2.0f, fy + 2.0f, fw - 4.0f, fh - 4.0f, 8.0f, heBg);
+    HE_Text(fx + 16.0f, fy, fh, 17.0f, heHi, he.saveName, qfalse);
+    tw = HE_TextW(he.saveName, 17.0f, qfalse);
+    if ((uiInfo.uiDC.realTime / 500) & 1) {
+        SM_Fill(fx + 17.0f + tw, fy + 12.0f, 2.0f, fh - 24.0f, heGold, NULL);
+    }
+    by = y + h - 28.0f - HE_CTRL_H;
+    bx = x + w - 28.0f - HE_PillW("Save", HE_FA_SAVE);
+    HE_Pill(bx, by, HE_CTRL_H, "Save", HE_FA_SAVE, NULL, HE_PILL_PRIMARY, HE_HIT_SAVEAS, 0, NULL);
+    bx -= 8.0f + HE_PillW("Cancel", 0);
+    HE_Pill(bx, by, HE_CTRL_H, "Cancel", 0, NULL, HE_PILL_GHOST, HE_HIT_SAVEAS, 1, NULL);
 }
 
 static void HE_PaintConfirm(void) {
@@ -3149,6 +3282,7 @@ void UI_HudEditor_Paint(void) {
     HE_PaintDragNew();
     HE_PaintTip();
     HE_PaintConfirm();
+    HE_PaintSaveAs();
     SM_EndFrame();
 }
 
@@ -3201,9 +3335,25 @@ static qboolean HE_Click(void) {
         }
         return qtrue;
     }
+    if (he.saveAs) {
+        if (hit && hit->type == HE_HIT_SAVEAS) {
+            if (hit->index == 0) {
+                HE_DoSaveAs();
+            } else {
+                he.saveAs = qfalse;
+            }
+        }
+        return qtrue;
+    }
     if (he.hudMenu) {
         if (hit && hit->type == HE_HIT_HUDITEM && hit->index < he.numHuds) {
             HE_SwitchHud(he.huds[hit->index]);
+        } else if (hit && hit->type == HE_HIT_HUDACT && hit->index == 0) {
+            HE_OpenSaveAs();
+        } else if (hit && hit->type == HE_HIT_HUDACT && hit->index == 1) {
+            he.hudMenu = qfalse;
+            trap_Cmd_ExecuteText(EXEC_APPEND, "openhudfolder\n");
+            HE_Status("Your HUD folder is open. Files you drop there show up in this list.");
         } else if (!(hit && hit->type == HE_HIT_POPUP && hit->index == 0)) {
             he.hudMenu = qfalse;
         }
@@ -3382,6 +3532,9 @@ qboolean UI_HudEditor_HandleKey(int key) {
     qboolean shift = trap_Key_IsDown(K_SHIFT);
     float step = shift ? 10.0f : 1.0f;
 
+    if (he.saveAs && key != K_MOUSE1) {
+        return HE_SaveAsKey(key);
+    }
     if (he.field >= 0 && HE_FieldKey(key)) {
         return qtrue;
     }

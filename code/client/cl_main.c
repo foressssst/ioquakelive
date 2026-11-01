@@ -3331,6 +3331,36 @@ static void CL_Web_HideBrowser_f(void) {
     VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
 }
 
+static void CL_OpenHudFolder_f(void) {
+    char* path = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), "hud/");
+#ifdef _WIN32
+    FS_CreatePath(path);
+    Com_Printf("opening %s\n", path);
+    Sys_OpenURL(path);
+#else
+    static const char hex[] = "0123456789ABCDEF";
+    char url[MAX_OSPATH * 3 + 8];
+    const unsigned char* s;
+    int n;
+
+    FS_CreatePath(path);
+    n = Com_sprintf(url, sizeof(url), "file://");
+    for (s = (const unsigned char*)path; *s && n < (int)sizeof(url) - 4; s++) {
+        if ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') || *s == '/' ||
+            *s == '-' || *s == '_' || *s == '.' || *s == '~') {
+            url[n++] = (char)*s;
+        } else {
+            url[n++] = '%';
+            url[n++] = hex[*s >> 4];
+            url[n++] = hex[*s & 15];
+        }
+    }
+    url[n] = 0;
+    Com_Printf("opening %s\n", path);
+    Sys_OpenURL(url);
+#endif
+}
+
 void CL_OpenURL(const char* url) {
     const char* p;
 
@@ -3669,6 +3699,7 @@ void CL_Init(void) {
     Cmd_AddCommand("model", CL_SetModel_f);
     Cmd_AddCommand("web_changeHash", CL_Web_ChangeHash_f);
     Cmd_AddCommand("web_hideBrowser", CL_Web_HideBrowser_f);
+    Cmd_AddCommand("openhudfolder", CL_OpenHudFolder_f);
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
 
     cl_demoRecordMessage = Cvar_Get("cl_demoRecordMessage", "2", CVAR_ARCHIVE | CVAR_USERSAVE);

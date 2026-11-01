@@ -250,6 +250,7 @@ static const cmdHelp_t cmdHelp[] = {
                "usage: setenv <name> [value], and with no value it clears it"},
     {"changeVectors", "prints how often each network field changes, for the delta tables"},
     {"openupdate", "opens the download page of the newer version found at startup, if there is one"},
+    {"openhudfolder", "opens the folder where your HUDs are saved, to add or take out HUD files"},
     {"frametimes", "measures the real time between frames, in microseconds\n"
                    "usage: frametimes [frames]\n"
                    "this is what says whether something made the game smoother; com_speeds\n"
