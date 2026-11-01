@@ -2135,7 +2135,13 @@ qboolean CL_InitDownloads(void) {
     int index = 0;
 
     list = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_WORKSHOP_IDS];
-    if (clc.demoplaying || !list[0]) {
+    if (clc.demoplaying) {
+        return qfalse;
+    }
+    if (!com_sv_running->integer) {
+        Steam_WorkshopServerItems(list);
+    }
+    if (!list[0]) {
         return qfalse;
     }
     Com_Printf("Server requires the following workshop items: %s\n", list);

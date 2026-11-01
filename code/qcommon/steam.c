@@ -2117,6 +2117,7 @@ static struct {
     int numQueued;
     char folders[STEAM_WORKSHOP_FOLDERS][MAX_OSPATH];
     uint64_t folderItems[STEAM_WORKSHOP_FOLDERS];
+    qboolean folderUnused[STEAM_WORKSHOP_FOLDERS];
 } ws;
 
 qboolean Steam_WorkshopUGC(void) {
@@ -2165,6 +2166,7 @@ static void Steam_WorkshopMount(uint64_t item, qboolean inCache) {
             if (!ws.folders[i][0] || ws.folderItems[i] == item) {
                 Q_strncpyz(ws.folders[i], folder, sizeof(ws.folders[i]));
                 ws.folderItems[i] = item;
+                ws.folderUnused[i] = qfalse;
                 break;
             }
         }
@@ -2280,7 +2282,26 @@ const char* Steam_WorkshopFolder(int index, uint64_t* item) {
         return NULL;
     }
     *item = ws.folderItems[index];
-    return ws.folders[index];
+    return ws.folderUnused[index] ? "" : ws.folders[index];
+}
+
+void Steam_WorkshopServerItems(const char* list) {
+    char copy[BIG_INFO_STRING];
+    char* token;
+    unsigned long long item;
+    int i;
+
+    for (i = 0; i < STEAM_WORKSHOP_FOLDERS && ws.folders[i][0]; i++) {
+        ws.folderUnused[i] = qtrue;
+        Q_strncpyz(copy, list, sizeof(copy));
+        for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
+            item = 0;
+            if (sscanf(token, "%llu", &item) == 1 && (uint64_t)item == ws.folderItems[i]) {
+                ws.folderUnused[i] = qfalse;
+                break;
+            }
+        }
+    }
 }
 
 static unsigned int Steam_OwnAppID(void) {

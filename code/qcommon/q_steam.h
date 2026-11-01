@@ -47,6 +47,7 @@ qboolean Steam_WorkshopProgress(uint64_t item, uint64_t* done, uint64_t* total);
 qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size);
 int Steam_WorkshopSubscribed(uint64_t* items, int max);
 const char* Steam_WorkshopFolder(int index, uint64_t* item);
+void Steam_WorkshopServerItems(const char* list);
 void Steam_DownloadUGC_f(void);
 void Steam_SubscribeUGC_f(void);
 void Steam_UnsubscribeUGC_f(void);
