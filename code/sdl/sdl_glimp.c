@@ -510,6 +510,8 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     } else {
         if (noborder)
             flags |= SDL_WINDOW_BORDERLESS;
+        if (getenv("IOQL_DEMOWINDOW") && *getenv("IOQL_DEMOWINDOW"))
+            flags |= SDL_WINDOW_HIDDEN;
 
         glConfig.isFullscreen = qfalse;
     }

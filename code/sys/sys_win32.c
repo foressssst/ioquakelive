@@ -565,6 +565,44 @@ qboolean Sys_PipeWrite(void* pipe, const void* data, int size) {
     return qtrue;
 }
 
+qboolean Sys_PipeAlive(void* pipe) {
+    return WaitForSingleObject(((sysPipe_t*)pipe)->process, 0) == WAIT_TIMEOUT ? qtrue : qfalse;
+}
+
+void Sys_PipeKill(void* pipe) {
+    TerminateProcess(((sysPipe_t*)pipe)->process, 1);
+}
+
+static HANDLE sys_sharedHandle;
+
+void* Sys_SharedOpen(const char* name, int size, qboolean create) {
+    char full[128];
+    void* view;
+
+    Com_sprintf(full, sizeof(full), "Local\\ioql_%s", name);
+    sys_sharedHandle = create ? CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, full)
+                              : OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, full);
+    if (!sys_sharedHandle) {
+        return NULL;
+    }
+    view = MapViewOfFile(sys_sharedHandle, FILE_MAP_ALL_ACCESS, 0, 0, (SIZE_T)size);
+    if (!view) {
+        CloseHandle(sys_sharedHandle);
+        sys_sharedHandle = NULL;
+    }
+    return view;
+}
+
+void Sys_SharedClose(void* view) {
+    UnmapViewOfFile(view);
+    CloseHandle(sys_sharedHandle);
+    sys_sharedHandle = NULL;
+}
+
+void Sys_LowerPriority(void) {
+    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+}
+
 int Sys_PipeClose(void* pipe) {
     sysPipe_t* p = (sysPipe_t*)pipe;
     DWORD code = 1;

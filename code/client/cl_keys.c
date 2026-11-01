@@ -1283,6 +1283,10 @@ void CL_KeyUpEvent(int key, unsigned time) {
 }
 
 void CL_KeyEvent(int key, qboolean down, unsigned time) {
+    if (CL_DemoWindowKey(key, down)) {
+        return;
+    }
+
     if (down && key == K_MOUSE1 && cls.rendererStarted && re.LowLatencyFlash) {
         re.LowLatencyFlash();
     }
@@ -1295,6 +1299,10 @@ void CL_KeyEvent(int key, qboolean down, unsigned time) {
 
 void CL_CharEvent(int key) {
     if (key == 127) {
+        return;
+    }
+
+    if (CL_DemoWindowChar(key)) {
         return;
     }
 

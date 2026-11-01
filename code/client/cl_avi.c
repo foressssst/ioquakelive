@@ -383,6 +383,9 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
     int paddingSize = PADLEN(size, 2);
     byte padding[4] = {0};
 
+    if (CL_DemoWindowTakeFrame(imageBuffer, size))
+        return;
+
     if (!afd.fileOpen)
         return;
 

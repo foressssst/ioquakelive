@@ -493,6 +493,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile Include="..\..\code\botlib\l_script.c" />
     <ClCompile Include="..\..\code\botlib\l_struct.c" />
     <ClCompile Include="..\..\code\client\cl_avi.c" />
+    <ClCompile Include="..\..\code\client\cl_demowindow.c" />
     <ClCompile Include="..\..\code\client\cl_cgame.c">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
       <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</BrowseInformation>

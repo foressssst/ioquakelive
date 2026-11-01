@@ -1306,6 +1306,7 @@ Q3OBJ = \
   $(B)/client/cl_scrn.o \
   $(B)/client/cl_ui.o \
   $(B)/client/cl_avi.o \
+  $(B)/client/cl_demowindow.o \
   \
   $(B)/client/cm_load.o \
   $(B)/client/cm_patch.o \

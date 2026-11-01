@@ -373,6 +373,8 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
         VM_Call(uivm, UI_REFRESH, cls.realtime);
     }
 
+    CL_DemoWindowDraw();
+
     Con_DrawConsole();
 
     if (cl_debuggraph->integer || cl_timegraph->integer || cl_debugMove->integer) {

@@ -2953,7 +2953,10 @@ void CL_Frame(int msec) {
 
     CL_WorkshopFrame();
     CL_WarmPlayers();
-    CL_UpdateFrame();
+    if (!com_demoWindowParent) {
+        CL_UpdateFrame();
+    }
+    CL_DemoWindowFrame();
 
     CL_MatchReportFrame();
     CL_VoiceFrame();
@@ -3009,6 +3012,7 @@ void CL_ShutdownRef(void) {
 }
 
 void CL_InitRenderer(void) {
+    CL_DemoWindowRendererRestart();
     re.BeginRegistration(&cls.glconfig);
     CL_ClearAvatars();
 
@@ -3617,6 +3621,9 @@ void CL_Init(void) {
     Cmd_AddCommand("disconnect", CL_Disconnect_f);
     Cmd_AddCommand("record", CL_Record_f);
     CL_VideoInit();
+    CL_DemoWindowInit();
+    Cmd_AddCommand("demowindow", CL_DemoWindow_f);
+    Cmd_SetCommandCompletionFunc("demowindow", CL_CompleteDemoName);
     Cmd_AddCommand("video", CL_Video_f);
     Cmd_AddCommand("stopvideo", CL_StopVideo_f);
     Cmd_AddCommand("demo", CL_PlayDemo_f);
@@ -3675,6 +3682,7 @@ void CL_Init(void) {
 }
 
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
+    CL_DemoWindowShutdown();
     static qboolean recursive = qfalse;
 
     if (!(com_cl_running && com_cl_running->integer))
@@ -3705,6 +3713,7 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     Cmd_RemoveCommand("vid_restart");
     Cmd_RemoveCommand("disconnect");
     Cmd_RemoveCommand("record");
+    Cmd_RemoveCommand("demowindow");
     Cmd_RemoveCommand("video");
     Cmd_RemoveCommand("stopvideo");
     Cmd_RemoveCommand("demo");

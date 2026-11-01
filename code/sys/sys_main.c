@@ -177,7 +177,8 @@ static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
     SDL_Quit();
 
     if (exitCode < 2 && com_fullyInitialized) {
-        Sys_RemovePIDFile(BASEGAME_DIR);
+        if (!com_demoWindowParent)
+            Sys_RemovePIDFile(BASEGAME_DIR);
     }
 
     NET_Shutdown();

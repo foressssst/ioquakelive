@@ -284,6 +284,8 @@ qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes) {
 typedef struct {
     pid_t process;
     int input;
+    int status;
+    qboolean exited;
 } sysPipe_t;
 
 void* Sys_PipeOpen(const char* const* argv, const char* logPath) {
@@ -344,6 +346,8 @@ void* Sys_PipeOpen(const char* const* argv, const char* logPath) {
     signal(SIGPIPE, SIG_IGN);
     p->process = pid;
     p->input = fds[1];
+    p->status = 0;
+    p->exited = qfalse;
     return p;
 }
 
@@ -363,12 +367,80 @@ qboolean Sys_PipeWrite(void* pipe, const void* data, int size) {
     return qtrue;
 }
 
+qboolean Sys_PipeAlive(void* pipe) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+
+    if (!p->exited && waitpid(p->process, &p->status, WNOHANG) != 0) {
+        p->exited = qtrue;
+    }
+    return p->exited ? qfalse : qtrue;
+}
+
+void Sys_PipeKill(void* pipe) {
+    sysPipe_t* p = (sysPipe_t*)pipe;
+
+    if (!p->exited) {
+        kill(p->process, SIGKILL);
+    }
+}
+
+static char sys_sharedPath[MAX_OSPATH];
+static int sys_sharedSize;
+
+void* Sys_SharedOpen(const char* name, int size, qboolean create) {
+    const char* dir = getenv("TMPDIR");
+    void* view;
+    int fd;
+
+    Com_sprintf(sys_sharedPath, sizeof(sys_sharedPath), "%s/ioql_%s", dir && *dir ? dir : "/tmp", name);
+    if (create) {
+        unlink(sys_sharedPath);
+        fd = open(sys_sharedPath, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    } else {
+        fd = open(sys_sharedPath, O_RDWR | O_NOFOLLOW);
+        sys_sharedPath[0] = '\0';
+    }
+    if (fd < 0) {
+        return NULL;
+    }
+    if (create && ftruncate(fd, size)) {
+        close(fd);
+        unlink(sys_sharedPath);
+        return NULL;
+    }
+    view = mmap(NULL, (size_t)size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (view == MAP_FAILED) {
+        if (create) {
+            unlink(sys_sharedPath);
+        }
+        return NULL;
+    }
+    sys_sharedSize = size;
+    return view;
+}
+
+void Sys_SharedClose(void* view) {
+    munmap(view, (size_t)sys_sharedSize);
+    if (sys_sharedPath[0]) {
+        unlink(sys_sharedPath);
+    }
+}
+
+void Sys_LowerPriority(void) {
+    if (nice(5) == -1) {
+        return;
+    }
+}
+
 int Sys_PipeClose(void* pipe) {
     sysPipe_t* p = (sysPipe_t*)pipe;
-    int status = 0;
+    int status = p->status;
 
     close(p->input);
-    waitpid(p->process, &status, 0);
+    if (!p->exited) {
+        waitpid(p->process, &status, 0);
+    }
     free(p);
     return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }

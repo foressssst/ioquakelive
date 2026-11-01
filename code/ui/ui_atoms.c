@@ -188,6 +188,12 @@ qboolean UI_ConsoleCommand(int realTime) {
 
     cmd = UI_Argv(0);
 
+    if (Q_stricmp(cmd, "ui_replays") == 0) {
+        Menus_CloseAll();
+        Menus_ActivateByName("demo");
+        return qtrue;
+    }
+
     if (Q_stricmp(cmd, "listPlayerModels") == 0) {
         UI_ListPlayerModels();
         return qtrue;

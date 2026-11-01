@@ -391,6 +391,10 @@ void CL_KeyMove(usercmd_t* cmd) {
 }
 
 void CL_MouseAbsEvent(int x, int y) {
+    if (CL_DemoWindowMouse(x, y)) {
+        return;
+    }
+
     if (cg_ignoreMouseInput->integer) {
         return;
     }

@@ -805,7 +805,6 @@ void RB_SetGL2D( void ) {
 }
 
 void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
-	int			i, j;
 	int			start, end;
 
 	if ( !tr.registered ) {
@@ -819,15 +818,7 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *
 		start = ri.Milliseconds();
 	}
 
-	for ( i = 0 ; ( 1 << i ) < cols ; i++ ) {
-	}
-	for ( j = 0 ; ( 1 << j ) < rows ; j++ ) {
-	}
-	if ( ( 1 << i ) != cols || ( 1 << j ) != rows) {
-		ri.Error (ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
-	}
-
-	RE_UploadCinematic( w, h, cols, rows, data, client, dirty );
+RE_UploadCinematic( w, h, cols, rows, data, client, dirty );
 
 	if ( r_speeds->integer ) {
 		end = ri.Milliseconds();

@@ -62,6 +62,7 @@ cvar_t* com_journal;
 cvar_t* com_maxfps;
 cvar_t* com_timedemo;
 qboolean com_uncappedFrames;
+int com_demoWindowParent;
 cvar_t* com_sv_running;
 cvar_t* com_cl_running;
 cvar_t* com_logfile;
@@ -1912,7 +1913,7 @@ static void Com_CheckCrash(void) {
     com_ignoreCrash = Cvar_Get("com_ignoreCrash", "0", 0);
     com_crashed = Cvar_Get("com_crashed", "0", CVAR_ROM);
 
-    if (Sys_WritePIDFile(BASEGAME_DIR) && !com_ignoreCrash->integer) {
+    if (!com_demoWindowParent && Sys_WritePIDFile(BASEGAME_DIR) && !com_ignoreCrash->integer) {
         Cvar_Set("com_crashed", "1");
     }
     if (!com_crashed->integer) {
@@ -2010,6 +2011,8 @@ static void Com_InitRand(void) {
 }
 
 void Com_Init(char* commandLine) {
+    com_demoWindowParent = getenv("IOQL_DEMOWINDOW") ? atoi(getenv("IOQL_DEMOWINDOW")) : 0;
+
     char* s;
     int qport;
 
@@ -2277,7 +2280,7 @@ void Com_WriteConfiguration(void) {
     }
     cvar_modifiedFlags &= ~CVAR_ARCHIVE;
 
-    if (com_dedicated->integer) {
+    if (com_dedicated->integer || com_demoWindowParent) {
         return;
     }
 

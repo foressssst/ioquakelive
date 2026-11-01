@@ -3662,6 +3662,19 @@ qboolean FS_ExtractGamecode(const char* module, char* outOSPath) {
 			unzOpenCurrentFile(pak->handle);
 			fhdIn->zipFilePos = fileEntry->pos;
 
+			if (com_demoWindowParent && FS_FileExists(filename)) {
+				Q_strncpyz(outOSPath, FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename), MAX_OSPATH);
+				FS_FCloseFile(handleIn);
+				if (Q_stricmp(module, "ui") == 0) {
+					fs_uiBinChecksum = checksum;
+				} else if (Q_stricmp(module, "cgame") == 0) {
+					fs_cgameBinChecksum = checksum;
+				} else if (Q_stricmp(module, "qagame") == 0) {
+					fs_qagameBinChecksum = checksum;
+				}
+				return qtrue;
+			}
+
 			if (FS_FileExists(filename)) {
 				char* path = FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename);
 				remove(path);

@@ -1137,7 +1137,7 @@ void IN_Frame(void) {
 
     cls.glconfig.isFullscreen = Cvar_VariableIntegerValue("r_fullscreen") != 0;
 
-    if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
+    if ((Key_GetCatcher() & KEYCATCH_CONSOLE) || CL_DemoWindowOpen()) {
         IN_DeactivateMouse(qfalse);
 
         if (SDL_GetMouseFocus() == SDL_window) {
