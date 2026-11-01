@@ -207,6 +207,11 @@ void CL_StopRecord_f(void) {
     Com_Printf("Stopped demo.\n");
 }
 
+static void CL_StopRecordCommand_f(void) {
+    cl.autoRecordStopped = qtrue;
+    CL_StopRecord_f();
+}
+
 void CL_DemoFilename(int number, char* fileName, int fileNameSize) {
     int a, b, c, d;
 
@@ -2818,7 +2823,7 @@ void CL_Frame(int msec) {
     }
 
     if (cl_autoRecordDemo->integer) {
-        if (clc.state == CA_ACTIVE && !clc.demorecording && !clc.demoplaying) {
+        if (clc.state == CA_ACTIVE && !clc.demorecording && !clc.demoplaying && !cl.autoRecordStopped) {
             qtime_t now;
             char* nowString;
             char* p;
@@ -3548,7 +3553,7 @@ void CL_Init(void) {
     Cvar_Get("cl_demorecording", "0", CVAR_ROM);
     Cvar_Get("vid_resizeCount", "0", CVAR_ROM);
     Cvar_Get("cl_demoname", "", CVAR_ROM);
-    Cmd_AddCommand("stoprecord", CL_StopRecord_f);
+    Cmd_AddCommand("stoprecord", CL_StopRecordCommand_f);
     Cmd_AddCommand("connect", CL_Connect_f);
     Cmd_AddCommand("reconnect", CL_Reconnect_f);
     Cmd_AddCommand("fullredirect", CL_FullRedirect_f);

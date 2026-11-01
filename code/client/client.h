@@ -102,6 +102,8 @@ typedef struct {
     entityState_t entityBaselines[MAX_GENTITIES];
 
     entityState_t parseEntities[MAX_PARSE_ENTITIES];
+
+    qboolean autoRecordStopped;
 } clientActive_t;
 
 extern clientActive_t cl;
