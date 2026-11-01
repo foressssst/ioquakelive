@@ -21,6 +21,8 @@
 #define CL_UPDATE_TIMEOUT_MS 5000
 #define CL_NEWS_API "https://quakeclub.com/api/news"
 #define CL_NEWS_MAX 6
+#define CL_NEWS_SITE "https://quakeclub.com"
+#define CL_NEWS_IMAGE_MAX 0x100000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
 #define CL_VERIFIED_MAX 64
@@ -52,6 +54,8 @@ static char clUpdateNotes[8192];
 static char clNewsRaw[0x10000];
 static char clNewsText[4096];
 static volatile long clNewsState;
+static char clNewsDir[MAX_OSPATH];
+static byte clNewsImage[CL_NEWS_IMAGE_MAX];
 static cvar_t* cl_clubNews;
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
@@ -518,6 +522,109 @@ int CL_UpdateNotes(char* buf, int size) {
     return (int)strlen(buf);
 }
 
+static int CL_NewsImageKind(const byte* d, int n, int* w, int* h) {
+    int i = 2;
+
+    if (n >= 24 && !memcmp(d, "\x89PNG\r\n\x1a\n", 8)) {
+        *w = (d[16] << 24) | (d[17] << 16) | (d[18] << 8) | d[19];
+        *h = (d[20] << 24) | (d[21] << 16) | (d[22] << 8) | d[23];
+        return 2;
+    }
+    if (n < 4 || d[0] != 0xff || d[1] != 0xd8) {
+        return 0;
+    }
+    while (i + 9 < n) {
+        int m = d[i + 1];
+
+        if (d[i] != 0xff) {
+            return 0;
+        }
+        if (m == 0xff) {
+            i++;
+        } else if (m == 0x01 || (m >= 0xd0 && m <= 0xd8)) {
+            i += 2;
+        } else if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
+            *h = (d[i + 5] << 8) | d[i + 6];
+            *w = (d[i + 7] << 8) | d[i + 8];
+            return 1;
+        } else {
+            i += 2 + ((d[i + 2] << 8) | d[i + 3]);
+        }
+    }
+    return 0;
+}
+
+static void CL_NewsImage(const char* url, char* pic, int size, int* aspect) {
+    static const char* const ext[2] = {"jpg", "png"};
+    char address[512];
+    char path[MAX_OSPATH];
+    char tmp[MAX_OSPATH];
+    char hex[65];
+    clUpdateSink_t sink;
+    clSha256_t sha;
+    const char* c;
+    FILE* f;
+    int n = 0, kind = 0, w = 0, h = 0, i;
+
+    pic[0] = '\0';
+    *aspect = 0;
+    if (!clNewsDir[0] || Q_strncmp(url, "/api/news/", 10) || strlen(url) > 200 || strstr(url, "..")) {
+        return;
+    }
+    for (c = url; *c; c++) {
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '-' ||
+              *c == '_' || *c == '/' || *c == '.')) {
+            return;
+        }
+    }
+    CL_Sha256Init(&sha);
+    CL_Sha256Update(&sha, url, (int)strlen(url));
+    CL_Sha256Hex(&sha, hex);
+    hex[16] = '\0';
+    for (i = 0; i < 2 && !kind; i++) {
+        Com_sprintf(path, sizeof(path), "%s%c%s.%s", clNewsDir, PATH_SEP, hex, ext[i]);
+        f = Sys_FOpen(path, "rb");
+        if (f) {
+            n = (int)fread(clNewsImage, 1, sizeof(clNewsImage), f);
+            fclose(f);
+            if (n > 0 && CL_NewsImageKind(clNewsImage, n, &w, &h) == i + 1) {
+                kind = i + 1;
+            }
+        }
+    }
+    if (!kind) {
+        Com_Memset(&sink, 0, sizeof(sink));
+        sink.buf = (char*)clNewsImage;
+        sink.size = sizeof(clNewsImage);
+        Com_sprintf(address, sizeof(address), "%s%s", CL_NEWS_SITE, url);
+        if (!CL_UpdateHttpGet(address, &sink, CL_UPDATE_TIMEOUT_MS) || sink.used <= 0 || sink.used >= sink.size - 1) {
+            return;
+        }
+        n = sink.used;
+        kind = CL_NewsImageKind(clNewsImage, n, &w, &h);
+        if (!kind) {
+            return;
+        }
+        Com_sprintf(path, sizeof(path), "%s%c%s.%s", clNewsDir, PATH_SEP, hex, ext[kind - 1]);
+        Com_sprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        f = Sys_FOpen(tmp, "wb");
+        if (!f) {
+            return;
+        }
+        i = fwrite(clNewsImage, 1, (size_t)n, f) == (size_t)n;
+        fclose(f);
+        if (!i || rename(tmp, path)) {
+            remove(tmp);
+            return;
+        }
+    }
+    if (w <= 0 || h <= 0 || w > 8192 || h > 8192) {
+        return;
+    }
+    Com_sprintf(pic, size, "cache/news/%s.%s", hex, ext[kind - 1]);
+    *aspect = (int)(1000.0f * w / h);
+}
+
 static qboolean CL_NewsLoad(void) {
     const char* end;
     const char* list;
@@ -535,8 +642,10 @@ static qboolean CL_NewsLoad(void) {
         char title[256];
         char date[16];
         char slug[128];
+        char image[256];
+        char pic[MAX_QPATH];
         char* c;
-        int len;
+        int len, aspect;
 
         CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "title"), end, title, sizeof(title));
         CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "date"), end, date, sizeof(date));
@@ -551,11 +660,14 @@ static qboolean CL_NewsLoad(void) {
         if (!title[0] || !slug[0] || *c || strlen(date) != 10 || date[4] != '-' || date[7] != '-') {
             continue;
         }
-        len = (int)(strlen(date) + strlen(title) + strlen(slug) + 3);
+        CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "imageUrl"), end, image, sizeof(image));
+        CL_NewsImage(image, pic, sizeof(pic), &aspect);
+        Com_sprintf(image, sizeof(image), "\t%s\t%i\n", pic, aspect);
+        len = (int)(strlen(date) + strlen(title) + strlen(slug) + 2 + strlen(image));
         if (n + len >= (int)sizeof(clNewsText)) {
             break;
         }
-        Com_sprintf(clNewsText + n, sizeof(clNewsText) - n, "%s\t%s\t%s\n", date, title, slug);
+        Com_sprintf(clNewsText + n, sizeof(clNewsText) - n, "%s\t%s\t%s%s", date, title, slug, image);
         n += len;
         count++;
     }
@@ -994,6 +1106,11 @@ void CL_UpdateInit(void) {
         CL_UpdateSet(&clUpdateState, CLU_RUNNING);
     }
     if (cl_clubNews->integer) {
+        Q_strncpyz(clNewsDir,
+                   FS_BuildOSPath(Cvar_VariableString("fs_homepath"), Cvar_VariableString("com_basegame"), "cache/news/x"),
+                   sizeof(clNewsDir));
+        FS_CreatePath(clNewsDir);
+        clNewsDir[strlen(clNewsDir) - 2] = '\0';
         CL_UpdateSet(&clNewsState, CLU_RUNNING);
     }
     if (!Sys_ThreadCreate(CL_UpdateThread, NULL)) {

@@ -1054,7 +1054,14 @@ static struct {
     char date[HW_MAX][16];
     char title[HW_MAX][256];
     char slug[HW_MAX][128];
+    char image[HW_MAX][MAX_QPATH];
+    int aspect[HW_MAX];
+    qhandle_t pic[HW_MAX];
+    qboolean asked[HW_MAX];
+    qboolean thumbs;
 } hw;
+
+#define HW_THUMB_W SM_Len(85.0f)
 
 static void UI_Home_NewsRefresh(void) {
     static char buf[4096];
@@ -1072,6 +1079,7 @@ static void UI_Home_NewsRefresh(void) {
         char* eol = strchr(p, '\n');
         char* title;
         char* slug;
+        char* image;
 
         if (!eol) {
             break;
@@ -1085,6 +1093,20 @@ static void UI_Home_NewsRefresh(void) {
         }
         *title++ = '\0';
         *slug++ = '\0';
+        image = strchr(slug, '\t');
+        if (image) {
+            char* aspect = strchr(image + 1, '\t');
+
+            *image++ = '\0';
+            if (aspect) {
+                *aspect++ = '\0';
+                hw.aspect[hw.count] = atoi(aspect);
+            }
+            if (image[0] && hw.aspect[hw.count] > 0) {
+                Q_strncpyz(hw.image[hw.count], image, sizeof(hw.image[0]));
+                hw.thumbs = qtrue;
+            }
+        }
         Com_sprintf(hw.date[hw.count], sizeof(hw.date[0]), "%.2s/%.2s/%.4s", date + 8, date + 5, date);
         Q_strncpyz(hw.title[hw.count], title, sizeof(hw.title[0]));
         Q_strncpyz(hw.slug[hw.count], slug, sizeof(hw.slug[0]));
@@ -1114,14 +1136,48 @@ static void UI_Home_NewsLine(float x, float base, float room, const float* color
     SM_Text(x, base, FONT_SANS, HM_TEXT, color, text, -1, qfalse);
 }
 
+static void UI_Home_NewsThumb(int i, float x, float y) {
+    float boxW = HW_THUMB_W;
+    float boxH = HM_FRIEND_PIC;
+    float box = boxW / boxH;
+    float img = hw.aspect[i] / 1000.0f;
+    float s = 0.0f;
+    float t = 0.0f;
+
+    SM_Fill(x, y, boxW, boxH, smField, NULL);
+    if (!hw.image[i][0]) {
+        return;
+    }
+    if (!hw.asked[i]) {
+        static int lastAsk;
+
+        if (lastAsk == uiInfo.uiDC.realTime) {
+            return;
+        }
+        lastAsk = uiInfo.uiDC.realTime;
+        hw.asked[i] = qtrue;
+        hw.pic[i] = trap_R_RegisterShaderNoMip(hw.image[i]);
+    }
+    if (!hw.pic[i]) {
+        return;
+    }
+    if (img > box) {
+        s = (1.0f - box / img) * 0.5f;
+    } else if (img < box) {
+        t = (1.0f - img / box) * 0.5f;
+    }
+    SM_PicPart(x, y, boxW, boxH, s, t, 1.0f - s, 1.0f - t, hw.pic[i]);
+}
+
 static void UI_Home_DrawNews(float x, float y, float w, float bottom) {
     static const vec4_t rowOver = {30 / 255.0f, 30 / 255.0f, 30 / 255.0f, 1.0f};
     float line = SM_NormalLine(FONT_SANS, HM_TEXT);
-    float rowH = 2 * HM_FRIEND_PAD + 2 * line;
+    float rowH;
     float listTop = y + HM_SELECTOR_H + SM_Len(3.0f);
     int rows, i;
 
     UI_Home_NewsRefresh();
+    rowH = hw.thumbs ? HM_FRIEND_H : 2 * HM_FRIEND_PAD + 2 * line;
     rows = (int)((bottom - listTop) / rowH);
     if (rows > hw.count) {
         rows = hw.count;
@@ -1135,15 +1191,24 @@ static void UI_Home_DrawNews(float x, float y, float w, float bottom) {
     SM_Fill(x, listTop, w, rows * rowH, hmBlack80, NULL);
     for (i = 0; i < rows; i++) {
         float ry = listTop + i * rowH;
+        float tx = x + 10;
+        float ty = ry + HM_FRIEND_PAD;
         qboolean over = SM_Over(HM_HIT_NEWS, i);
 
         if (over) {
             SM_Fill(x, ry, w, rowH, rowOver, NULL);
         }
-        UI_Home_NewsLine(x + 10, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD, SM_LINE_NORMAL), w - 20,
+        if (hw.thumbs) {
+            float px = x + HM_FRIEND_PAD + HM_FRIEND_EDGE;
+
+            UI_Home_NewsThumb(i, px, ry + HM_FRIEND_PAD + HM_FRIEND_EDGE);
+            tx = px + HW_THUMB_W + SM_Len(8.0f);
+            ty = ry + (rowH - 2 * line) * 0.5f;
+        }
+        UI_Home_NewsLine(tx, SM_Baseline(FONT_SANS, HM_TEXT, ty, SM_LINE_NORMAL), x + w - 10 - tx,
                          over ? smGold : smText, hw.title[i]);
-        SM_Text(x + 10, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD + line, SM_LINE_NORMAL), FONT_SANS,
-                HM_TEXT, hmNameGrey, hw.date[i], -1, qfalse);
+        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ty + line, SM_LINE_NORMAL), FONT_SANS, HM_TEXT, hmNameGrey,
+                hw.date[i], -1, qfalse);
         SM_Hit(x, ry, w, rowH, HM_HIT_NEWS, i, NULL);
     }
 }

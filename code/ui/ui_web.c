@@ -175,6 +175,13 @@ void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t
                           (r.y - y) / h, (r.x + r.w - x) / w, (r.y + r.h - y) / h, shader);
 }
 
+void SM_PicPart(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t shader) {
+    if (!shader) {
+        return;
+    }
+    trap_R_DrawStretchPic(x * smScale, smTop + y * smScale, w * smScale, h * smScale, s1, t1, s2, t2, shader);
+}
+
 void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const float* color,
                  const smRect_t* clip) {
     trap_R_SetColor(color);
