@@ -2047,7 +2047,7 @@ void Com_Init(char* commandLine) {
     com_basegame = Cvar_Get("com_basegame", BASEGAME_DIR, CVAR_INIT);
     com_homepath = Cvar_Get("com_homepath", "", CVAR_INIT | CVAR_PROTECTED);
 
-    if (!Cvar_VariableIntegerValue("dedicated")) {
+    if (!Cvar_VariableIntegerValue("dedicated") && !com_demoWindowParent) {
         Steam_Init();
     }
     FS_InitFilesystem();
