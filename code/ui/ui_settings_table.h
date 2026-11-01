@@ -155,7 +155,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_GAME, "Zoom Toggle", "cg_zoomtoggle", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Choose to toggle your zoom on and off, rather than having to hold it down.", 1},
     {ST_TAB_GAME, "Zoom Scaling", "cg_zoomscaling", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Choose whether your zoom scales in & out or quickly snaps.", 1},
     {ST_TAB_GAME, "Auto Record Actions", "cg_autoaction", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_autoaction, 4, "Automated actions to archive match results.", 1},
-    {ST_TAB_GAME, "Auto Record Demos", "cl_autorecorddemo", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_GAME, "Record Every Map", "cl_autorecorddemo", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Keep a demo of every map you play, even with Auto Record Actions on None. stoprecord pauses it until the next map.", 1},
     {ST_TAB_GAME, "Recording Message", "cl_demorecordmessage", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cl_demorecordmessage, 3, "Display the verbose demo recording message while recording.", 1},
     {ST_TAB_GAME, "Enable Console", "com_allowconsole", ST_BOOL, 0.0f, 2.0f, 0.0f, NULL, 0, "Enable the ability to easily lower the console with the ~ key", 1},
     {ST_TAB_GAME, "Allow Console Chat", "cl_allowconsolechat", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Enable the ability to chat in the console without the use of the 'say' command.", 1},
