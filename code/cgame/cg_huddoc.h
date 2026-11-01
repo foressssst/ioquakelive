@@ -135,6 +135,7 @@ const char* HD_Keyword(int kind, int keyword);
 int HD_FindProp(const hdDoc_t* d, int kind, int owner, const char* key);
 qboolean HD_SetValues(hdDoc_t* d, int kind, int owner, const char* key, const float* values, int count);
 qboolean HD_SetRect(hdDoc_t* d, int item, const float rect[4]);
+void HD_ClearEdits(hdDoc_t* d);
 int HD_Write(const hdDoc_t* d, char* out, int outSize);
 void HD_TokenString(const hdDoc_t* d, int tok, char* out, int size);
 

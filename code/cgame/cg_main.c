@@ -2460,6 +2460,8 @@ qboolean CG_Load_Menu(char** p) {
 
 char cg_hudListFile[MAX_QPATH];
 int cg_hudMenuCount;
+int cg_hudLoadCount;
+qboolean cg_hudPainted;
 
 void CG_LoadMenus(const char* menuFile) {
     char* token;
@@ -2517,6 +2519,7 @@ void CG_LoadMenus(const char* menuFile) {
     }
 
     cg_hudMenuCount = Menu_Count();
+    cg_hudLoadCount++;
     Com_Printf("UI menu load time = %d milli seconds\n", trap_Milliseconds() - start);
 }
 

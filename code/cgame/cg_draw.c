@@ -3280,6 +3280,12 @@ void CG_DemoCursorFrame(void) {
 		!cg_freecam.integer ? qtrue : qfalse;
 	int			catcher = trap_Key_GetCatcher();
 
+	if (CG_HudEdit_Active()) {
+		cg_demoCursor = qfalse;
+		demoDragging = qfalse;
+		return;
+	}
+
 	if (want && !cg_demoCursor && !(catcher & ~KEYCATCH_CGAME)) {
 		if (!(catcher & KEYCATCH_CGAME)) {
 			trap_Key_SetCatcher(catcher | KEYCATCH_CGAME);
@@ -3567,6 +3573,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		if (!cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0) {
 			if (cg_drawStatus.integer) {
 				Menu_PaintAll();
+				cg_hudPainted = qtrue;
 				CG_DrawTimedMenus();
 			}
 
@@ -3635,6 +3642,8 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (cg_drawVersion.integer) {
 		CG_DrawVersion();
 	}
+
+	CG_HudEdit_Draw();
 }
 
 static void CG_DrawFullScreenColor(void) {

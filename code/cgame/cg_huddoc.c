@@ -754,6 +754,11 @@ qboolean HD_SetRect(hdDoc_t* d, int item, const float rect[4]) {
     return qtrue;
 }
 
+void HD_ClearEdits(hdDoc_t* d) {
+    d->numEdits = 0;
+    d->editTextUsed = 0;
+}
+
 int HD_Write(const hdDoc_t* d, char* out, int outSize) {
     const char* s = d->text + d->files[0].ofs;
     int len = d->files[0].len;

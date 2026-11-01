@@ -4328,6 +4328,10 @@ void CG_MouseEvent(int x, int y) {
     int n;
     int bias;
 
+    if (CG_HudEdit_MouseEvent(x, y)) {
+        return;
+    }
+
     xscale43 = (4.0f * cgs.glconfig.vidHeight / 3.0f) / (float)SCREEN_WIDTH;
     if (xscale43 <= 0.0f || cgs.screenYScale <= 0.0f) {
         return;
@@ -4378,12 +4382,17 @@ void CG_EventHandling(int type) {
     } else if (type == CGAME_EVENT_RESOLUTION) {
         CG_ReadResolution();
     } else if (type == CGAME_EVENT_ESCAPE) {
+        CG_HudEdit_Escape();
         CG_HideJoinMenu();
     }
 }
 
 void CG_KeyEvent(int key, qboolean down) {
     menuDef_t* menu;
+
+    if (CG_HudEdit_KeyEvent(key, down)) {
+        return;
+    }
 
     if (CG_DemoHUDKey(key, down)) {
         return;

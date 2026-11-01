@@ -73,7 +73,7 @@ qboolean CG_MenuHoldsKeys(void) {
     if (!(trap_Key_GetCatcher() & KEYCATCH_CGAME)) {
         return qfalse;
     }
-    if (!cg_demoCursor) {
+    if (!cg_demoCursor && !CG_HudEdit_Active()) {
         return qtrue;
     }
 
