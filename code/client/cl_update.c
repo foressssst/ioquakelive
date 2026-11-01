@@ -21,8 +21,14 @@
 #define CL_UPDATE_TIMEOUT_MS 5000
 #define CL_NEWS_API "https://quakeclub.com/api/news"
 #define CL_NEWS_MAX 6
-#define CL_NEWS_SITE "https://quakeclub.com"
+#define CL_CLUB_SITE "https://quakeclub.com"
 #define CL_NEWS_IMAGE_MAX 0x100000
+#define CL_CLUB_IDENTITY "/api/ioql/identidad?steamIds="
+#define CL_CLUB_IMAGES "/api/ioql/imagen/"
+#define CL_CLUB_MAX 256
+#define CL_CLUB_BATCH 32
+#define CL_CLUB_WAIT 4000
+#define CL_CLUB_IMAGE_MAX 0x40000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
 #define CL_VERIFIED_MAX 64
@@ -57,6 +63,27 @@ static volatile long clNewsState;
 static char clNewsDir[MAX_OSPATH];
 static byte clNewsImage[CL_NEWS_IMAGE_MAX];
 static cvar_t* cl_clubNews;
+
+enum { CLC_NEW, CLC_ASKED, CLC_READY, CLC_FAILED };
+
+typedef struct {
+    uint64_t steamId;
+    volatile long state;
+    int asked;
+    char avatar[MAX_QPATH];
+    char flag[MAX_QPATH];
+    qhandle_t avatarShader;
+    qhandle_t flagShader;
+} clClub_t;
+
+static clClub_t clClub[CL_CLUB_MAX];
+static int clClubCount;
+static int clClubAsk[CL_CLUB_BATCH];
+static int clClubAskCount;
+static volatile long clClubBusy;
+static char clClubDir[MAX_OSPATH];
+static char clClubText[8192];
+static byte clClubImage[CL_CLUB_IMAGE_MAX];
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
 
@@ -554,7 +581,8 @@ static int CL_NewsImageKind(const byte* d, int n, int* w, int* h) {
     return 0;
 }
 
-static void CL_NewsImage(const char* url, char* pic, int size, int* aspect) {
+static qboolean CL_SiteImage(const char* url, const char* prefix, const char* dir, const char* folder, byte* buf,
+                             int bufSize, char* pic, int size, int* w, int* h) {
     static const char* const ext[2] = {"jpg", "png"};
     char address[512];
     char path[MAX_OSPATH];
@@ -564,17 +592,17 @@ static void CL_NewsImage(const char* url, char* pic, int size, int* aspect) {
     clSha256_t sha;
     const char* c;
     FILE* f;
-    int n = 0, kind = 0, w = 0, h = 0, i;
+    int n = 0, kind = 0, i;
 
     pic[0] = '\0';
-    *aspect = 0;
-    if (!clNewsDir[0] || Q_strncmp(url, "/api/news/", 10) || strlen(url) > 200 || strstr(url, "..")) {
-        return;
+    *w = *h = 0;
+    if (!dir[0] || Q_strncmp(url, prefix, (int)strlen(prefix)) || strlen(url) > 200 || strstr(url, "..")) {
+        return qfalse;
     }
     for (c = url; *c; c++) {
         if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '-' ||
               *c == '_' || *c == '/' || *c == '.')) {
-            return;
+            return qfalse;
         }
     }
     CL_Sha256Init(&sha);
@@ -582,47 +610,68 @@ static void CL_NewsImage(const char* url, char* pic, int size, int* aspect) {
     CL_Sha256Hex(&sha, hex);
     hex[16] = '\0';
     for (i = 0; i < 2 && !kind; i++) {
-        Com_sprintf(path, sizeof(path), "%s%c%s.%s", clNewsDir, PATH_SEP, hex, ext[i]);
+        Com_sprintf(path, sizeof(path), "%s%c%s.%s", dir, PATH_SEP, hex, ext[i]);
         f = Sys_FOpen(path, "rb");
         if (f) {
-            n = (int)fread(clNewsImage, 1, sizeof(clNewsImage), f);
+            n = (int)fread(buf, 1, (size_t)bufSize, f);
             fclose(f);
-            if (n > 0 && CL_NewsImageKind(clNewsImage, n, &w, &h) == i + 1) {
+            if (n > 0 && CL_NewsImageKind(buf, n, w, h) == i + 1) {
                 kind = i + 1;
             }
         }
     }
     if (!kind) {
         Com_Memset(&sink, 0, sizeof(sink));
-        sink.buf = (char*)clNewsImage;
-        sink.size = sizeof(clNewsImage);
-        Com_sprintf(address, sizeof(address), "%s%s", CL_NEWS_SITE, url);
+        sink.buf = (char*)buf;
+        sink.size = bufSize;
+        Com_sprintf(address, sizeof(address), "%s%s", CL_CLUB_SITE, url);
         if (!CL_UpdateHttpGet(address, &sink, CL_UPDATE_TIMEOUT_MS) || sink.used <= 0 || sink.used >= sink.size - 1) {
-            return;
+            return qfalse;
         }
         n = sink.used;
-        kind = CL_NewsImageKind(clNewsImage, n, &w, &h);
+        kind = CL_NewsImageKind(buf, n, w, h);
         if (!kind) {
-            return;
+            return qfalse;
         }
-        Com_sprintf(path, sizeof(path), "%s%c%s.%s", clNewsDir, PATH_SEP, hex, ext[kind - 1]);
+        Com_sprintf(path, sizeof(path), "%s%c%s.%s", dir, PATH_SEP, hex, ext[kind - 1]);
         Com_sprintf(tmp, sizeof(tmp), "%s.tmp", path);
         f = Sys_FOpen(tmp, "wb");
         if (!f) {
-            return;
+            return qfalse;
         }
-        i = fwrite(clNewsImage, 1, (size_t)n, f) == (size_t)n;
+        i = fwrite(buf, 1, (size_t)n, f) == (size_t)n;
         fclose(f);
         if (!i || rename(tmp, path)) {
             remove(tmp);
-            return;
+            return qfalse;
         }
     }
-    if (w <= 0 || h <= 0 || w > 8192 || h > 8192) {
+    if (*w <= 0 || *h <= 0 || *w > 8192 || *h > 8192) {
+        return qfalse;
+    }
+    Com_sprintf(pic, size, "%s/%s.%s", folder, hex, ext[kind - 1]);
+    return qtrue;
+}
+
+static void CL_SiteImageDir(char* dir, int size, const char* name) {
+    const char* base = Sys_DefaultCachePath();
+
+    dir[0] = '\0';
+    if (!base || !base[0]) {
         return;
     }
-    Com_sprintf(pic, size, "cache/news/%s.%s", hex, ext[kind - 1]);
-    *aspect = (int)(1000.0f * w / h);
+    Com_sprintf(dir, size, "%s%c%s%cx", base, PATH_SEP, name, PATH_SEP);
+    FS_CreatePath(dir);
+    dir[strlen(dir) - 2] = '\0';
+}
+
+static void CL_NewsImage(const char* url, char* pic, int size, int* aspect) {
+    int w, h;
+
+    *aspect = 0;
+    if (CL_SiteImage(url, "/api/news/", clNewsDir, "news", clNewsImage, sizeof(clNewsImage), pic, size, &w, &h)) {
+        *aspect = (int)(1000.0f * w / h);
+    }
 }
 
 static qboolean CL_NewsLoad(void) {
@@ -802,6 +851,157 @@ qboolean CL_ServerVerified(const netadr_t* adr) {
         }
     }
     return qfalse;
+}
+
+qboolean CL_ClubActive(void) {
+    return (qboolean)(clClubDir[0] && clc.state >= CA_CONNECTED && !clc.demoplaying &&
+                      CL_ServerVerified(&clc.serverAddress));
+}
+
+static void CL_ClubThread(void* unused) {
+    char address[1024];
+    char pic[MAX_QPATH];
+    char id[24];
+    char avatar[256];
+    char flag[256];
+    const char* line;
+    const char* next;
+    clClub_t* c;
+    uint64_t steamId;
+    qboolean ok;
+    int i, n, w, h;
+
+    (void)unused;
+    n = Com_sprintf(address, sizeof(address), "%s%s", CL_CLUB_SITE, CL_CLUB_IDENTITY);
+    for (i = 0; i < clClubAskCount; i++) {
+        n += Com_sprintf(address + n, sizeof(address) - n, "%s%llu", i ? "," : "",
+                         (unsigned long long)clClub[clClubAsk[i]].steamId);
+    }
+    ok = CL_UpdateFetch(address, clClubText, sizeof(clClubText));
+    for (line = clClubText; ok && *line; line = next) {
+        next = strchr(line, '\n');
+        next = next ? next + 1 : line + strlen(line);
+        if (sscanf(line, "%23s %255s %255s", id, avatar, flag) != 3) {
+            continue;
+        }
+        steamId = strtoull(id, NULL, 10);
+        for (i = 0; i < clClubAskCount; i++) {
+            c = &clClub[clClubAsk[i]];
+            if (c->steamId != steamId) {
+                continue;
+            }
+            if (CL_SiteImage(avatar, CL_CLUB_IMAGES, clClubDir, "club", clClubImage, sizeof(clClubImage), pic,
+                             sizeof(pic), &w, &h) &&
+                w == h) {
+                Q_strncpyz(c->avatar, pic, sizeof(c->avatar));
+            }
+            if (CL_SiteImage(flag, CL_CLUB_IMAGES, clClubDir, "club", clClubImage, sizeof(clClubImage), pic,
+                             sizeof(pic), &w, &h) &&
+                w == 2 * h) {
+                Q_strncpyz(c->flag, pic, sizeof(c->flag));
+            }
+        }
+    }
+    for (i = 0; i < clClubAskCount; i++) {
+        CL_UpdateSet(&clClub[clClubAsk[i]].state, ok ? CLC_READY : CLC_FAILED);
+    }
+    CL_UpdateSet(&clClubBusy, 0);
+}
+
+static clClub_t* CL_ClubEntry(uint64_t steamId) {
+    clClub_t* c;
+    int i;
+
+    if (!steamId || !CL_ClubActive()) {
+        return NULL;
+    }
+    for (i = 0; i < clClubCount; i++) {
+        if (clClub[i].steamId == steamId) {
+            return &clClub[i];
+        }
+    }
+    if (clClubCount >= CL_CLUB_MAX) {
+        if (CL_UpdateGet(&clClubBusy)) {
+            return NULL;
+        }
+        clClubCount = 0;
+    }
+    c = &clClub[clClubCount++];
+    Com_Memset(c, 0, sizeof(*c));
+    c->steamId = steamId;
+    return c;
+}
+
+static qhandle_t CL_ClubShader(const char* pic, qhandle_t* shader) {
+    if (!*shader) {
+        *shader = pic[0] ? re.RegisterShaderNoMip(pic) : 0;
+        if (!*shader) {
+            *shader = -1;
+        }
+    }
+    return *shader > 0 ? *shader : 0;
+}
+
+qhandle_t CL_ClubAvatar(uint64_t steamId, qboolean* wait) {
+    clClub_t* c = CL_ClubEntry(steamId);
+    long state;
+
+    *wait = qfalse;
+    if (!c) {
+        return 0;
+    }
+    state = CL_UpdateGet(&c->state);
+    if (state == CLC_READY) {
+        return CL_ClubShader(c->avatar, &c->avatarShader);
+    }
+    if (state != CLC_FAILED) {
+        *wait = (qboolean)(!c->asked || cls.realtime - c->asked < CL_CLUB_WAIT);
+    }
+    return 0;
+}
+
+qhandle_t CL_ClubFlag(uint64_t steamId) {
+    clClub_t* c = CL_ClubEntry(steamId);
+
+    if (!c || CL_UpdateGet(&c->state) != CLC_READY) {
+        return 0;
+    }
+    return CL_ClubShader(c->flag, &c->flagShader);
+}
+
+void CL_ClubClearShaders(void) {
+    int i;
+
+    for (i = 0; i < clClubCount; i++) {
+        clClub[i].avatarShader = 0;
+        clClub[i].flagShader = 0;
+    }
+}
+
+static void CL_ClubFrame(void) {
+    int i;
+
+    if (CL_UpdateGet(&clClubBusy) || !CL_ClubActive()) {
+        return;
+    }
+    clClubAskCount = 0;
+    for (i = 0; i < clClubCount && clClubAskCount < CL_CLUB_BATCH; i++) {
+        if (CL_UpdateGet(&clClub[i].state) == CLC_NEW) {
+            CL_UpdateSet(&clClub[i].state, CLC_ASKED);
+            clClub[i].asked = cls.realtime ? cls.realtime : 1;
+            clClubAsk[clClubAskCount++] = i;
+        }
+    }
+    if (!clClubAskCount) {
+        return;
+    }
+    CL_UpdateSet(&clClubBusy, 1);
+    if (!Sys_ThreadCreate(CL_ClubThread, NULL)) {
+        for (i = 0; i < clClubAskCount; i++) {
+            CL_UpdateSet(&clClub[clClubAsk[i]].state, CLC_FAILED);
+        }
+        CL_UpdateSet(&clClubBusy, 0);
+    }
 }
 
 static void CL_UpdateThread(void* unused) {
@@ -1098,6 +1298,9 @@ void CL_UpdateInit(void) {
             CL_UpdateCleanup();
         }
     }
+    if (!clClubDir[0]) {
+        CL_SiteImageDir(clClubDir, sizeof(clClubDir), "club");
+    }
     if (CL_UpdateGet(&clVerifiedState) != CLU_IDLE) {
         return;
     }
@@ -1106,11 +1309,7 @@ void CL_UpdateInit(void) {
         CL_UpdateSet(&clUpdateState, CLU_RUNNING);
     }
     if (cl_clubNews->integer) {
-        Q_strncpyz(clNewsDir,
-                   FS_BuildOSPath(Cvar_VariableString("fs_homepath"), Cvar_VariableString("com_basegame"), "cache/news/x"),
-                   sizeof(clNewsDir));
-        FS_CreatePath(clNewsDir);
-        clNewsDir[strlen(clNewsDir) - 2] = '\0';
+        CL_SiteImageDir(clNewsDir, sizeof(clNewsDir), "news");
         CL_UpdateSet(&clNewsState, CLU_RUNNING);
     }
     if (!Sys_ThreadCreate(CL_UpdateThread, NULL)) {
@@ -1163,6 +1362,7 @@ void CL_UpdateFrame(void) {
     long state;
 
     CL_UpdateDownloadFrame();
+    CL_ClubFrame();
     state = CL_UpdateGet(&clUpdateState);
     if (state != CLU_DONE && state != CLU_FAILED) {
         return;

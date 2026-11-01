@@ -3692,7 +3692,14 @@ void Item_ListBox_Paint(itemDef_t* item) {
                         if (optionalImage >= 0) {
                             DC->drawHandlePic(x + 4 + listPtr->columnInfo[j].pos, y - 2 + listPtr->elementHeight * 0.5f, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
                         } else if (text) {
-                            DC->drawText(x + 4 + listPtr->columnInfo[j].pos, y + listPtr->elementHeight, item->textscale,
+                            float tx = x + 4 + listPtr->columnInfo[j].pos;
+                            qhandle_t prefix = DC->feederItemPrefix ? DC->feederItemPrefix(item->special, i, j) : 0;
+
+                            if (prefix) {
+                                DC->drawHandlePic(tx, y + listPtr->elementHeight - FEEDER_PREFIX_H + 0.5f, FEEDER_PREFIX_H * 2.0f, FEEDER_PREFIX_H, prefix);
+                                tx += FEEDER_PREFIX_W;
+                            }
+                            DC->drawText(tx, y + listPtr->elementHeight, item->textscale,
                                          (i == item->cursorPos) ? item->window.selectedColor : item->window.elementColor,
                                          text, 0, listPtr->columnInfo[j].maxChars, item->textStyle, item->fontIndex);
                         }

@@ -102,6 +102,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SLIDER_THUMB_HEIGHT 20.0
 #define NUM_CROSSHAIRS 30
 
+#define FEEDER_PREFIX_H 8.0f
+#define FEEDER_PREFIX_W (FEEDER_PREFIX_H * 2.0f + 2.0f)
+
 typedef struct {
     const char* command;
     const char* args[MAX_SCRIPT_ARGS];
@@ -357,6 +360,7 @@ typedef struct {
     int (*feederCount)(float feederID);
     const char* (*feederItemText)(float feederID, int index, int column, qhandle_t* handle);
     qhandle_t (*feederItemImage)(float feederID, int index);
+    qhandle_t (*feederItemPrefix)(float feederID, int index, int column);
     void (*feederSelection)(float feederID, int index);
     void (*keynumToStringBuf)(int keynum, char* buf, int buflen);
     void (*getBindingBuf)(int keynum, char* buf, int buflen);

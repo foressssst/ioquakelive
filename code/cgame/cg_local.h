@@ -1973,6 +1973,7 @@ void CG_PredictPlayerState(void);
 void CG_LoadDeferredPlayers(void);
 void CG_LoadAvatars(void);
 qhandle_t CG_PlayerAvatar(const clientInfo_t* ci);
+qhandle_t CG_ClubFlag(const clientInfo_t* ci);
 void CG_ReloadOtherClients(void);
 void CG_SetEndScoreboardMenu(void);
 
@@ -2272,6 +2273,7 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 qboolean trap_WebImageLink(const char* url);
 qhandle_t trap_SteamAvatar(uint64_t steamId);
+qhandle_t trap_ClubFlag(uint64_t steamId);
 void trap_ConsoleAvatar(uint64_t steamId, const char* icon);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);

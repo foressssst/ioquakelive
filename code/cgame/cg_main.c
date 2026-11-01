@@ -2757,6 +2757,12 @@ static const char* CG_ScoreboardName(const char* name, int wide, int fit) {
     return va("%s", full);
 }
 
+static const char* CG_ClubName(const clientInfo_t* info, int wide, int fit) {
+    const int flag = CG_ClubFlag(info) ? (int)FEEDER_PREFIX_W : 0;
+
+    return CG_ScoreboardName(info->name, wide - flag, fit - flag);
+}
+
 static const char* CG_FeederItemTextStats(float feederID, int index, int column, qhandle_t* handle) {
     int scoreIndex = 0;
     int team = (feederID == FEEDER_REDTEAM_STATS) ? TEAM_RED : TEAM_BLUE;
@@ -2770,7 +2776,7 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
 
     switch (column) {
         case 0:
-            return CG_ScoreboardName(info->name, 100, 92);
+            return CG_ClubName(info, 100, 92);
         case 1:
             if (sp->score == -9999 || sp->score == -999) {
                 return "";
@@ -2932,15 +2938,15 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
                 switch (cgs.gametype) {
                     case GT_TEAM:
                     case GT_FREEZE:
-                        return CG_ScoreboardName(info->name, 100, 92);
+                        return CG_ClubName(info, 100, 92);
                     case GT_CA:
-                        return CG_ScoreboardName(info->name, 70, 62);
+                        return CG_ClubName(info, 70, 62);
                     case GT_CTF:
                     case GT_1FCTF:
                     case GT_HARVESTER:
                     case GT_DOMINATION:
                     case GT_AD:
-                        return CG_ScoreboardName(info->name, 74, 66);
+                        return CG_ClubName(info, 74, 66);
                     default:
                         break;
                 }
@@ -2971,6 +2977,30 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
 
 static qhandle_t CG_FeederItemImage(float feederID, int index) {
     return 0;
+}
+
+static qhandle_t CG_FeederItemPrefix(float feederID, int index, int column) {
+    int scoreIndex = 0;
+    int team = -1;
+    clientInfo_t* info;
+
+    if (feederID == FEEDER_REDTEAM_STATS || feederID == FEEDER_BLUETEAM_STATS) {
+        if (column != 0) {
+            return 0;
+        }
+        team = feederID == FEEDER_REDTEAM_STATS ? TEAM_RED : TEAM_BLUE;
+    } else {
+        if (feederID == FEEDER_REDTEAM_LIST) {
+            team = TEAM_RED;
+        } else if (feederID == FEEDER_BLUETEAM_LIST) {
+            team = TEAM_BLUE;
+        }
+        if (column != (cgs.gametype == GT_RACE && team == -1 ? 3 : 5)) {
+            return 0;
+        }
+    }
+    info = CG_InfoFromScoreIndex(index, team, &scoreIndex);
+    return (info && info->infoValid) ? CG_ClubFlag(info) : 0;
 }
 
 static void CG_FeederSelection(float feederID, int index) {
@@ -3123,6 +3153,7 @@ void CG_LoadHudMenu(void) {
     cgDC.ownerDrawHandleKey = &CG_OwnerDrawHandleKey;
     cgDC.feederCount = &CG_FeederCount;
     cgDC.feederItemImage = &CG_FeederItemImage;
+    cgDC.feederItemPrefix = &CG_FeederItemPrefix;
     cgDC.feederItemText = &CG_FeederItemText;
     cgDC.feederSelection = &CG_FeederSelection;
     cgDC.setBinding = &CG_DC_SetBinding;

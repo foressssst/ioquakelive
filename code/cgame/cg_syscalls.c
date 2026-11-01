@@ -254,6 +254,10 @@ qhandle_t trap_SteamAvatar(uint64_t steamId) {
     return (qhandle_t)syscall(CG_STEAM_AVATAR, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
 }
 
+qhandle_t trap_ClubFlag(uint64_t steamId) {
+    return (qhandle_t)syscall(CG_CLUB_FLAG, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
+}
+
 void trap_ConsoleAvatar(uint64_t steamId, const char* icon) {
     syscall(CG_CONSOLE_AVATAR, (int)(steamId & 0xffffffffu), (int)(steamId >> 32), icon);
 }

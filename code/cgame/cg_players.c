@@ -938,6 +938,10 @@ qhandle_t CG_PlayerAvatar(const clientInfo_t* ci) {
     return (cg_drawProfileImages.integer && ci->steamId) ? ci->avatar : 0;
 }
 
+qhandle_t CG_ClubFlag(const clientInfo_t* ci) {
+    return (cg_drawProfileImages.integer && ci->steamId) ? trap_ClubFlag(ci->steamId) : 0;
+}
+
 void CG_LoadAvatars(void) {
     static int next;
     int i;

@@ -758,6 +758,22 @@ static qboolean FS_IsWebImageName(const char* filename) {
 	       !Q_stricmp(p + 4, ".tga");
 }
 
+static qboolean FS_IsSiteImageName(const char* filename) {
+	const char* p;
+	int i;
+
+	if (Q_stricmpn(filename, "club/", 5) && Q_stricmpn(filename, "news/", 5)) {
+		return qfalse;
+	}
+	p = filename + 5;
+	for (i = 0; i < 16; i++) {
+		if (!isxdigit((unsigned char)p[i])) {
+			return qfalse;
+		}
+	}
+	return (qboolean)(!Q_stricmp(p + 16, ".png") || !Q_stricmp(p + 16, ".jpg"));
+}
+
 qboolean FS_IsDemoExt(const char* filename, int namelen) {
 	char* ext_test;
 	int index, protocol;
@@ -1302,7 +1318,7 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 	if (!Q_stricmpn(qpath, "webui/", 6)) {
 		return FS_WebPak_ReadFile(qpath + 6, buffer);
 	}
-	if (FS_IsWebImageName(qpath)) {
+	if (FS_IsWebImageName(qpath) || FS_IsSiteImageName(qpath)) {
 		void* data;
 
 		len = FS_ReadCacheFile(qpath, &data);
