@@ -253,8 +253,9 @@ void CL_SystemInfoChanged(void) {
     char key[BIG_INFO_KEY];
     char value[BIG_INFO_VALUE];
     qboolean gameSet;
+    int flags;
 
-    systemInfo = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SYSTEMINFO];
+    systemInfo =cl.gameState.stringData + cl.gameState.stringOffsets[CS_SYSTEMINFO];
     cl.serverId = atoi(Info_ValueForKey(systemInfo, "sv_serverid"));
 
     if (clc.demoplaying) {
@@ -292,6 +293,17 @@ void CL_SystemInfoChanged(void) {
             gameSet = qtrue;
         }
         if (!Q_stricmp(key, "cl_updateVersion")) {
+            continue;
+        }
+
+        flags = Cvar_Flags(key);
+        if (flags == CVAR_NONEXISTENT) {
+            Cvar_Get(key, value, CVAR_USER_CREATED);
+            continue;
+        }
+        if (!(flags & (CVAR_SYSTEMINFO | CVAR_USER_CREATED)) && Q_stricmp(key, "g_training") &&
+            Q_stricmp(key, "g_skipTrainingEnable")) {
+            Com_Printf(S_COLOR_YELLOW "WARNING: server is not allowed to set %s=%s\n", key, value);
             continue;
         }
 
