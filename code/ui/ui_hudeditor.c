@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "ui_web.h"
 #include "ui_hudview.h"
 #include "ui_huddoc.h"
+#include "ui_settings.h"
 
 void Item_UpdatePosition(itemDef_t* item);
 
@@ -104,7 +105,65 @@ typedef struct {
     itemDef_t* item;
     qboolean locked;
     int edited;
+    qboolean removed;
+    int fresh;
+    int slot;
 } heItem_t;
+
+#define HEK_ALIVE HEK_COUNT
+#define HE_MAX_NEW 64
+#define HE_CUSTOM "custom"
+
+typedef struct {
+    const char* label;
+    const char* group;
+    const char* name;
+    int ownerDraw;
+    float w, h;
+    float scale;
+    int textStyle;
+    int align;
+    int winStyle;
+    const char* background;
+    float color[4];
+    float special;
+} hePal_t;
+
+static const hePal_t hePal[] = {
+    {"Health", "Player", "health", CG_PLAYER_HEALTH, 63, 22, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Armor", "Player", "armor", CG_PLAYER_ARMOR_VALUE, 63, 22, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Ammo", "Player", "ammo", CG_PLAYER_AMMO_VALUE, 64, 32, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Ammo icon", "Player", "ammoicon", CG_PLAYER_AMMO_ICON2D, 22, 22, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Armor icon", "Player", "armoricon", CG_PLAYER_ARMOR_ICON2D, 22, 22, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Health bar", "Player", "healthbar", CG_PLAYER_HEALTH_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/h100.tga", {1, 1, 1, 1}, 0},
+    {"Armor bar", "Player", "armorbar", CG_PLAYER_ARMOR_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/a100.tga", {1, 1, 1, 1}, 0},
+    {"Holdable", "Player", "holdable", CG_PLAYER_ITEM, 25, 25, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Powerups", "Player", "powerups", CG_AREA_POWERUP, 35, 35, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 4},
+    {"Timer", "Match", "timer", CG_LEVELTIMER, 50, 12, 0.28f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Round timer", "Match", "roundtimer", CG_ROUNDTIMER, 50, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {0.73f, 0.73f, 0.73f, 0.7f}, 0},
+    {"Score", "Match", "score", CG_PLAYER_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Red score", "Match", "redscore", CG_RED_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Blue score", "Match", "bluescore", CG_BLUE_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Game type", "Match", "gametype", CG_GAME_TYPE_ICON, 19, 19, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Clock", "Match", "clock", CG_LOCALTIME, 60, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Kill feed", "Messages", "killfeed", CG_PLAYER_OBIT, 65, 12, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Chat", "Messages", "chat", CG_AREA_NEW_CHAT, 300, 60, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Box", "Shapes", "box", 0, 64, 32, 0, 0, 0, WINDOW_STYLE_FILLED, NULL, {0, 0, 0, 0.5f}, 0},
+};
+
+typedef struct {
+    itemDef_t item;
+    editFieldDef_t field;
+    char name[32];
+    int pal;
+} heNew_t;
+
+static heNew_t heNew[HE_MAX_NEW];
+static int heNumNew;
+static itemDef_t heGone;
+static itemDef_t heScratch;
+static editFieldDef_t heScratchField;
+static menuDef_t heScratchMenu;
 
 typedef struct {
     int item;
@@ -136,7 +195,14 @@ typedef enum {
     HE_HIT_POPUP,
     HE_HIT_CONFIRM,
     HE_HIT_HUD,
-    HE_HIT_HUDITEM
+    HE_HIT_HUDITEM,
+    HE_HIT_RTAB,
+    HE_HIT_OPT,
+    HE_HIT_OPTSTEP,
+    HE_HIT_OPTROW,
+    HE_HIT_LTAB,
+    HE_HIT_ADD,
+    HE_HIT_DELETE
 } heHit_t;
 
 typedef enum {
@@ -144,7 +210,8 @@ typedef enum {
     HE_DRAG_MOVE,
     HE_DRAG_SIZE,
     HE_DRAG_ALPHA,
-    HE_DRAG_SCALE
+    HE_DRAG_SCALE,
+    HE_DRAG_NEW
 } heDrag_t;
 
 enum { HF_X, HF_Y, HF_W, HF_H, HF_SCALE, HF_BORDER, HF_COUNT };
@@ -209,6 +276,16 @@ static struct {
     float hudMenuX;
     char huds[HE_MAX_HUDS][MAX_QPATH];
     int numHuds;
+    int rightTab;
+    float optScroll;
+    float optScrollMax;
+    int leftTab;
+    float addScroll;
+    float addScrollMax;
+    float addStops[48];
+    int addNumStops;
+    int dragPal;
+    float pressX, pressY;
     char status[160];
     int statusTime;
     float cv[4];
@@ -232,9 +309,9 @@ static const vec4_t heGold = {0.897f, 0.675f, 0.297f, 1.0f};
 static const vec4_t heGoldHover = {0.963f, 0.738f, 0.364f, 1.0f};
 static const vec4_t heGoldText = {0.078f, 0.075f, 0.063f, 1.0f};
 static const vec4_t heHi = {0.925f, 0.902f, 0.859f, 1.0f};
-static const vec4_t heMd = {0.647f, 0.612f, 0.553f, 1.0f};
-static const vec4_t heLo = {0.486f, 0.459f, 0.408f, 1.0f};
-static const vec4_t heGhost = {0.294f, 0.275f, 0.243f, 1.0f};
+static const vec4_t heMd = {0.749f, 0.718f, 0.659f, 1.0f};
+static const vec4_t heLo = {0.604f, 0.576f, 0.522f, 1.0f};
+static const vec4_t heGhost = {0.388f, 0.365f, 0.329f, 1.0f};
 static const vec4_t heWarn = {0.86f, 0.42f, 0.38f, 1.0f};
 static const vec4_t heShade = {0.0f, 0.0f, 0.0f, 0.6f};
 static const vec4_t heShadow = {0.0f, 0.0f, 0.0f, 0.3f};
@@ -371,6 +448,9 @@ static void HE_BuildItems(void) {
             e->item = menu->items[j];
             e->locked = qtrue;
             e->edited = 0;
+            e->removed = qfalse;
+            e->fresh = -1;
+            e->slot = j;
         }
     }
 }
@@ -395,6 +475,7 @@ static qboolean HE_Load(const char* listFile) {
     he.colorKey = -1;
     he.confirm = qfalse;
     he.scroll = 0;
+    heNumNew = 0;
     if (he.numFiles <= 0) {
         HV_Unload();
         return qfalse;
@@ -489,6 +570,10 @@ static void HE_Get(int i, int key, float* v) {
     float* f;
     int n;
 
+    if (key == HEK_ALIVE) {
+        v[0] = he.items[i].removed ? 0.0f : 1.0f;
+        return;
+    }
     if (key == HEK_WIDESCREEN) {
         v[0] = it->widescreenFlag ? (float)it->widescreen : -1.0f;
         return;
@@ -504,6 +589,19 @@ static void HE_Set(int i, int key, const float* v) {
     float* f;
     int n;
 
+    if (key == HEK_ALIVE) {
+        heItem_t* e = &he.items[i];
+
+        e->removed = v[0] == 0.0f;
+        heGone.parent = e->menu;
+        e->menu->items[e->slot] = e->removed ? &heGone : e->item;
+        if (e->removed && he.selected == i) {
+            he.selected = -1;
+        }
+        e->edited |= 1 << key;
+        he.dirty = qtrue;
+        return;
+    }
     if (key == HEK_WIDESCREEN) {
         if (v[0] < 0.0f) {
             it->widescreenFlag = 0;
@@ -569,7 +667,7 @@ static void HE_Swap(heUndo_t* from, int* fromCount, heUndo_t* to, int* toCount) 
 
         HE_PushStack(to, toCount, u.item, u.key, group);
         HE_Set(u.item, u.key, u.values);
-        he.selected = u.item;
+        he.selected = he.items[u.item].removed ? -1 : u.item;
     }
 }
 
@@ -674,6 +772,123 @@ static void HE_DefaultName(char* out, int size) {
     }
 }
 
+static void HE_Num(char* out, int size, float v) {
+    Com_sprintf(out, size, "%.4f", v);
+    while (strchr(out, '.') && (out[strlen(out) - 1] == '0' || out[strlen(out) - 1] == '.')) {
+        out[strlen(out) - 1] = 0;
+    }
+    if (!strcmp(out, "-0")) {
+        Q_strncpyz(out, "0", size);
+    }
+}
+
+static void HE_NumList(char* out, int size, const float* v, int n) {
+    char num[32];
+    int k;
+
+    out[0] = 0;
+    for (k = 0; k < n; k++) {
+        HE_Num(num, sizeof(num), v[k]);
+        Q_strcat(out, size, k ? va(" %s", num) : num);
+    }
+}
+
+static void HE_ItemText(const heNew_t* n, char* out, int size) {
+    const itemDef_t* it = &n->item;
+    const hePal_t* p = &hePal[n->pal];
+    char v[96];
+
+    Com_sprintf(out, size, "\t\titemDef {\n\t\t\tname \"%s\"\n", n->name);
+    HE_NumList(v, sizeof(v), &it->window.rectClient.x, 4);
+    Q_strcat(out, size, va("\t\t\trect %s\n", v));
+    if (it->widescreenFlag) {
+        Q_strcat(out, size, va("\t\t\twidescreen %d\n", it->widescreen));
+    }
+    Q_strcat(out, size, "\t\t\tvisible 1\n\t\t\tdecoration\n");
+    if (it->window.style) {
+        Q_strcat(out, size, va("\t\t\tstyle %d\n", it->window.style));
+    }
+    if (p->background) {
+        Q_strcat(out, size, va("\t\t\tbackground \"%s\"\n", p->background));
+    }
+    if (it->window.ownerDraw) {
+        Q_strcat(out, size, va("\t\t\townerdraw %d\n", it->window.ownerDraw));
+    }
+    if (p->scale > 0.0f) {
+        HE_Num(v, sizeof(v), it->textscale);
+        Q_strcat(out, size, va("\t\t\ttextscale %s\n\t\t\ttextstyle %d\n\t\t\talign %d\n", v, it->textStyle,
+                               it->alignment));
+    }
+    if (it->special != 0.0f) {
+        HE_Num(v, sizeof(v), it->special);
+        Q_strcat(out, size, va("\t\t\tspecial %s\n", v));
+    }
+    if (it->textalignx != 0.0f || it->textaligny != 0.0f) {
+        HE_NumList(v, sizeof(v), &it->textalignx, 1);
+        Q_strcat(out, size, va("\t\t\ttextalignx %s\n", v));
+        HE_NumList(v, sizeof(v), &it->textaligny, 1);
+        Q_strcat(out, size, va("\t\t\ttextaligny %s\n", v));
+    }
+    HE_NumList(v, sizeof(v), it->window.foreColor, 4);
+    Q_strcat(out, size, va("\t\t\tforecolor %s\n", v));
+    HE_NumList(v, sizeof(v), it->window.backColor, 4);
+    Q_strcat(out, size, va("\t\t\tbackcolor %s\n", v));
+    if (it->window.border && it->window.borderSize > 0.0f) {
+        Q_strcat(out, size, va("\t\t\tborder %d\n", it->window.border));
+        HE_Num(v, sizeof(v), it->window.borderSize);
+        Q_strcat(out, size, va("\t\t\tbordersize %s\n", v));
+        HE_NumList(v, sizeof(v), it->window.borderColor, 4);
+        Q_strcat(out, size, va("\t\t\tbordercolor %s\n", v));
+    }
+    Q_strcat(out, size, "\t\t}\n");
+}
+
+static int HE_SaveNew(void) {
+    static char block[32768];
+    static char wrap[33024];
+    char one[2048];
+    int i, k, doc = -1, at = -1;
+    qboolean any = qfalse;
+
+    block[0] = 0;
+    for (i = 0; i < he.numItems; i++) {
+        const heItem_t* e = &he.items[i];
+
+        if (e->fresh < 0 || e->removed) {
+            continue;
+        }
+        HE_ItemText(&heNew[e->fresh], one, sizeof(one));
+        if (strlen(block) + strlen(one) + 1 >= sizeof(block)) {
+            return -2;
+        }
+        Q_strcat(block, sizeof(block), one);
+        any = qtrue;
+    }
+    if (!any) {
+        return -1;
+    }
+    for (k = 0; k < he.numDocs && doc < 0; k++) {
+        for (i = 0; i < heDocs[k].numMenus; i++) {
+            if (heDocs[k].menus[i].local && !Q_stricmp(heDocs[k].menus[i].name, HE_CUSTOM)) {
+                doc = k;
+                at = heDocs[k].menus[i].closeFrom;
+                break;
+            }
+        }
+    }
+    if (doc >= 0) {
+        Com_sprintf(wrap, sizeof(wrap), "%s\t", block + 1);
+        return HD_Insert(&heDocs[doc], at, wrap) ? doc : -2;
+    }
+    if (he.numDocs <= 0 || heDocs[0].endFrom < 0) {
+        return -2;
+    }
+    Com_sprintf(wrap, sizeof(wrap),
+                "\tmenuDef {\n\t\tname \"%s\"\n\t\tfullScreen 0\n\t\tvisible 1\n\t\trect 0 0 640 480\n\n%s\t}\n",
+                HE_CUSTOM, block);
+    return HD_Insert(&heDocs[0], heDocs[0].endFrom, wrap) ? 0 : -2;
+}
+
 static qboolean HE_Save(void) {
     char name[64], path[MAX_QPATH], listPath[MAX_QPATH], list[MAX_MENUDEFFILE];
     char paths[HV_MAX_FILES][MAX_QPATH];
@@ -692,6 +907,14 @@ static qboolean HE_Save(void) {
         if (e->locked || e->doc < 0 || !e->edited) {
             continue;
         }
+        if (e->removed) {
+            if (!HD_RemoveItem(&heDocs[e->doc], e->docItem)) {
+                HE_Status("Could not save");
+                return qfalse;
+            }
+            changed[e->doc] = qtrue;
+            continue;
+        }
         for (key = 0; key < HEK_COUNT; key++) {
             float v[4];
 
@@ -704,6 +927,14 @@ static qboolean HE_Save(void) {
             }
             changed[e->doc] = qtrue;
         }
+    }
+    k = HE_SaveNew();
+    if (k == -2) {
+        HE_Status("Could not save");
+        return qfalse;
+    }
+    if (k >= 0) {
+        changed[k] = qtrue;
     }
     for (i = 0; i < he.numFiles; i++) {
         Q_strncpyz(paths[i], he.files[i], MAX_QPATH);
@@ -776,6 +1007,9 @@ static void HE_MousePx(float* x, float* y) {
 }
 
 static qboolean HE_ItemPickable(int i) {
+    if (he.items[i].removed) {
+        return qfalse;
+    }
     if (!(he.items[i].item->window.flags & WINDOW_VISIBLE) && i != he.selected) {
         return qfalse;
     }
@@ -785,6 +1019,140 @@ static qboolean HE_ItemPickable(int i) {
 static qboolean HE_InCanvas(float px, float py) {
     return px >= HE_PxX(he.cv[0]) && px < HE_PxX(he.cv[0] + he.cv[2]) && py >= HE_PxY(he.cv[1]) &&
            py < HE_PxY(he.cv[1] + he.cv[3]);
+}
+
+static void HE_NewInit(itemDef_t* it, editFieldDef_t* field, const hePal_t* p, menuDef_t* menu, const char* name) {
+    Item_Init(it);
+    it->window.name = name;
+    it->parent = menu;
+    it->window.flags = WINDOW_VISIBLE | WINDOW_DECORATION;
+    it->window.rectClient.w = p->w;
+    it->window.rectClient.h = p->h;
+    if (p->scale > 0.0f) {
+        it->textscale = p->scale;
+    }
+    it->textStyle = p->textStyle;
+    it->alignment = p->align;
+    it->special = p->special;
+    it->window.style = p->winStyle;
+    if (p->background) {
+        it->window.background = trap_R_RegisterShaderNoMip(p->background);
+    }
+    if (p->ownerDraw) {
+        it->type = ITEM_TYPE_OWNERDRAW;
+        it->window.ownerDraw = p->ownerDraw;
+        Vector4Copy(p->color, it->window.foreColor);
+        if (!p->winStyle) {
+            Vector4Copy(p->color, it->window.backColor);
+        }
+    } else {
+        memset(field, 0, sizeof(*field));
+        it->type = ITEM_TYPE_TEXT;
+        it->typeData = field;
+        Vector4Copy(p->color, it->window.backColor);
+    }
+    Item_UpdatePosition(it);
+}
+
+static menuDef_t* HE_CustomMenu(void) {
+    menuDef_t* m = HV_FindMenu(HE_CUSTOM);
+
+    return m ? m : HV_AddMenu(HE_CUSTOM);
+}
+
+static int HE_DropAnchor(float px) {
+    float f = (px - HE_PxX(he.cv[0])) / (he.cv[2] * smScale);
+
+    return f < 0.34f ? WIDESCREEN_LEFT : f > 0.66f ? WIDESCREEN_RIGHT : WIDESCREEN_CENTER;
+}
+
+static int HE_NewAnchor(int pal, float px) {
+    return hePal[pal].ownerDraw == CG_AREA_NEW_CHAT ? WIDESCREEN_LEFT : HE_DropAnchor(px);
+}
+
+static void HE_PlaceNew(itemDef_t* it, float px, float py, int anchor, const float* box) {
+    menuDef_t* menu = (menuDef_t*)it->parent;
+    float x = px, y = py;
+
+    HV_FromScreen(anchor, &x, &y);
+    it->widescreen = anchor;
+    it->widescreenFlag = 1;
+    it->window.rectClient.x = (float)floor(x - box[0] - box[2] * 0.5f - menu->window.rect.x + 0.5f);
+    it->window.rectClient.y = (float)floor(y - box[1] - box[3] * 0.5f - menu->window.rect.y + 0.5f);
+    Item_UpdatePosition(it);
+}
+
+static void HE_PalBox(int pal, float* box);
+static void HE_RestoreCanvas(void);
+
+static int HE_AddItem(int pal, float px, float py) {
+    static const float alive = 1.0f;
+    const hePal_t* p = &hePal[pal];
+    menuDef_t* menu;
+    heNew_t* n;
+    heItem_t* e;
+    float box[4];
+    int i, count = 0;
+
+    if (he.numDocs <= 0) {
+        HE_Status("This HUD can be viewed but not edited.");
+        return -1;
+    }
+    menu = HE_CustomMenu();
+    if (!menu || heNumNew >= HE_MAX_NEW || he.numItems >= HE_MAX_ITEMS || menu->itemCount >= MAX_MENUITEMS) {
+        HE_Status("No room for more elements.");
+        return -1;
+    }
+    for (i = 0; i < heNumNew; i++) {
+        count += heNew[i].pal == pal;
+    }
+    n = &heNew[heNumNew];
+    n->pal = pal;
+    Com_sprintf(n->name, sizeof(n->name), "%s%d", p->name, count + 1);
+    HE_PalBox(pal, box);
+    HE_RestoreCanvas();
+    HE_NewInit(&n->item, &n->field, p, menu, n->name);
+    HE_PlaceNew(&n->item, px, py, HE_NewAnchor(pal, px), box);
+    menu->items[menu->itemCount] = &n->item;
+
+    i = he.numItems++;
+    e = &he.items[i];
+    e->doc = -1;
+    e->docItem = -1;
+    e->menu = menu;
+    e->item = &n->item;
+    e->locked = qfalse;
+    e->edited = 0;
+    e->removed = qtrue;
+    e->fresh = heNumNew++;
+    e->slot = menu->itemCount++;
+    HE_BeginUndo();
+    HE_PushUndo(i, HEK_ALIVE);
+    HE_Set(i, HEK_ALIVE, &alive);
+    return i;
+}
+
+static qboolean HE_Removable(int i) {
+    const heItem_t* e;
+
+    if (!HE_Editable(i)) {
+        return qfalse;
+    }
+    e = &he.items[i];
+    return e->fresh >= 0 || (e->doc >= 0 && e->docItem >= 0 && heDocs[e->doc].items[e->docItem].srcFrom >= 0);
+}
+
+static void HE_Remove(int i) {
+    static const float gone = 0.0f;
+
+    if (!HE_Removable(i)) {
+        HE_Status("This element can't be deleted.");
+        return;
+    }
+    HE_BeginUndo();
+    HE_PushUndo(i, HEK_ALIVE);
+    HE_Set(i, HEK_ALIVE, &gone);
+    HE_Status("Deleted. Ctrl+Z brings it back.");
 }
 
 static int HE_ItemIcon(const itemDef_t* it);
@@ -1561,18 +1929,233 @@ static void HE_Thumb(float x, float y, float size, const itemDef_t* it, qboolean
     HE_IconCenter(x, y, size, size, 12.0f, selected ? heGold : heLo, HE_ItemIcon(it));
 }
 
+static void HE_RestoreCanvas(void) {
+    HV_SetCanvas(HE_PxX(he.cv[0]), HE_PxY(he.cv[1]), he.cv[2] * smScale, he.cv[3] * smScale);
+}
+
+static itemDef_t* HE_Scratch(int pal) {
+    if (!heScratchMenu.window.rect.w) {
+        Menu_Init(&heScratchMenu);
+        heScratchMenu.window.rect.w = heScratchMenu.window.rectClient.w = 640.0f;
+        heScratchMenu.window.rect.h = heScratchMenu.window.rectClient.h = 480.0f;
+        heScratchMenu.window.flags |= WINDOW_VISIBLE;
+    }
+    HE_NewInit(&heScratch, &heScratchField, &hePal[pal], &heScratchMenu, hePal[pal].name);
+    return &heScratch;
+}
+
+static void HE_PalBox(int pal, float* box) {
+    itemDef_t* it = HE_Scratch(pal);
+    float far = -8192.0f, b[4];
+
+    HV_SetCanvas(far, far, 640.0f, 480.0f);
+    if (HV_PaintLoose(it, b) && b[2] > 0.5f && b[3] > 0.5f) {
+        box[0] = b[0] - far - it->window.rect.x;
+        box[1] = b[1] - far - it->window.rect.y;
+        box[2] = b[2];
+        box[3] = b[3];
+    } else {
+        box[0] = 0.0f;
+        box[1] = 0.0f;
+        box[2] = it->window.rect.w;
+        box[3] = it->window.rect.h;
+    }
+}
+
+static void HE_PalPreview(int pal, float x, float y, float w, float h) {
+    float box[4], s, cx = HE_PxX(x + w * 0.5f), cy = HE_PxY(y + h * 0.5f);
+
+    HE_PalBox(pal, box);
+    s = (w * 0.8f / box[2] < h * 0.7f / box[3] ? w * 0.8f / box[2] : h * 0.7f / box[3]) * smScale;
+    if (s > 3.0f * smScale) {
+        s = 3.0f * smScale;
+    }
+    HV_SetCanvas(cx - (box[0] + box[2] * 0.5f) * s, cy - (box[1] + box[3] * 0.5f) * s, 640.0f * s, 480.0f * s);
+    if (HV_PaintLoose(&heScratch, box) && !hePal[pal].ownerDraw) {
+        HE_PxFill(box[0], box[1], box[2], 1.0f, heLo);
+        HE_PxFill(box[0], box[1] + box[3] - 1.0f, box[2], 1.0f, heLo);
+        HE_PxFill(box[0], box[1], 1.0f, box[3], heLo);
+        HE_PxFill(box[0] + box[2] - 1.0f, box[1], 1.0f, box[3], heLo);
+    }
+}
+
+static void HE_AddStop(float at) {
+    if (he.addNumStops < (int)ARRAY_LEN(he.addStops)) {
+        he.addStops[he.addNumStops++] = at;
+    }
+}
+
+static void HE_ScrollAdd(int dir) {
+    int k;
+
+    if (dir > 0) {
+        for (k = 0; k < he.addNumStops; k++) {
+            if (he.addStops[k] > he.addScroll + 0.5f) {
+                he.addScroll = he.addStops[k];
+                break;
+            }
+        }
+    } else {
+        float to = 0.0f;
+
+        for (k = 0; k < he.addNumStops; k++) {
+            if (he.addStops[k] < he.addScroll - 0.5f) {
+                to = he.addStops[k];
+            }
+        }
+        he.addScroll = to;
+    }
+    if (he.addScroll > he.addScrollMax) {
+        he.addScroll = he.addScrollMax;
+    }
+    if (he.addScroll < 0.0f) {
+        he.addScroll = 0.0f;
+    }
+}
+
+static void HE_PaintAdd(float px, float pw, float top, float bottom) {
+    float gap = 10.0f, x0 = px + 12.0f, tw = (pw - 24.0f - gap) * 0.5f, th = 104.0f, gh = 34.0f, y;
+    const char* last = NULL;
+    int i, col = 0;
+
+    y = top - he.addScroll;
+    he.addNumStops = 0;
+    for (i = 0; i < (int)ARRAY_LEN(hePal); i++) {
+        float tx, prev = 70.0f;
+
+        if (!last || Q_stricmp(last, hePal[i].group)) {
+            if (col) {
+                y += th + gap;
+                col = 0;
+            }
+            last = hePal[i].group;
+            HE_AddStop(y + he.addScroll - top);
+            if (y >= top && y + gh <= bottom) {
+                HE_Caps(x0 + 4.0f, y + 6.0f, gh - 6.0f, 12.0f, heLo, last);
+            }
+            y += gh;
+        }
+        tx = x0 + col * (tw + gap);
+        if (!col && i && !Q_stricmp(hePal[i - 1].group, hePal[i].group)) {
+            HE_AddStop(y + he.addScroll - top);
+        }
+        if (y >= top && y + th <= bottom) {
+            qboolean over = SM_Over(HE_HIT_ADD, i) || (he.drag == HE_DRAG_NEW && he.dragPal == i);
+
+            HE_Round(tx, y, tw, th, 12.0f, over ? heRowHover : heCard);
+            HE_Round(tx + 6.0f, y + 6.0f, tw - 12.0f, prev, 8.0f, heBg);
+            HE_PalPreview(i, tx + 6.0f, y + 6.0f, tw - 12.0f, prev);
+            HE_TextCenter(tx, y + prev + 6.0f, tw, th - prev - 6.0f, 14.0f, over ? heHi : heMd, hePal[i].label,
+                          qfalse);
+            SM_Hit(tx, y, tw, th, HE_HIT_ADD, i, NULL);
+        }
+        if (++col == 2) {
+            col = 0;
+            y += th + gap;
+        }
+    }
+    if (col) {
+        y += th + gap;
+    }
+    HE_RestoreCanvas();
+    he.addScrollMax = y + he.addScroll - top - (bottom - top) + 8.0f;
+    if (he.addScrollMax < 0.0f) {
+        he.addScrollMax = 0.0f;
+    } else {
+        for (i = 0; i < he.addNumStops; i++) {
+            if (he.addStops[i] >= he.addScrollMax - 0.5f) {
+                he.addScrollMax = he.addStops[i];
+                break;
+            }
+        }
+    }
+    if (he.addScroll > he.addScrollMax) {
+        he.addScroll = he.addScrollMax;
+    }
+}
+
+static void HE_PaintDragNew(void) {
+    float mx, my;
+
+    if (he.drag != HE_DRAG_NEW) {
+        return;
+    }
+    HE_MousePx(&mx, &my);
+    if (HE_InCanvas(mx, my)) {
+        float box[4], r[4];
+
+        HE_PalBox(he.dragPal, box);
+        HE_RestoreCanvas();
+        HE_PlaceNew(&heScratch, mx, my, HE_NewAnchor(he.dragPal, mx), box);
+        if (!HV_PaintLoose(&heScratch, r)) {
+            HV_ItemScreenRect(&heScratch, r);
+        }
+        r[0] -= 2.0f;
+        r[1] -= 2.0f;
+        r[2] += 4.0f;
+        r[3] += 4.0f;
+        HE_PxFill(r[0], r[1], r[2], 1.0f, heGold);
+        HE_PxFill(r[0], r[1] + r[3] - 1.0f, r[2], 1.0f, heGold);
+        HE_PxFill(r[0], r[1], 1.0f, r[3], heGold);
+        HE_PxFill(r[0] + r[2] - 1.0f, r[1], 1.0f, r[3], heGold);
+    } else {
+        const char* label = hePal[he.dragPal].label;
+        float w = HE_TextW(label, 14.0f, qtrue) + 28.0f;
+
+        HE_Round(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 17.0f, heGold);
+        HE_TextCenter(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 14.0f, heGoldText, label, qtrue);
+    }
+}
+
+static void HE_Select(int i);
+
+static void HE_DropNew(void) {
+    float mx, my;
+    int i;
+
+    HE_MousePx(&mx, &my);
+    if (!HE_InCanvas(mx, my)) {
+        if (fabs(mx - he.pressX) > 6.0f * smScale || fabs(my - he.pressY) > 6.0f * smScale) {
+            return;
+        }
+        mx = HE_PxX(he.cv[0] + he.cv[2] * 0.5f);
+        my = HE_PxY(he.cv[1] + he.cv[3] * 0.5f);
+    }
+    i = HE_AddItem(he.dragPal, mx, my);
+    if (i >= 0) {
+        HE_Select(i);
+        HE_Status(va("Added %s. Drag it into place.", hePal[he.dragPal].label));
+    }
+}
+
+static int HE_AliveCount(void) {
+    int i, n = 0;
+
+    for (i = 0; i < he.numItems; i++) {
+        n += !he.items[i].removed;
+    }
+    return n;
+}
+
 static void HE_PaintLayers(void) {
     float px = HE_G, py = HE_BAR, pw = HE_LEFT_W, ph = HE_PanelH();
     float top = HE_ListTop(), bottom = top + HE_ListH(), y;
     smRect_t clip = SM_R(px + 8.0f, top, pw - 16.0f, bottom - top);
     menuDef_t* last = NULL;
-    const char* count = va("%d", he.numItems);
+    static char layers[32];
+    const char* tabs[2];
     int i;
 
+    Com_sprintf(layers, sizeof(layers), "Layers  %d", HE_AliveCount());
+    tabs[0] = layers;
+    tabs[1] = "Add";
     HE_Round(px, py, pw, ph, HE_R_PANEL, hePanel);
     SM_Hit(px, py, pw, ph, HE_HIT_PANEL, 0, NULL);
-    HE_Caps(px + 20.0f, py, HE_HEAD_H, 12.0f, heMd, "Layers");
-    HE_Text(px + pw - 20.0f - HE_TextW(count, 13.0f, qfalse), py, HE_HEAD_H, 13.0f, heLo, count, qfalse);
+    HE_Segment(px + 12.0f, py + 10.0f, pw - 24.0f, 36.0f, tabs, 2, he.leftTab, HE_HIT_LTAB, qtrue, qtrue);
+    if (he.leftTab == 1) {
+        HE_PaintAdd(px, pw, top, bottom);
+        return;
+    }
 
     y = top - he.scroll;
     for (i = 0; i < he.numItems; i++) {
@@ -1580,11 +2163,14 @@ static void HE_PaintLayers(void) {
         qboolean shown = HV_ItemShown(e->item) && (e->item->window.flags & WINDOW_VISIBLE);
         qboolean selected = i == he.selected;
 
+        if (e->removed) {
+            continue;
+        }
         if (e->menu != last) {
             last = e->menu;
             if (y + HE_GROUP_H > top && y < bottom &&
-                SM_TextInside(HE_Base(11.0f, y + 6.0f, HE_GROUP_H - 6.0f), 11.0f, &clip)) {
-                HE_Caps(px + 20.0f, y + 6.0f, HE_GROUP_H - 6.0f, 11.0f, heLo, HV_MenuLabel(e->menu));
+                SM_TextInside(HE_Base(12.0f, y + 6.0f, HE_GROUP_H - 6.0f), 12.0f, &clip)) {
+                HE_Caps(px + 20.0f, y + 6.0f, HE_GROUP_H - 6.0f, 12.0f, heLo, HV_MenuLabel(e->menu));
             }
             y += HE_GROUP_H;
         }
@@ -1635,6 +2221,9 @@ static void HE_ScrollTo(int i) {
     int k;
 
     for (k = 0; k <= i && k < he.numItems; k++) {
+        if (he.items[k].removed) {
+            continue;
+        }
         if (he.items[k].menu != last) {
             last = he.items[k].menu;
             y += HE_GROUP_H;
@@ -1762,7 +2351,7 @@ static void HE_CommitField(void) {
 }
 
 static void HE_NumberField(float x, float y, float w, const char* label, int field, qboolean editable) {
-    float h = 38.0f, step = 26.0f, lw = HE_CapsW(label, 11.0f);
+    float h = 38.0f, step = 26.0f, lw = HE_CapsW(label, 12.0f);
     qboolean focused = he.field == field;
     qboolean over = editable && SM_Over(HE_HIT_FIELD, field);
 
@@ -1772,7 +2361,7 @@ static void HE_NumberField(float x, float y, float w, const char* label, int fie
     } else {
         HE_Round(x, y, w, h, HE_R, over ? heRowHover : heRow);
     }
-    HE_Caps(x + 12.0f, y, h, 11.0f, heLo, label);
+    HE_Caps(x + 12.0f, y, h, 12.0f, heLo, label);
     HE_Text(x + 12.0f + lw + 10.0f, y, h, 15.0f, editable ? heHi : heMd, HE_FieldText(field), qfalse);
     if (!editable) {
         return;
@@ -1833,8 +2422,265 @@ static void HE_PaintEmpty(float x, float y, float w) {
     HE_TextCenter(x, y + 156.0f, w, 22.0f, 14.0f, heMd, "from the layers list.", qfalse);
 }
 
+enum { HE_OG_WEAPON, HE_OG_HUD, HE_OG_CROSSHAIR, HE_OG_MESSAGES, HE_OG_COUNT };
+
+static const char* heOptGroups[HE_OG_COUNT] = {"Weapon", "HUD", "Crosshair", "Messages"};
+static int heOpts[64];
+static int heOptGroup[64];
+static int heNumOpts = -1;
+
+static int HE_OptGroupOf(const stCvar_t* cv) {
+    if (!Q_stricmp(cv->cvar, "cg_drawgun") || !Q_stricmp(cv->cvar, "cg_weaponbar") ||
+        !Q_stricmp(cv->cvar, "cg_drawfullweaponbar")) {
+        return HE_OG_WEAPON;
+    }
+    if (Q_stristr(cv->cvar, "crosshair")) {
+        return HE_OG_CROSSHAIR;
+    }
+    return cv->column ? HE_OG_MESSAGES : HE_OG_HUD;
+}
+
+static void HE_BuildOpts(void) {
+    int g, i, n = UI_SettingsCount();
+
+    heNumOpts = 0;
+    for (g = 0; g < HE_OG_COUNT; g++) {
+        for (i = 0; i < n && heNumOpts < (int)ARRAY_LEN(heOpts); i++) {
+            const stCvar_t* cv = UI_SettingsAt(i);
+
+            if (!cv->cvar || !(cv->widget == ST_BOOL || cv->widget == ST_SELECT || cv->widget == ST_RANGE ||
+                               cv->widget == ST_PALETTE || cv->widget == ST_CROSSHAIR)) {
+                continue;
+            }
+            if ((cv->tab != ST_TAB_HUD && Q_stricmp(cv->cvar, "cg_drawgun")) || !Q_stricmp(cv->cvar, "cg_hudfiles")) {
+                continue;
+            }
+            if (HE_OptGroupOf(cv) != g) {
+                continue;
+            }
+            heOpts[heNumOpts] = i;
+            heOptGroup[heNumOpts] = g;
+            heNumOpts++;
+        }
+    }
+}
+
+static const char* HE_OptValue(const stCvar_t* cv) {
+    static char buf[MAX_CVAR_VALUE_STRING];
+
+    trap_Cvar_VariableStringBuffer(cv->cvar, buf, sizeof(buf));
+    return buf;
+}
+
+static int HE_OptIndex(const stCvar_t* cv, const char* v) {
+    int k;
+
+    for (k = 0; k < cv->numOptions; k++) {
+        if (!Q_stricmp(cv->options[k].value, v)) {
+            return k;
+        }
+    }
+    for (k = 0; k < cv->numOptions; k++) {
+        if (atof(cv->options[k].value) == atof(v)) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+static int HE_StepDecimals(float step) {
+    double scaled = step;
+    int d;
+
+    if (step <= 0.0f) {
+        return 0;
+    }
+    for (d = 0; d < 4; d++) {
+        if (fabs(scaled - floor(scaled + 0.5)) < 0.0001) {
+            break;
+        }
+        scaled *= 10.0;
+    }
+    return d;
+}
+
+static void HE_OptChange(int idx, int dir) {
+    const stCvar_t* cv = UI_SettingsAt(idx);
+    const char* v;
+
+    if (!cv) {
+        return;
+    }
+    v = HE_OptValue(cv);
+    switch (cv->widget) {
+        case ST_BOOL:
+            trap_Cvar_Set(cv->cvar, atoi(v) ? "0" : "1");
+            break;
+        case ST_SELECT:
+            if (cv->numOptions > 0) {
+                int k = HE_OptIndex(cv, v);
+
+                k = k < 0 ? (dir > 0 ? 0 : cv->numOptions - 1) : (k + dir + cv->numOptions) % cv->numOptions;
+                trap_Cvar_Set(cv->cvar, cv->options[k].value);
+            }
+            break;
+        case ST_RANGE: {
+            float f = (float)atof(v) + (float)dir * (cv->step > 0.0f ? cv->step : 1.0f);
+
+            if (f < cv->min) {
+                f = cv->min;
+            }
+            if (cv->max > cv->min && f > cv->max) {
+                f = cv->max;
+            }
+            trap_Cvar_Set(cv->cvar, va("%.*f", HE_StepDecimals(cv->step), f));
+            break;
+        }
+        case ST_PALETTE: {
+            int c = atoi(v) + dir;
+
+            trap_Cvar_Set(cv->cvar, va("%d", c < 1 ? 26 : c > 26 ? 1 : c));
+            break;
+        }
+        case ST_CROSSHAIR: {
+            int c = atoi(v) + dir;
+
+            trap_Cvar_Set(cv->cvar, va("%d", c < 0 ? NUM_CROSSHAIRS - 1 : c >= NUM_CROSSHAIRS ? 0 : c));
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void HE_OptStepper(float x, float y, int idx, const char* text, qhandle_t pic, const float* swatch) {
+    float bw = 28.0f, mid = 52.0f, h = 30.0f;
+
+    HE_Round(x, y, bw * 2.0f + mid, h, h * 0.5f, heCard);
+    if (SM_Over(HE_HIT_OPTSTEP, idx * 2)) {
+        HE_Round(x + 2.0f, y + 2.0f, bw - 2.0f, h - 4.0f, (h - 4.0f) * 0.5f, heRowHover);
+    }
+    if (SM_Over(HE_HIT_OPTSTEP, idx * 2 + 1)) {
+        HE_Round(x + bw + mid, y + 2.0f, bw - 2.0f, h - 4.0f, (h - 4.0f) * 0.5f, heRowHover);
+    }
+    HE_IconCenter(x, y, bw, h, 10.0f, heMd, HE_FA_MINUS);
+    HE_IconCenter(x + bw + mid, y, bw, h, 10.0f, heMd, HE_FA_PLUS);
+    SM_Hit(x, y, bw, h, HE_HIT_OPTSTEP, idx * 2, NULL);
+    SM_Hit(x + bw + mid, y, bw, h, HE_HIT_OPTSTEP, idx * 2 + 1, NULL);
+    if (swatch) {
+        HE_Round(x + bw + 6.0f, y + 6.0f, mid - 12.0f, h - 12.0f, 4.0f, swatch);
+    } else if (pic) {
+        trap_R_SetColor(NULL);
+        trap_R_DrawStretchPic(HE_PxX(x + bw + mid * 0.5f - 11.0f), HE_PxY(y + 4.0f), 22.0f * smScale, 22.0f * smScale,
+                              0, 0, 1, 1, pic);
+    } else {
+        HE_TextCenter(x + bw, y, mid, h, 13.0f, heHi, text, qtrue);
+    }
+}
+
+static void HE_PaintOptRow(int idx, float x, float y, float w, float h) {
+    const stCvar_t* cv = UI_SettingsAt(idx);
+    const char* v = HE_OptValue(cv);
+    float right = x + w - 8.0f, cy = y + (h - 30.0f) * 0.5f, cw = 0.0f;
+    qboolean over = SM_Over(HE_HIT_OPTROW, idx) || SM_Over(HE_HIT_OPT, idx) || SM_Over(HE_HIT_OPTSTEP, idx * 2) ||
+                    SM_Over(HE_HIT_OPTSTEP, idx * 2 + 1);
+    int fit;
+
+    if (over) {
+        HE_Round(x, y + 2.0f, w, h - 4.0f, HE_R, heRow);
+        if (cv->tip) {
+            HE_Tip(x, y, w, h - 4.0f, cv->tip);
+        }
+    }
+    SM_Hit(x, y + 2.0f, w, h - 4.0f, HE_HIT_OPTROW, idx, NULL);
+    switch (cv->widget) {
+        case ST_BOOL: {
+            qboolean on = atoi(v) != 0;
+            float tw = 40.0f, th = 22.0f, ty = y + (h - th) * 0.5f;
+
+            cw = tw;
+            HE_Round(right - tw, ty, tw, th, th * 0.5f, on ? heGold : heEdge);
+            HE_Round(on ? right - th + 3.0f : right - tw + 3.0f, ty + 3.0f, th - 6.0f, th - 6.0f, (th - 6.0f) * 0.5f,
+                     on ? heGoldText : heMd);
+            SM_Hit(right - tw, ty, tw, th, HE_HIT_OPT, idx, NULL);
+            break;
+        }
+        case ST_SELECT: {
+            int k = HE_OptIndex(cv, v);
+            const char* label = k >= 0 ? cv->options[k].label : v;
+            float pw = HE_TextW(label, 13.0f, qtrue) + 50.0f;
+
+            if (pw > w * 0.55f) {
+                pw = w * 0.55f;
+            }
+            cw = pw;
+            HE_Round(right - pw, cy, pw, 30.0f, 15.0f, SM_Over(HE_HIT_OPT, idx) ? heRowHover : heCard);
+            fit = SM_Fit(HE_FONT, 13.0f, label, pw - 50.0f);
+            SM_Text(right - pw + 16.0f, HE_Base(13.0f, cy, 30.0f), HE_FONT, 13.0f, heHi, label, fit, qtrue);
+            HE_Icon(right - 26.0f, cy, 30.0f, 9.0f, heMd, HE_FA_CHEVRON);
+            SM_Hit(right - pw, cy, pw, 30.0f, HE_HIT_OPT, idx, NULL);
+            break;
+        }
+        case ST_RANGE:
+            cw = 108.0f;
+            HE_OptStepper(right - cw, cy, idx, va("%.*f", HE_StepDecimals(cv->step), atof(v)), 0, NULL);
+            break;
+        case ST_PALETTE: {
+            int c = atoi(v);
+
+            cw = 108.0f;
+            HE_OptStepper(right - cw, cy, idx, "", 0, c >= 1 && c <= 26 ? UI_CrosshairPalette()[c - 1] : heGhost);
+            break;
+        }
+        case ST_CROSSHAIR: {
+            int c = atoi(v);
+
+            cw = 108.0f;
+            HE_OptStepper(right - cw, cy, idx, "None", c > 0 && c < NUM_CROSSHAIRS ? uiInfo.uiDC.Assets.crosshairShader[c] : 0,
+                          NULL);
+            break;
+        }
+        default:
+            break;
+    }
+    fit = SM_Fit(HE_FONT, 13.0f, cv->title, right - cw - 12.0f - (x + 12.0f));
+    SM_Text(x + 12.0f, HE_Base(13.0f, y, h), HE_FONT, 13.0f, heHi, cv->title, fit, qfalse);
+}
+
+static void HE_PaintOptions(float px, float py, float ph) {
+    float x = px + 12.0f, w = HE_RIGHT_W - 24.0f, top = py + HE_HEAD_H + 4.0f, bottom = py + ph - 12.0f, y;
+    float rh = 44.0f, gh = 34.0f;
+    int i, last = -1;
+
+    if (heNumOpts < 0) {
+        HE_BuildOpts();
+    }
+    y = top - he.optScroll;
+    for (i = 0; i < heNumOpts; i++) {
+        if (heOptGroup[i] != last) {
+            last = heOptGroup[i];
+            if (y >= top && y + gh <= bottom) {
+                HE_Caps(x + 12.0f, y + 8.0f, gh - 8.0f, 12.0f, heLo, heOptGroups[last]);
+            }
+            y += gh;
+        }
+        if (y >= top && y + rh <= bottom) {
+            HE_PaintOptRow(heOpts[i], x, y, w, rh);
+        }
+        y += rh;
+    }
+    he.optScrollMax = y + he.optScroll - top - (bottom - top) + 8.0f;
+    if (he.optScrollMax < 0.0f) {
+        he.optScrollMax = 0.0f;
+    }
+    if (he.optScroll > he.optScrollMax) {
+        he.optScroll = he.optScrollMax;
+    }
+}
+
 static void HE_PaintProps(void) {
     static const char* anchors[5] = {"Menu", "Stretch", "Left", "Center", "Right"};
+    static const char* tabs[2] = {"Properties", "Options"};
     float px = smVW - HE_G - HE_RIGHT_W, py = HE_BAR, ph = HE_PanelH();
     float x = px + 20.0f, w = HE_RIGHT_W - 40.0f, y = py + HE_HEAD_H, half = (w - 8.0f) * 0.5f;
     heItem_t* e;
@@ -1844,7 +2690,11 @@ static void HE_PaintProps(void) {
 
     HE_Round(px, py, HE_RIGHT_W, ph, HE_R_PANEL, hePanel);
     SM_Hit(px, py, HE_RIGHT_W, ph, HE_HIT_PANEL, 0, NULL);
-    HE_Caps(px + 20.0f, py, HE_HEAD_H, 12.0f, heMd, "Properties");
+    HE_Segment(px + 12.0f, py + 10.0f, HE_RIGHT_W - 24.0f, 36.0f, tabs, 2, he.rightTab, HE_HIT_RTAB, qtrue, qtrue);
+    if (he.rightTab == 1) {
+        HE_PaintOptions(px, py, ph);
+        return;
+    }
 
     if (he.selected < 0) {
         HE_PaintEmpty(x, y, w);
@@ -1855,7 +2705,13 @@ static void HE_PaintProps(void) {
     editable = !e->locked;
     {
         float tx = x + 56.0f, tw = w - 56.0f;
-        int fit = SM_Fit(HE_FONT, 18.0f, HV_ItemLabel(it), tw);
+        int fit;
+
+        if (HE_Removable(he.selected)) {
+            tw -= 44.0f;
+            HE_IconButton(x + w - 36.0f, y + 1.0f, 36.0f, HE_FA_TRASH, HE_HIT_DELETE, 0, qfalse, qfalse, "Delete");
+        }
+        fit = SM_Fit(HE_FONT, 18.0f, HV_ItemLabel(it), tw);
         int fit2 = SM_Fit(HE_FONT, 13.0f, va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), tw);
 
         HE_Thumb(x, y - 4.0f, 46.0f, it, qtrue);
@@ -1872,7 +2728,7 @@ static void HE_PaintProps(void) {
         y += 72.0f;
     }
 
-    HE_Caps(x, y, 18.0f, 11.0f, heLo, "Position and size");
+    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Position and size");
     y += 26.0f;
     HE_NumberField(x, y, half, "X", HF_X, editable);
     HE_NumberField(x + half + 8.0f, y, half, "Y", HF_Y, editable);
@@ -1881,20 +2737,20 @@ static void HE_PaintProps(void) {
     HE_NumberField(x + half + 8.0f, y, half, "H", HF_H, editable);
     y += 58.0f;
 
-    HE_Caps(x, y, 18.0f, 11.0f, heLo, "Screen anchor");
+    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Screen anchor");
     y += 26.0f;
     anchor = it->widescreenFlag ? it->widescreen + 1 : 0;
     HE_Segment(x, y, w, 40.0f, anchors, 5, anchor, HE_HIT_ANCHOR, editable, qtrue);
     y += 58.0f;
 
     if (HE_HasText(it)) {
-        HE_Caps(x, y, 18.0f, 11.0f, heLo, "Text");
+        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Text");
         y += 26.0f;
         HE_NumberField(x, y, w, "Size", HF_SCALE, editable);
         y += 58.0f;
     }
 
-    HE_Caps(x, y, 18.0f, 11.0f, heLo, "Colors");
+    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Colors");
     y += 26.0f;
     HE_Swatch(x, y, w, "Color", HEK_FORECOLOR, it->window.foreColor, editable);
     y += 44.0f;
@@ -1944,7 +2800,7 @@ static void HE_PaintPopup(void) {
         SM_Hit(cx, cy, cell, cell, HE_HIT_PALETTE, i, NULL);
     }
     ty = y + pad + 4.0f * (cell + gap) + 4.0f;
-    HE_Caps(x + pad, ty, 18.0f, 11.0f, heLo, "Opacity");
+    HE_Caps(x + pad, ty, 18.0f, 12.0f, heLo, "Opacity");
     {
         const char* pct = va("%d%%", (int)(color[3] * 100.0f + 0.5f));
 
@@ -1987,7 +2843,7 @@ static void HE_PaintHudMenu(void) {
         qboolean current = !Q_stricmp(he.huds[i], he.list);
 
         if (i == 0 || i == retail) {
-            HE_Caps(x + 16.0f, ry, head, 11.0f, heLo, i == 0 ? "Quake Live" : "Your HUDs");
+            HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, i == 0 ? "Quake Live" : "Your HUDs");
             ry += head;
         }
         if (ry + row > y + h - pad) {
@@ -2006,7 +2862,7 @@ static void HE_PaintHudMenu(void) {
     }
     if (he.numHuds <= retail) {
         if (retail == he.numHuds) {
-            HE_Caps(x + 16.0f, ry, head, 11.0f, heLo, "Your HUDs");
+            HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, "Your HUDs");
             ry += head;
         }
         HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs you save appear here.", qfalse);
@@ -2092,7 +2948,8 @@ static void HE_PaintCanvas(void) {
     }
     if (hvScene.showAll) {
         for (i = 0; i < he.numItems; i++) {
-            if (!HV_ItemShown(he.items[i].item) && (he.items[i].item->window.flags & WINDOW_VISIBLE) &&
+            if (!he.items[i].removed && !HV_ItemShown(he.items[i].item) &&
+                (he.items[i].item->window.flags & WINDOW_VISIBLE) &&
                 i != he.selected) {
                 HV_PaintItem(he.items[i].item);
             }
@@ -2151,13 +3008,13 @@ static void HE_PaintCanvas(void) {
 }
 
 static float HE_KeyHint(float x, float y, float h, const char* key, const char* what, float limit) {
-    float kw = HE_CapsW(key, 10.0f) + 14.0f, ww = HE_TextW(what, 13.0f, qfalse);
+    float kw = HE_CapsW(key, 11.0f) + 14.0f, ww = HE_TextW(what, 13.0f, qfalse);
 
     if (x + kw + 8.0f + ww > limit) {
         return -1.0f;
     }
     HE_Round(x, y + (h - 24.0f) * 0.5f, kw, 24.0f, 6.0f, heRow);
-    HE_CapsCenter(x, y + (h - 24.0f) * 0.5f, kw, 24.0f, 10.0f, heMd, key);
+    HE_CapsCenter(x, y + (h - 24.0f) * 0.5f, kw, 24.0f, 11.0f, heMd, key);
     HE_Text(x + kw + 8.0f, y, h, 13.0f, heLo, what, qfalse);
     return x + kw + 8.0f + ww + 18.0f;
 }
@@ -2246,14 +3103,26 @@ static void HE_RequestClose(void) {
     HE_Close();
 }
 
+static float HE_ViewH(void) {
+    float w = (float)uiInfo.uiDC.glconfig.vidWidth, h = (float)uiInfo.uiDC.glconfig.vidHeight, viewH = 864.0f;
+
+    if (h > 0.0f && w / h * viewH < 1500.0f) {
+        viewH = 1500.0f * h / w;
+    }
+    return viewH;
+}
+
 void UI_HudEditor_Paint(void) {
-    SM_BeginFrame();
+    SM_BeginFrameView(HE_ViewH());
     if (!he.open) {
         UI_HudEditor_Open();
     }
     he.tip = NULL;
     HE_Layout();
     if (he.drag != HE_DRAG_NONE && !trap_Key_IsDown(K_MOUSE1)) {
+        if (he.drag == HE_DRAG_NEW) {
+            HE_DropNew();
+        }
         HE_EndDrag();
     }
     if ((he.drag == HE_DRAG_MOVE || he.drag == HE_DRAG_SIZE) && HE_Editable(he.selected)) {
@@ -2277,6 +3146,7 @@ void UI_HudEditor_Paint(void) {
     HE_PaintStatus();
     HE_PaintPopup();
     HE_PaintHudMenu();
+    HE_PaintDragNew();
     HE_PaintTip();
     HE_PaintConfirm();
     SM_EndFrame();
@@ -2289,6 +3159,7 @@ static void HE_Select(int i) {
     he.colorKey = -1;
     he.selected = i;
     if (i >= 0) {
+        he.rightTab = 0;
         HE_ScrollTo(i);
     }
 }
@@ -2421,6 +3292,34 @@ static qboolean HE_Click(void) {
             case HE_HIT_SWATCH:
                 he.colorKey = he.colorKey == hit->index ? -1 : hit->index;
                 return qtrue;
+            case HE_HIT_RTAB:
+                he.rightTab = hit->index;
+                return qtrue;
+            case HE_HIT_LTAB:
+                he.leftTab = hit->index;
+                return qtrue;
+            case HE_HIT_ADD:
+                he.drag = HE_DRAG_NEW;
+                he.dragPal = hit->index;
+                HE_MousePx(&he.pressX, &he.pressY);
+                return qtrue;
+            case HE_HIT_DELETE:
+                HE_Remove(he.selected);
+                return qtrue;
+            case HE_HIT_OPT:
+                HE_OptChange(hit->index, 1);
+                return qtrue;
+            case HE_HIT_OPTSTEP:
+                HE_OptChange(hit->index / 2, hit->index & 1 ? 1 : -1);
+                return qtrue;
+            case HE_HIT_OPTROW: {
+                const stCvar_t* cv = UI_SettingsAt(hit->index);
+
+                if (cv && (cv->widget == ST_BOOL || cv->widget == ST_SELECT)) {
+                    HE_OptChange(hit->index, 1);
+                }
+                return qtrue;
+            }
             default:
                 return qtrue;
         }
@@ -2500,11 +3399,28 @@ qboolean UI_HudEditor_HandleKey(int key) {
             return qtrue;
         case K_MWHEELUP:
         case K_MWHEELDOWN:
-            if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W) {
+            if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W && he.leftTab == 1) {
+                HE_ScrollAdd(key == K_MWHEELUP ? -1 : 1);
+            } else if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W) {
                 he.scroll += key == K_MWHEELUP ? -HE_ROW_H * 3 : HE_ROW_H * 3;
                 if (he.scroll < 0) {
                     he.scroll = 0;
                 }
+            } else if (he.rightTab == 1 && smMX >= smVW - HE_G - HE_RIGHT_W) {
+                he.optScroll += key == K_MWHEELUP ? -88.0f : 88.0f;
+                if (he.optScroll > he.optScrollMax) {
+                    he.optScroll = he.optScrollMax;
+                }
+                if (he.optScroll < 0.0f) {
+                    he.optScroll = 0.0f;
+                }
+            }
+            return qtrue;
+        case K_DEL:
+        case K_KP_DEL:
+        case K_BACKSPACE:
+            if (!he.confirm && he.selected >= 0) {
+                HE_Remove(he.selected);
             }
             return qtrue;
         case K_ESCAPE:
@@ -2555,7 +3471,7 @@ qboolean UI_HudEditor_HandleKey(int key) {
 
                 for (n = 0; n < he.numItems; n++) {
                     i = shift ? (i <= 0 ? he.numItems - 1 : i - 1) : (i + 1) % he.numItems;
-                    if (HV_ItemShown(he.items[i].item) || hvScene.showAll) {
+                    if (!he.items[i].removed && (HV_ItemShown(he.items[i].item) || hvScene.showAll)) {
                         break;
                     }
                 }

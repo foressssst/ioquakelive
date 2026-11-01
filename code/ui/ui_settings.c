@@ -26,56 +26,29 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define ST_TEAM_GAP 12.0f
 #define ST_TEAM_MODEL_W 360.0f
 
-typedef enum {
-    ST_TAB_INPUT,
-    ST_TAB_GAMEPAD,
-    ST_TAB_BASIC,
-    ST_TAB_GAME,
-    ST_TAB_HUD,
-    ST_TAB_TEAM,
-    ST_TAB_WEAPONS,
-    ST_TAB_VIDEO,
-    ST_TAB_SOUND,
-    ST_TAB_SPECTATING,
-    ST_NUM_TABS
-} stTab_t;
-
-typedef enum {
-    ST_HEADING,
-    ST_TEXT,
-    ST_BREAK,
-    ST_BOOL,
-    ST_SELECT,
-    ST_RANGE,
-    ST_INPUT,
-    ST_PALETTE,
-    ST_RGB,
-    ST_MODEL,
-    ST_MODELSKIN,
-    ST_CROSSHAIR,
-    ST_BIND
-} stWidget_t;
-
-typedef struct {
-    const char* label;
-    const char* value;
-} stOption_t;
-
-typedef struct {
-    int tab;
-    const char* title;
-    const char* cvar;
-    int widget;
-    float min, max, step;
-    const stOption_t* options;
-    int numOptions;
-    const char* tip;
-    int column;
-} stCvar_t;
-
+#include "ui_settings.h"
 #include "ui_settings_table.h"
 
 #define ST_NUM_CVARS ((int)ARRAY_LEN(stCvars))
+
+int UI_SettingsCount(void) {
+    return ST_NUM_CVARS;
+}
+
+const stCvar_t* UI_SettingsAt(int i) {
+    return i >= 0 && i < ST_NUM_CVARS ? &stCvars[i] : NULL;
+}
+
+const stCvar_t* UI_SettingsCvar(const char* cvar) {
+    int i;
+
+    for (i = 0; i < ST_NUM_CVARS; i++) {
+        if (stCvars[i].cvar && !Q_stricmp(stCvars[i].cvar, cvar)) {
+            return &stCvars[i];
+        }
+    }
+    return NULL;
+}
 
 typedef enum {
     ST_HIT_NONE,
@@ -159,8 +132,6 @@ static struct {
     int selectFocus;
     qboolean fromIngame;
 } st;
-
-extern const vec4_t* UI_CrosshairPalette(void);
 
 static const vec4_t strBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t strRowOdd = SM_RGB(36, 33, 33);

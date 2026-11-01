@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "ui_hudview.h"
+#include "ui_settings.h"
 
 void Item_Paint(itemDef_t* item);
 
@@ -43,9 +44,10 @@ static struct {
     float b[4];
     qhandle_t shader;
     char text[16];
-} hvBounds[HV_MAX_BOUNDS];
+} hvBounds[HV_MAX_BOUNDS + 1];
 static int hvNumBounds;
 static int hvCur = -1;
+static qboolean hvLoose;
 
 static void HV_NoteShader(qhandle_t shader) {
     if (hvCur >= 0 && !hvBounds[hvCur].shader && shader && shader != uiInfo.uiDC.whiteShader) {
@@ -92,6 +94,10 @@ static void HV_TrackBegin(int ownerDraw, float y, float w, float h) {
     int m, i;
 
     hvCur = -1;
+    if (hvLoose) {
+        hvCur = HV_MAX_BOUNDS;
+        return;
+    }
     if (hvNumBounds >= HV_MAX_BOUNDS) {
         return;
     }
@@ -605,7 +611,7 @@ static void HV_Powerups(const rectDef_t* r, int align, float special, float scal
     float* inc = align == HUD_VERTICAL ? &r2.y : &r2.x;
     int i;
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < (hvLoose ? 1 : 2); i++) {
         HV_Pic(r2.x, r2.y, r2.w * 0.75f, r2.h, icons[i], NULL);
         HV_PaintText(r2.x + r2.w * 0.75f + 3, r2.y + r2.h, 0, scale, color, va("%i", secs[i]), 0, 0);
         *inc += r2.w + special;
@@ -700,7 +706,7 @@ static void HV_OwnerDraw(float x, float y, float w, float h, float text_x, float
     r.h = h;
     HV_TrackBegin(ownerDraw, y, w, h);
     HV_OwnerDrawBody(&r, ownerDraw, ownerDrawFlags, align, special, scale, color, shader, textStyle, font);
-    hvCur = -1;
+    hvCur = hvLoose ? HV_MAX_BOUNDS : -1;
 }
 
 static void HV_OwnerDrawBody(rectDef_t* rp, int ownerDraw, int ownerDrawFlags, int align, float special, float scale,
@@ -1396,6 +1402,366 @@ menuDef_t* HV_Menu(int index) {
     return index >= 0 && index < hvCount ? &hvMenu[index] : NULL;
 }
 
+menuDef_t* HV_FindMenu(const char* name) {
+    int i;
+
+    for (i = 0; i < hvCount; i++) {
+        if (hvMenu[i].window.name && !Q_stricmp(hvMenu[i].window.name, name)) {
+            return &hvMenu[i];
+        }
+    }
+    return NULL;
+}
+
+menuDef_t* HV_AddMenu(const char* name) {
+    static char added[32];
+    menuDef_t* m;
+
+    if (!hvLoaded || hvCount >= HV_MAX_MENUS) {
+        return NULL;
+    }
+    m = &hvMenu[hvCount];
+    HV_Begin();
+    Menu_Init(m);
+    HV_End();
+    Q_strncpyz(added, name, sizeof(added));
+    m->window.name = added;
+    m->window.rect.w = m->window.rectClient.w = 640.0f;
+    m->window.rect.h = m->window.rectClient.h = 480.0f;
+    m->window.flags |= WINDOW_VISIBLE;
+    m->widescreen = WIDESCREEN_STRETCH;
+    hvCount++;
+    return m;
+}
+
+static float HV_Cvar(const char* name) {
+    return trap_Cvar_VariableValue(name);
+}
+
+static float HV_Noise(int i, int seed) {
+    unsigned int h = (unsigned int)(i * 374761393 + seed * 668265263);
+
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return (float)((h ^ (h >> 16)) & 1023) / 1023.0f;
+}
+
+static void HV_Line1(float x, float y, float w, float h) {
+    if (h > 0.0f && w > 0.0f) {
+        trap_R_DrawStretchPic(x, y, w, h, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+    }
+}
+
+static void HV_PreviewCrosshair(void) {
+    int n = (int)HV_Cvar("cg_drawCrosshair");
+    float size = HV_Cvar("cg_crosshairSize"), bright = HV_Cvar("cg_crosshairBrightness"), scale = hvW / 640.0f;
+    vec4_t color;
+    float w, h, x, y;
+
+    if (n <= 0 || n % NUM_CROSSHAIRS == 0) {
+        return;
+    }
+    if (HV_Cvar("cg_crosshairHealth") != 0.0f) {
+        color[0] = color[1] = color[2] = color[3] = 1.0f;
+    } else {
+        int c = (int)HV_Cvar("cg_crosshairColor");
+
+        Vector4Copy(UI_CrosshairPalette()[c >= 1 && c <= 26 ? c - 1 : 0], color);
+    }
+    VectorScale(color, bright, color);
+    color[3] = 1.0f;
+    w = h = size * scale;
+    x = hvX + HV_Cvar("cg_crosshairX") * scale + 0.5f * (hvW - w);
+    y = hvY + HV_Cvar("cg_crosshairY") * scale + 0.5f * (hvH - h);
+    trap_R_SetColor(color);
+    trap_R_DrawStretchPic(x, y, w, h, 0, 0, 1, 1, uiInfo.uiDC.Assets.crosshairShader[n % NUM_CROSSHAIRS]);
+    trap_R_SetColor(NULL);
+}
+
+static void HV_PreviewLagometer(void) {
+    static const vec4_t yellow = {1.0f, 1.0f, 0.0f, 1.0f};
+    static const vec4_t blue = {0.0f, 0.0f, 1.0f, 1.0f};
+    static const vec4_t green = {0.0f, 1.0f, 0.0f, 1.0f};
+    int mode = (int)HV_Cvar("cg_lagometer");
+    float ax = 592.0f, ay = 336.0f, aw = 48.0f, ah = 48.0f, range, mid, v;
+    int a, n;
+
+    if (mode <= 0) {
+        return;
+    }
+    hvAnchor = WIDESCREEN_RIGHT;
+    HV_DrawPic(592.0f, 336.0f, 48.0f, 48.0f, trap_R_RegisterShaderNoMip("lagometer"));
+    HV_ToScreen(WIDESCREEN_RIGHT, &ax, &ay, &aw, &ah);
+    n = (int)aw;
+    range = ah / 3.0f;
+    mid = ay + range;
+    for (a = 0; a < n; a++) {
+        v = (12.0f + 30.0f * HV_Noise(a, 1)) * range / 300.0f;
+        if (HV_Noise(a, 2) > 0.93f) {
+            trap_R_SetColor(yellow);
+            HV_Line1(ax + aw - a, mid - v, 1.0f, v);
+        } else {
+            trap_R_SetColor(blue);
+            HV_Line1(ax + aw - a, mid, 1.0f, v);
+        }
+    }
+    range = ah / 2.0f;
+    trap_R_SetColor(green);
+    for (a = 0; a < n; a++) {
+        v = (38.0f + 24.0f * HV_Noise(a, 3)) * range / 900.0f;
+        HV_Line1(ax + aw - a, ay + ah - v, 1.0f, v);
+    }
+    trap_R_SetColor(NULL);
+    if (mode == 2) {
+        HV_PaintText(592.0f, HV_Height("48", 0.175f, 0) + 337.0f, 0, 0.15f, colorWhite, "48", 0,
+                     ITEM_TEXTSTYLE_SHADOWED);
+    }
+}
+
+static float HV_PreviewFPS(float y) {
+    char s[16];
+    float w, h, fps = HV_Cvar("com_maxfps");
+
+    Com_sprintf(s, sizeof(s), "%ifps", fps > 0.0f ? (int)fps : 125);
+    w = HV_Width(s, 0.25f, 2);
+    h = HV_Height(s, 0.25f, 2);
+    HV_PaintText(635.0f - w, y + h, 2, 0.25f, colorWhite, s, 0, ITEM_TEXTSTYLE_SHADOWED);
+    return y + h;
+}
+
+static void HV_PreviewSpeedometer(void) {
+    static const vec4_t bar1 = {0.0f, 1.0f, 0.0f, 1.0f};
+    static const vec4_t bar2 = {1.0f, 1.0f, 0.0f, 1.0f};
+    int mode = (int)HV_Cvar("cg_speedometer"), anchor, i, speed = 0;
+    float rx, ry, rw, rh, gx, gy, barScale, barWidth, half, s, bh, full, over, total;
+    vec4_t c1, c2;
+    char text[16];
+
+    if (mode <= 0 || mode >= 4) {
+        return;
+    }
+    if (mode < 2) {
+        rx = gx = 592.0f;
+        ry = gy = 384.0f;
+        rw = rh = 48.0f;
+        anchor = WIDESCREEN_RIGHT;
+    } else {
+        rx = gx = 256.0f;
+        ry = gy = (float)((int)HV_Cvar("cg_crosshairY") / 2 + 241);
+        rw = 128.0f;
+        rh = 32.0f;
+        anchor = WIDESCREEN_CENTER;
+    }
+    Vector4Copy(bar1, c1);
+    Vector4Copy(bar2, c2);
+    c1[3] = c2[3] = mode < 2 ? 1.0f : 0.75f;
+    hvAnchor = anchor;
+    if (mode < 2) {
+        HV_DrawPic(gx, gy, 48.0f, 48.0f, trap_R_RegisterShaderNoMip("lagometer"));
+    }
+    HV_ToScreen(anchor, &rx, &ry, &rw, &rh);
+    half = rh * 0.5f;
+    barScale = (rh - 5.0f) / (320.0f * 3.0f);
+    barWidth = rw / 128.0f;
+    for (i = 0; i < 128; i++) {
+        s = 320.0f + 200.0f * (0.5f + 0.5f * (float)sin(i * 0.09f)) + 40.0f * HV_Noise(i, 4);
+        speed = (int)s;
+        if (mode >= 3) {
+            continue;
+        }
+        bh = barScale * s;
+        if (bh > half) {
+            bh = half;
+        }
+        trap_R_SetColor(c1);
+        trap_R_DrawStretchPic(rx + barWidth * i, ry + rh - bh, barWidth, bh, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
+        full = barScale * s;
+        if (full > half) {
+            over = full - bh;
+            if (over > half) {
+                over = half;
+            }
+            total = full > rh ? rh : full;
+            trap_R_SetColor(c2);
+            trap_R_DrawStretchPic(rx + barWidth * i, ry + rh - total, barWidth, over, 0, 0, 0, 0,
+                                  uiInfo.uiDC.whiteShader);
+        }
+    }
+    trap_R_SetColor(NULL);
+    Com_sprintf(text, sizeof(text), "%d", speed);
+    if (mode < 2) {
+        hvAnchor = WIDESCREEN_RIGHT;
+        HV_PaintText(gx + 2.0f, gy + 8.0f, 0, 0.15f, colorWhite, text, 0, ITEM_TEXTSTYLE_SHADOWED);
+    } else {
+        HV_PaintText((float)(320 - (int)(HV_Width(text, 0.175f, 0) / 2.0f)), gy + 33.0f, 0, 0.15f, colorWhite, text,
+                     0, ITEM_TEXTSTYLE_SHADOWED);
+    }
+}
+
+static int HV_SampleAmmo(int weapon) {
+    switch (weapon) {
+        case WP_MACHINEGUN:
+            return 100;
+        case WP_SHOTGUN:
+            return 25;
+        case WP_GRENADE_LAUNCHER:
+            return 10;
+        case WP_ROCKET_LAUNCHER:
+            return 25;
+        case WP_LIGHTNING:
+            return 150;
+        case WP_RAILGUN:
+            return 10;
+        case WP_PLASMAGUN:
+            return 50;
+        default:
+            return -1;
+    }
+}
+
+static void HV_PreviewWeaponBar(void) {
+    static const vec4_t normal = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const vec4_t low = {1.0f, 0.8f, 0.2f, 0.8f};
+    static const vec4_t empty = {1.0f, 0.0f, 0.0f, 0.8f};
+    int mode = (int)HV_Cvar("cg_weaponBar"), full = HV_Cvar("cg_drawFullWeaponBar") != 0.0f;
+    int lowAmmo = (int)HV_Cvar("cg_lowAmmoWeaponBarWarning"), i, count = 0, ammoOffset;
+    float x, y, xStep, yStep;
+
+    if (mode <= 0 || mode >= 4) {
+        return;
+    }
+    for (i = WP_MACHINEGUN; i < WP_NUM_WEAPONS; i++) {
+        if (HV_SampleAmmo(i) >= 0 || (full && BG_FindItemForWeapon((weapon_t)i)->icon)) {
+            count++;
+        }
+    }
+    if (mode != 3) {
+        x = mode == 2 ? 623.0f : 1.0f;
+        ammoOffset = mode == 2 ? -3 : 20;
+        y = 94.0f;
+        xStep = 0.0f;
+        yStep = 22.0f;
+        hvAnchor = mode == 2 ? WIDESCREEN_RIGHT : WIDESCREEN_LEFT;
+    } else {
+        x = 320.0f - (float)count * 55.0f * 0.5f;
+        y = 413.0f;
+        xStep = 55.0f;
+        yStep = 0.0f;
+        ammoOffset = 20;
+        hvAnchor = WIDESCREEN_CENTER;
+    }
+    trap_R_SetColor(NULL);
+    for (i = WP_MACHINEGUN; i < WP_NUM_WEAPONS; i++) {
+        int ammo = HV_SampleAmmo(i);
+        const char* iconName = BG_FindItemForWeapon((weapon_t)i)->icon;
+        qboolean has = ammo >= 0;
+
+        if (!iconName || (!has && !full)) {
+            continue;
+        }
+        if (i == WP_ROCKET_LAUNCHER) {
+            HV_DrawPic(mode == 2 ? x - 33.0f : x - 4.0f, y - 2.0f, 52.0f, 20.0f,
+                       trap_R_RegisterShaderNoMip("ui/assets/hud/weaplit2.tga"));
+        }
+        HV_DrawPic(x, y, 16.0f, 16.0f, trap_R_RegisterShaderNoMip(iconName));
+        if (has) {
+            char s[8];
+            float tx = x + (float)ammoOffset;
+            const float* c = ammo == 0 ? empty : lowAmmo > 0 && ammo < lowAmmo ? low : normal;
+
+            Com_sprintf(s, sizeof(s), "%i", ammo);
+            if (mode == 2) {
+                tx -= HV_Width(s, 0.24f, 0);
+            }
+            HV_PaintText(tx, y + 13.0f, 0, 0.24f, c, s, 0, 0);
+        }
+        x += xStep;
+        y += yStep;
+    }
+    trap_R_SetColor(NULL);
+}
+
+static void HV_PreviewFragMessage(void) {
+    const char* s = "You fragged Visor.";
+    float w, h, y;
+
+    if (HV_Cvar("cg_drawFragMessages") == 0.0f) {
+        return;
+    }
+    hvAnchor = WIDESCREEN_CENTER;
+    y = (float)(int)((hvScene.warmup ? 144.0f : 125.0f) - 0.3f * 16.0f);
+    HV_Measure(s, 0.3f, 0, 0, &w, &h);
+    HV_PaintText((float)((640 - (int)w) / 2), y + h, 0, 0.3f, colorWhite, s, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+}
+
+static void HV_PreviewGun(void) {
+    int mode = (int)HV_Cvar("cg_drawGun");
+    float fov = HV_Cvar("cg_fov"), x, fovY;
+    const gitem_t* item = BG_FindItemForWeapon(WP_ROCKET_LAUNCHER);
+    char path[MAX_QPATH];
+    orientation_t tag;
+    refEntity_t gun;
+    refdef_t rd;
+    qhandle_t hand;
+    int i;
+
+    if (mode <= 0 || !item->world_model[0]) {
+        return;
+    }
+    fov = fov < 1.0f ? 1.0f : fov > 130.0f ? 130.0f : fov;
+    memset(&rd, 0, sizeof(rd));
+    rd.x = (int)hvX;
+    rd.y = (int)hvY;
+    rd.width = (int)hvW;
+    rd.height = (int)hvH;
+    x = 640.0f / (float)tan(fov / 360.0f * M_PI);
+    fovY = (float)(atan2(480.0f, x) * 360.0 / M_PI);
+    x = (float)rd.height / (float)tan(fovY / 360.0f * M_PI);
+    rd.fov_x = (float)(atan2((float)rd.width, x) * 360.0 / M_PI);
+    rd.fov_y = fovY;
+    AxisClear(rd.viewaxis);
+    rd.rdflags = RDF_NOWORLDMODEL;
+    rd.time = uiInfo.uiDC.realTime;
+
+    COM_StripExtension(item->world_model[0], path, sizeof(path));
+    Q_strcat(path, sizeof(path), "_hand.md3");
+    hand = trap_R_RegisterModel(path);
+    trap_CM_LerpTag(&tag, hand, 0, 0, 1.0f, "tag_weapon");
+
+    memset(&gun, 0, sizeof(gun));
+    gun.origin[0] = HV_Cvar("cg_gunX");
+    gun.origin[1] = HV_Cvar("cg_gunY");
+    gun.origin[2] = HV_Cvar("cg_gunZ") + (fov > 90.0f ? -0.2f * (fov - 90.0f) : 0.0f);
+    VectorCopy(gun.origin, gun.lightingOrigin);
+    for (i = 0; i < 3; i++) {
+        gun.origin[i] += tag.origin[i];
+    }
+    AxisCopy(tag.axis, gun.axis);
+    gun.hModel = trap_R_RegisterModel(item->world_model[0]);
+    gun.renderfx = RF_DEPTHHACK | RF_FIRST_PERSON | RF_MINLIGHT;
+    if (mode == 3) {
+        gun.customShader = trap_R_RegisterShaderNoMip("ghostWeaponShader");
+        gun.shaderRGBA[0] = gun.shaderRGBA[1] = gun.shaderRGBA[2] = gun.shaderRGBA[3] = 255;
+    }
+    trap_R_ClearScene();
+    trap_R_AddRefEntityToScene(&gun);
+    trap_R_RenderScene(&rd);
+}
+
+static void HV_PaintPreviews(void) {
+    float y = 0.0f;
+
+    HV_PreviewCrosshair();
+    HV_PreviewWeaponBar();
+    HV_PreviewLagometer();
+    hvAnchor = WIDESCREEN_RIGHT;
+    if (HV_Cvar("cg_drawFPS") != 0.0f) {
+        y = HV_PreviewFPS(y);
+    }
+    HV_PreviewSpeedometer();
+    HV_PreviewFragMessage();
+    hvAnchor = WIDESCREEN_STRETCH;
+}
+
 void HV_Paint(void) {
     int i;
 
@@ -1403,10 +1769,12 @@ void HV_Paint(void) {
         return;
     }
     hvNumBounds = 0;
+    HV_PreviewGun();
     HV_Begin();
     for (i = 0; i < hvCount; i++) {
         Menu_Paint(&hvMenu[i], qfalse);
     }
+    HV_PaintPreviews();
     HV_End();
 }
 
@@ -1425,6 +1793,28 @@ void HV_PaintItem(itemDef_t* item) {
     Item_Paint(item);
     item->window.flags = flags;
     HV_End();
+}
+
+qboolean HV_PaintLoose(itemDef_t* item, float* out) {
+    float* b = hvBounds[HV_MAX_BOUNDS].b;
+
+    b[0] = b[1] = b[2] = b[3] = 0.0f;
+    hvBounds[HV_MAX_BOUNDS].item = item;
+    hvBounds[HV_MAX_BOUNDS].shader = 0;
+    hvBounds[HV_MAX_BOUNDS].text[0] = 0;
+    hvLoose = qtrue;
+    hvCur = HV_MAX_BOUNDS;
+    HV_PaintItem(item);
+    hvCur = -1;
+    hvLoose = qfalse;
+    if (!out || b[2] <= b[0] || b[3] <= b[1]) {
+        return qfalse;
+    }
+    out[0] = b[0];
+    out[1] = b[1];
+    out[2] = b[2] - b[0];
+    out[3] = b[3] - b[1];
+    return qtrue;
 }
 
 int HV_ItemAnchor(const itemDef_t* item) {

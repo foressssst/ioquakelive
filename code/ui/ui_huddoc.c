@@ -529,6 +529,11 @@ static int HD_ParseItem(hdDoc_t* d, int menu, int x) {
             it->numProps = d->numProps - it->firstProp;
             it->local = d->xtoks[it->xOpen].direct && d->xtoks[x].direct;
             it->closeFrom = it->local ? d->toks[d->xtoks[x].tok].from : -1;
+            it->srcFrom = it->srcTo = -1;
+            if (it->local && it->xOpen > 0 && d->xtoks[it->xOpen - 1].direct) {
+                it->srcFrom = d->toks[d->xtoks[it->xOpen - 1].tok].from;
+                it->srcTo = d->toks[d->xtoks[x].tok].to;
+            }
             return x + 1;
         }
         x = HD_ParseProp(d, HDK_ITEM, idx, x);
@@ -614,6 +619,7 @@ qboolean HD_Load(hdDoc_t* d, const char* name, const char* text, int len, hdRead
     d->textUsed = d->numFiles = d->numToks = d->numX = d->numDefines = 0;
     d->numProps = d->numItems = d->numMenus = d->numEdits = d->editTextUsed = 0;
     d->unknownKeywords = d->unsupported = 0;
+    d->endFrom = -1;
     d->error[0] = 0;
     d->readFile = readFile;
 
@@ -623,8 +629,11 @@ qboolean HD_Load(hdDoc_t* d, const char* name, const char* text, int len, hdRead
         return qfalse;
 
     for (x = 0; x < d->numX; ) {
-        if (HD_XIs(d, x, "}"))
+        if (HD_XIs(d, x, "}")) {
+            if (d->xtoks[x].direct)
+                d->endFrom = d->toks[d->xtoks[x].tok].from;
             break;
+        }
         if (HD_XIs(d, x, "assetGlobalDef")) {
             x = HD_ParseAsset(d, x + 1);
         } else if (HD_XIs(d, x, "menuDef")) {
@@ -685,6 +694,18 @@ static qboolean HD_AddEdit(hdDoc_t* d, int from, int to, const char* text) {
             break;
         }
     }
+    if (e && from == to) {
+        int old = e->textLen;
+
+        if (d->editTextUsed + old + len + 1 > HD_MAX_EDITTEXT)
+            return qfalse;
+        memmove(d->editText + d->editTextUsed, d->editText + e->textOfs, old);
+        memcpy(d->editText + d->editTextUsed + old, text, len + 1);
+        e->textOfs = d->editTextUsed;
+        e->textLen = old + len;
+        d->editTextUsed += old + len + 1;
+        return qtrue;
+    }
     if (!e) {
         if (d->numEdits >= HD_MAX_EDITS)
             return qfalse;
@@ -699,6 +720,33 @@ static qboolean HD_AddEdit(hdDoc_t* d, int from, int to, const char* text) {
     memcpy(d->editText + d->editTextUsed, text, len + 1);
     d->editTextUsed += len + 1;
     return qtrue;
+}
+
+qboolean HD_Insert(hdDoc_t* d, int at, const char* text) {
+    if (at < 0 || at > d->files[0].len)
+        return qfalse;
+    return HD_AddEdit(d, at, at, text);
+}
+
+qboolean HD_RemoveItem(hdDoc_t* d, int item) {
+    const char* s = d->text + d->files[0].ofs;
+    int from, to, len = d->files[0].len;
+
+    if (item < 0 || item >= d->numItems || d->items[item].srcFrom < 0)
+        return qfalse;
+    from = d->items[item].srcFrom;
+    to = d->items[item].srcTo;
+    while (from > 0 && (s[from - 1] == ' ' || s[from - 1] == '\t'))
+        from--;
+    if (from > 0 && s[from - 1] != '\n')
+        from = d->items[item].srcFrom;
+    while (to < len && (s[to] == ' ' || s[to] == '\t'))
+        to++;
+    if (to < len && s[to] == '\r')
+        to++;
+    if (to < len && s[to] == '\n')
+        to++;
+    return HD_AddEdit(d, from, to, "");
 }
 
 static int HD_LineIndent(const hdDoc_t* d, int pos, char* out, int size) {

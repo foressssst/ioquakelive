@@ -43,10 +43,13 @@ void HV_Unload(void);
 qboolean HV_Loaded(void);
 int HV_MenuCount(void);
 menuDef_t* HV_Menu(int index);
+menuDef_t* HV_FindMenu(const char* name);
+menuDef_t* HV_AddMenu(const char* name);
 
 void HV_SetCanvas(float x, float y, float w, float h);
 void HV_Paint(void);
 void HV_PaintItem(itemDef_t* item);
+qboolean HV_PaintLoose(itemDef_t* item, float* out);
 
 int HV_ItemAnchor(const itemDef_t* item);
 void HV_ToScreen(int anchor, float* x, float* y, float* w, float* h);

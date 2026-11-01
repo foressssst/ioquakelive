@@ -244,6 +244,7 @@ void SM_Hit(float x, float y, float w, float h, int type, int index, const smRec
 const smHit_t* SM_HitAt(float x, float y);
 qboolean SM_Over(int type, int index);
 void SM_BeginFrame(void);
+void SM_BeginFrameView(float viewH);
 void SM_EndFrame(void);
 
 typedef enum {

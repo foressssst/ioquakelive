@@ -69,6 +69,7 @@ typedef struct {
     int xOpen, xClose;
     int firstProp, numProps;
     int closeFrom;
+    int srcFrom, srcTo;
     qboolean local;
     float rect[4];
     qboolean hasRect;
@@ -126,6 +127,7 @@ typedef struct {
     int editTextUsed;
     int unknownKeywords;
     int unsupported;
+    int endFrom;
     char error[256];
     hdReadFile_t readFile;
 } hdDoc_t;
@@ -135,6 +137,8 @@ const char* HD_Keyword(int kind, int keyword);
 int HD_FindProp(const hdDoc_t* d, int kind, int owner, const char* key);
 qboolean HD_SetValues(hdDoc_t* d, int kind, int owner, const char* key, const float* values, int count);
 qboolean HD_SetRect(hdDoc_t* d, int item, const float rect[4]);
+qboolean HD_Insert(hdDoc_t* d, int at, const char* text);
+qboolean HD_RemoveItem(hdDoc_t* d, int item);
 void HD_ClearEdits(hdDoc_t* d);
 int HD_Write(const hdDoc_t* d, char* out, int outSize);
 void HD_TokenString(const hdDoc_t* d, int tok, char* out, int size);

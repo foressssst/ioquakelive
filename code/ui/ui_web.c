@@ -47,18 +47,22 @@ float smBottom;
 float smMX, smMY;
 static float smSpacing;
 
-void SM_Frame(void) {
+static void SM_FrameView(float viewH) {
     float w = (float)uiInfo.uiDC.glconfig.vidWidth;
     float h = (float)uiInfo.uiDC.glconfig.vidHeight;
 
     smSpacing = 0;
-    smScale = h / SM_VIEW_H;
+    smScale = h / viewH;
     smVW = w / smScale;
-    smTop = (h - SM_VIEW_H * smScale) * 0.5f;
+    smTop = (h - viewH * smScale) * 0.5f;
     smBottom = (h - smTop) / smScale;
     smMX = (uiInfo.uiDC.cursorx * uiInfo.uiDC.xscale + uiInfo.uiDC.bias) / smScale;
     smMY = (uiInfo.uiDC.cursory * uiInfo.uiDC.yscale - smTop) / smScale;
     SM_LoadFonts();
+}
+
+void SM_Frame(void) {
+    SM_FrameView(SM_VIEW_H);
 }
 
 float SM_Len(float css) {
@@ -977,17 +981,21 @@ qboolean SM_Over(int type, int index) {
     return smHasUnder && smUnder.type == type && smUnder.index == index;
 }
 
-void SM_BeginFrame(void) {
+void SM_BeginFrameView(float viewH) {
     const smHit_t* under;
 
     smLook = SM_LOOK_RETAIL;
-    SM_Frame();
+    SM_FrameView(viewH);
     under = SM_HitAt(smMX, smMY);
     smHasUnder = under != NULL;
     if (under) {
         smUnder = *under;
     }
     smNumHits = 0;
+}
+
+void SM_BeginFrame(void) {
+    SM_BeginFrameView(SM_VIEW_H);
 }
 
 void SM_EndFrame(void) {
