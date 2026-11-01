@@ -2160,7 +2160,9 @@ void Com_Init(char* commandLine) {
     VM_Init();
     SV_Init();
 
-    Steam_GS_Init();
+    if (!com_demoWindowParent) {
+        Steam_GS_Init();
+    }
 
     ZMQ_Init();
 
