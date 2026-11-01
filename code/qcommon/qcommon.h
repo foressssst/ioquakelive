@@ -823,6 +823,7 @@ void* Sys_SignalOpen(const char* name, qboolean create);
 void Sys_SignalRaise(void* signal);
 void Sys_SignalWait(void* signal, int msec);
 void Sys_SignalClose(void* signal);
+qboolean Sys_ProcessExited(int pid);
 void* Sys_MutexCreate(void);
 void Sys_MutexLock(void* mutex);
 void Sys_MutexUnlock(void* mutex);

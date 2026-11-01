@@ -1087,6 +1087,10 @@ qboolean Sys_PIDIsRunning(int pid) {
     return kill(pid, 0) == 0;
 }
 
+qboolean Sys_ProcessExited(int pid) {
+    return (qboolean)(kill(pid, 0) != 0 && errno == ESRCH);
+}
+
 qboolean Sys_DllExtension(const char* name) {
     const char* p;
     char c = 0;

@@ -1134,6 +1134,20 @@ qboolean Sys_PIDIsRunning(int pid) {
     return qfalse;
 }
 
+qboolean Sys_ProcessExited(int pid) {
+    static HANDLE process;
+    static int opened;
+
+    if (opened != pid) {
+        if (process) {
+            CloseHandle(process);
+        }
+        process = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+        opened = pid;
+    }
+    return (qboolean)(process && WaitForSingleObject(process, 0) == WAIT_OBJECT_0);
+}
+
 qboolean Sys_DllExtension(const char* name) {
     return COM_CompareExtension(name, DLL_EXT);
 }

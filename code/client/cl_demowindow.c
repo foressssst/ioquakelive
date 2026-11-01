@@ -35,7 +35,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DW_FRAME_WAIT 50
 #define DW_LOAD_PACE 25
 #define DW_TEXT_LITERAL 0x40000000
-#define DW_ICON_FILM "\xef\x80\x88"
 #define DW_ICON_CLOSE "\xef\x80\x8d"
 
 enum { DW_EV_KEY, DW_EV_CHAR, DW_EV_MOUSE };
@@ -76,7 +75,6 @@ static const vec4_t dwKey = {34 / 255.0f, 34 / 255.0f, 34 / 255.0f, 1.0f};
 static const vec4_t dwText = {221 / 255.0f, 221 / 255.0f, 221 / 255.0f, 1.0f};
 static const vec4_t dwSoft = {204 / 255.0f, 204 / 255.0f, 204 / 255.0f, 1.0f};
 static const vec4_t dwMuted = {153 / 255.0f, 153 / 255.0f, 153 / 255.0f, 1.0f};
-static const vec4_t dwYellow = {247 / 255.0f, 209 / 255.0f, 0.0f, 1.0f};
 static const vec4_t dwDanger = {204 / 255.0f, 51 / 255.0f, 51 / 255.0f, 1.0f};
 
 static dwShared_t* dw;
@@ -92,11 +90,10 @@ static int dwMouseY;
 static qboolean dwOverClose;
 static qboolean dwHandleReady;
 static qboolean dwAssets;
-static qhandle_t dwLevelshot;
+static qhandle_t dwBackdrop;
 static int dwFontSans;
 static int dwFontBold;
 static int dwFontIcons;
-static char dwMap[MAX_QPATH];
 static char dwTitle[MAX_QPATH * 2];
 static char dwHome[MAX_OSPATH];
 static char dwBase[MAX_OSPATH];
@@ -170,48 +167,6 @@ static fileHandle_t CL_DemoWindowOpenDemo(const char* name) {
         }
     }
     return 0;
-}
-
-static void CL_DemoWindowReadMap(fileHandle_t f) {
-    static byte data[MAX_MSGLEN];
-    msg_t msg;
-    int head[2];
-    int cmd;
-
-    dwMap[0] = '\0';
-    if (FS_Read(head, sizeof(head), f) != sizeof(head)) {
-        return;
-    }
-    head[1] = LittleLong(head[1]);
-    if (head[1] <= 0 || head[1] > MAX_MSGLEN || FS_Read(data, head[1], f) != head[1]) {
-        return;
-    }
-    MSG_Init(&msg, data, sizeof(data));
-    msg.cursize = head[1];
-    MSG_Bitstream(&msg);
-    MSG_ReadLong(&msg);
-    for (;;) {
-        cmd = MSG_ReadByte(&msg);
-        if (cmd == svc_nop) {
-            continue;
-        }
-        if (cmd != svc_serverCommand) {
-            break;
-        }
-        MSG_ReadLong(&msg);
-        MSG_ReadString(&msg);
-    }
-    if (cmd != svc_gamestate) {
-        return;
-    }
-    MSG_ReadLong(&msg);
-    while (MSG_ReadByte(&msg) == svc_configstring) {
-        if (MSG_ReadShort(&msg) == CS_SERVERINFO) {
-            Q_strncpyz(dwMap, Info_ValueForKey(MSG_ReadBigString(&msg), "mapname"), sizeof(dwMap));
-            return;
-        }
-        MSG_ReadBigString(&msg);
-    }
 }
 
 static qboolean CL_DemoWindowLaunch(const char* name) {
@@ -292,7 +247,6 @@ static void CL_DemoWindowPlay(const char* name) {
         Com_Printf("Demo not found: %s\n", name);
         return;
     }
-    CL_DemoWindowReadMap(f);
     FS_FCloseFile(f);
 
     if (dwProcess && dwCloseTime) {
@@ -455,10 +409,7 @@ static void CL_DemoWindowAssets(void) {
     dwFontSans = CL_DemoWindowFont("webui/fonts/NotoSans-Regular.ttf", 1);
     dwFontBold = CL_DemoWindowFont("webui/fonts/NotoSans-Bold.ttf", dwFontSans);
     dwFontIcons = re.Font_Register("webui/fonts/fontawesome-webfont.ttf");
-    dwLevelshot = dwMap[0] ? re.RegisterShaderNoMip(va("levelshots/%s", dwMap)) : 0;
-    if (!dwLevelshot) {
-        dwLevelshot = re.RegisterShaderNoMip("menu/art/unknownmap");
-    }
+    dwBackdrop = re.RegisterShaderNoMip("ui/assets/backscreen_smoke");
 }
 
 static void CL_DemoWindowAwaitFrame(void) {
@@ -478,9 +429,9 @@ static void CL_DemoWindowDrawLoading(const dwRect_t* r) {
     float s0 = ((1920.0f - 1080.0f * r->w / r->h) / 1920.0f) * 0.5f;
 
     CL_DemoWindowFill(r->x, r->y, r->w, r->h, dwRaised);
-    if (dwLevelshot) {
+    if (dwBackdrop) {
         re.SetColor(NULL);
-        re.DrawStretchPic(r->x, r->y, r->w, r->h, s0, 0.0f, 1.0f - s0, 1.0f, dwLevelshot);
+        re.DrawStretchPic(r->x, r->y, r->w, r->h, s0, 0.0f, 1.0f - s0, 1.0f, dwBackdrop);
     }
 }
 
@@ -505,8 +456,6 @@ static void CL_DemoWindowDrawBar(const dwRect_t* r, float s) {
         w = CL_DemoWindowTextWidth(DW_ICON_CLOSE, dwFontIcons, 16.0f * s);
         CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 6.0f * s, DW_ICON_CLOSE, dwFontIcons, 16.0f * s,
                           dwOverClose ? dwText : dwMuted);
-        CL_DemoWindowText(x, mid + 6.0f * s, DW_ICON_FILM, dwFontIcons, 16.0f * s, dwYellow);
-        x += 28.0f * s;
     } else {
         w = CL_DemoWindowTextWidth("X", dwFontBold, 15.0f * s);
         CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 5.5f * s, "X", dwFontBold, 15.0f * s,
@@ -658,7 +607,7 @@ void CL_DemoWindowFrame(void) {
         }
     }
 
-    if (dw->quit || Sys_Milliseconds() - dwChildBeatTime > DW_PARENT_SILENCE) {
+    if (dw->quit || Sys_Milliseconds() - dwChildBeatTime > DW_PARENT_SILENCE || Sys_ProcessExited(com_demoWindowParent)) {
         CL_DemoWindowChildQuit();
         return;
     }
