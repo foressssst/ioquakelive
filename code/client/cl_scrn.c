@@ -345,8 +345,10 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
                 SCR_DrawCinematic();
                 break;
             case CA_DISCONNECTED:
-                S_StopAllSounds();
-                VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
+                if (!com_demoWindowParent) {
+                    S_StopAllSounds();
+                    VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
+                }
                 break;
             case CA_CONNECTING:
             case CA_CHALLENGING:

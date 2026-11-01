@@ -529,6 +529,7 @@ qboolean CL_DemoWindowChar(int ch);
 qboolean CL_DemoWindowMouse(int x, int y);
 void CL_DemoWindowDraw(void);
 void CL_DemoWindowFrame(void);
+qboolean CL_DemoWindowRoute(const char* name);
 qboolean CL_DemoWindowTakeFrame(const byte* image, int size);
 void CL_Video_f(void);
 void CL_StopVideo_f(void);

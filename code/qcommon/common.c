@@ -2763,6 +2763,7 @@ void Com_Frame(void) {
 
     if (!com_dedicated->integer) {
         CL_LowLatencyWait();
+        CL_DemoWindowWait();
     }
 
     IN_Frame();

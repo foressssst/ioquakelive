@@ -165,7 +165,8 @@ void S_UpdateEntityPosition(int entityNum, const vec3_t origin) {
 }
 
 void S_Update(void) {
-    qboolean background = s_muteBackground->integer && (com_unfocused->integer || com_minimized->integer);
+    qboolean background = CL_DemoWindowOpen() ||
+                          (s_muteBackground->integer && (com_unfocused->integer || com_minimized->integer));
 
     if (s_muted->integer != background) {
         s_muted->integer = background;

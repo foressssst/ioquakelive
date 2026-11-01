@@ -599,8 +599,31 @@ void Sys_SharedClose(void* view) {
     sys_sharedHandle = NULL;
 }
 
-void Sys_LowerPriority(void) {
-    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+void* Sys_SignalOpen(const char* name, qboolean create) {
+    char full[128];
+
+    Com_sprintf(full, sizeof(full), "Local\\ioql_%s", name);
+    return create ? CreateEventA(NULL, FALSE, FALSE, full) : OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, full);
+}
+
+void Sys_SignalRaise(void* signal) {
+    if (signal) {
+        SetEvent(signal);
+    }
+}
+
+void Sys_SignalWait(void* signal, int msec) {
+    if (signal) {
+        WaitForSingleObject(signal, (DWORD)msec);
+    } else {
+        Sleep(1);
+    }
+}
+
+void Sys_SignalClose(void* signal) {
+    if (signal) {
+        CloseHandle(signal);
+    }
 }
 
 int Sys_PipeClose(void* pipe) {

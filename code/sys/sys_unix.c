@@ -427,10 +427,18 @@ void Sys_SharedClose(void* view) {
     }
 }
 
-void Sys_LowerPriority(void) {
-    if (nice(5) == -1) {
-        return;
-    }
+void* Sys_SignalOpen(const char* name, qboolean create) {
+    return NULL;
+}
+
+void Sys_SignalRaise(void* signal) {
+}
+
+void Sys_SignalWait(void* signal, int msec) {
+    usleep(msec > 1 ? 500 : 250);
+}
+
+void Sys_SignalClose(void* signal) {
 }
 
 int Sys_PipeClose(void* pipe) {

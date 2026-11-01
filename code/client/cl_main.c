@@ -1302,6 +1302,10 @@ void CL_PlayDemo_f(void) {
         return;
     }
 
+    if (CL_DemoWindowRoute(Cmd_Argv(1))) {
+        return;
+    }
+
     Cvar_Set("sv_killserver", "2");
 
     Q_strncpyz(arg, Cmd_Argv(1), sizeof(arg));
@@ -2854,7 +2858,8 @@ void CL_Frame(int msec) {
 
     CL_ReconnectFrame();
 
-    if (clc.state == CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_UI) && !com_sv_running->integer && uivm) {
+    if (clc.state == CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_UI) && !com_sv_running->integer && uivm &&
+        !com_demoWindowParent) {
         S_StopAllSounds();
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
     }

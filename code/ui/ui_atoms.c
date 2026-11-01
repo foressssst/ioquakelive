@@ -189,6 +189,9 @@ qboolean UI_ConsoleCommand(int realTime) {
     cmd = UI_Argv(0);
 
     if (Q_stricmp(cmd, "ui_replays") == 0) {
+        if (!(trap_Key_GetCatcher() & KEYCATCH_UI)) {
+            _UI_SetActiveMenu(UIMENU_INGAME);
+        }
         Menus_CloseAll();
         Menus_ActivateByName("demo");
         return qtrue;

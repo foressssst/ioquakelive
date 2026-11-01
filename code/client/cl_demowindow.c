@@ -23,14 +23,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 
 #define DW_ENV "IOQL_DEMOWINDOW"
-#define DW_MAX_W 1600
+#define DW_MAX_W 1920
 #define DW_MAX_H 1200
 #define DW_RING 1024
 #define DW_HANDLE 15
-#define DW_SCREEN 0.85f
-#define DW_BAR 24
+#define DW_SCREEN 0.90f
+#define DW_BAR 40.0f
 #define DW_PARENT_SILENCE 20000
 #define DW_CLOSE_WAIT 3000
+#define DW_CHILD_WAIT 100
+#define DW_FRAME_WAIT 50
+#define DW_LOAD_PACE 25
+#define DW_TEXT_LITERAL 0x40000000
+#define DW_ICON_FILM "\xef\x80\x88"
+#define DW_ICON_CLOSE "\xef\x80\x8d"
 
 enum { DW_EV_KEY, DW_EV_CHAR, DW_EV_MOUSE };
 
@@ -49,6 +55,8 @@ typedef struct {
     volatile int seq;
     volatile int head;
     volatile int tail;
+    volatile int load;
+    volatile int playing;
     char demo[MAX_QPATH * 2];
     dwEvent_t ring[DW_RING];
     byte frames[2][DW_MAX_W * DW_MAX_H * 4];
@@ -59,20 +67,37 @@ typedef struct {
     int y;
     int w;
     int h;
+    int bar;
 } dwRect_t;
 
+static const vec4_t dwRaised = {15 / 255.0f, 15 / 255.0f, 15 / 255.0f, 1.0f};
+static const vec4_t dwBorder = {51 / 255.0f, 51 / 255.0f, 51 / 255.0f, 1.0f};
+static const vec4_t dwKey = {34 / 255.0f, 34 / 255.0f, 34 / 255.0f, 1.0f};
+static const vec4_t dwText = {221 / 255.0f, 221 / 255.0f, 221 / 255.0f, 1.0f};
+static const vec4_t dwSoft = {204 / 255.0f, 204 / 255.0f, 204 / 255.0f, 1.0f};
+static const vec4_t dwMuted = {153 / 255.0f, 153 / 255.0f, 153 / 255.0f, 1.0f};
+static const vec4_t dwYellow = {247 / 255.0f, 209 / 255.0f, 0.0f, 1.0f};
+static const vec4_t dwDanger = {204 / 255.0f, 51 / 255.0f, 51 / 255.0f, 1.0f};
+
 static dwShared_t* dw;
+static void* dwTick;
+static void* dwFrameSignal;
 
 static void* dwProcess;
 static qboolean dwOpen;
 static int dwCloseTime;
 static int dwLastSeq;
-static int dwWantW;
-static int dwWantH;
 static int dwMouseX;
 static int dwMouseY;
 static qboolean dwOverClose;
 static qboolean dwHandleReady;
+static qboolean dwAssets;
+static qhandle_t dwLevelshot;
+static int dwFontSans;
+static int dwFontBold;
+static int dwFontIcons;
+static char dwMap[MAX_QPATH];
+static char dwTitle[MAX_QPATH * 2];
 static char dwHome[MAX_OSPATH];
 static char dwBase[MAX_OSPATH];
 
@@ -80,9 +105,10 @@ static byte* dwCapture;
 static byte* dwEncode;
 static int dwCaptureW;
 static int dwCaptureH;
-static int dwChildSeenBeat;
-static int dwChildSeenTime;
-static qboolean dwChildPlayed;
+static int dwChildBeat;
+static int dwChildBeatTime;
+static int dwChildLoad;
+static int dwChildIssued;
 
 qboolean CL_DemoWindowOpen(void) {
     return dwOpen;
@@ -103,18 +129,20 @@ static void CL_DemoWindowPush(int type, int a, int b) {
 static void CL_DemoWindowRect(dwRect_t* r) {
     int sw = cls.glconfig.vidWidth;
     int sh = cls.glconfig.vidHeight;
-    int w = (int)(sw * DW_SCREEN);
-    int h = (int)(sh * DW_SCREEN);
 
-    r->w = w;
-    r->h = h;
-    r->x = (sw - w) / 2;
-    r->y = (sh - h + DW_BAR) / 2;
+    r->bar = (int)(DW_BAR * sh / 1080.0f);
+    r->w = (int)(sw * DW_SCREEN);
+    r->h = (int)(sh * DW_SCREEN) - r->bar;
+    r->x = (sw - r->w) / 2;
+    r->y = (sh - r->h + r->bar) / 2;
 }
 
 static void CL_DemoWindowFinish(void) {
     Sys_PipeClose(dwProcess);
     dwProcess = NULL;
+    Sys_SignalClose(dwTick);
+    Sys_SignalClose(dwFrameSignal);
+    dwTick = dwFrameSignal = NULL;
     Sys_SharedClose(dw);
     dw = NULL;
     dwOpen = qfalse;
@@ -130,7 +158,7 @@ static void CL_DemoWindowClose(void) {
     dwCloseTime = Sys_Milliseconds() + DW_CLOSE_WAIT;
 }
 
-static qboolean CL_DemoWindowDemoExists(const char* name) {
+static fileHandle_t CL_DemoWindowOpenDemo(const char* name) {
     int i;
 
     for (i = 0; i < 2; i++) {
@@ -138,19 +166,60 @@ static qboolean CL_DemoWindowDemoExists(const char* name) {
         const char* path = i ? va("demos/%s.%s%d", name, DEMOEXT, PROTOCOL_VERSION) : va("demos/%s", name);
 
         if (FS_FOpenFileRead(path, &f, qtrue) >= 0 && f) {
-            FS_FCloseFile(f);
-            return qtrue;
+            return f;
         }
     }
-    return qfalse;
+    return 0;
 }
 
-void CL_DemoWindow_f(void) {
+static void CL_DemoWindowReadMap(fileHandle_t f) {
+    static byte data[MAX_MSGLEN];
+    msg_t msg;
+    int head[2];
+    int cmd;
+
+    dwMap[0] = '\0';
+    if (FS_Read(head, sizeof(head), f) != sizeof(head)) {
+        return;
+    }
+    head[1] = LittleLong(head[1]);
+    if (head[1] <= 0 || head[1] > MAX_MSGLEN || FS_Read(data, head[1], f) != head[1]) {
+        return;
+    }
+    MSG_Init(&msg, data, sizeof(data));
+    msg.cursize = head[1];
+    MSG_Bitstream(&msg);
+    MSG_ReadLong(&msg);
+    for (;;) {
+        cmd = MSG_ReadByte(&msg);
+        if (cmd == svc_nop) {
+            continue;
+        }
+        if (cmd != svc_serverCommand) {
+            break;
+        }
+        MSG_ReadLong(&msg);
+        MSG_ReadString(&msg);
+    }
+    if (cmd != svc_gamestate) {
+        return;
+    }
+    MSG_ReadLong(&msg);
+    while (MSG_ReadByte(&msg) == svc_configstring) {
+        if (MSG_ReadShort(&msg) == CS_SERVERINFO) {
+            Q_strncpyz(dwMap, Info_ValueForKey(MSG_ReadBigString(&msg), "mapname"), sizeof(dwMap));
+            return;
+        }
+        MSG_ReadBigString(&msg);
+    }
+}
+
+static qboolean CL_DemoWindowLaunch(const char* name) {
     char exe[MAX_OSPATH];
     char log[MAX_OSPATH];
     char sw[16];
     char sh[16];
-    const char* name = Cmd_Argc() > 1 ? Cmd_Argv(1) : "";
+    int w, h;
     dwRect_t r;
     const char* argv[] = {exe,
                           "+set", "fs_basepath", dwBase,
@@ -160,70 +229,121 @@ void CL_DemoWindow_f(void) {
                           "+set", "r_windowedWidth", sw,
                           "+set", "r_windowedHeight", sh,
                           "+set", "r_swapInterval", "0",
-                          "+set", "com_maxfps", "60",
+                          "+set", "com_maxfps", "0",
                           "+set", "com_maxfpsUnfocused", "0",
                           "+set", "com_maxfpsMinimized", "0",
                           "+set", "com_preciseFrameTiming", "0",
                           "+set", "com_introPlayed", "1",
                           "+set", "com_ignoreCrash", "1",
-                          "+set", "s_muteWhenUnfocused", "0",
-                          "+set", "s_muteWhenMinimized", "0",
+                          "+set", "s_muteBackground", "0",
+                          "+set", "cg_drawFPS", "0",
                           "+set", "net_enabled", "0",
                           "+set", "logfile", "0",
                           NULL};
 
-    if (com_demoWindowParent) {
-        return;
-    }
-    if (dwOpen) {
-        CL_DemoWindowClose();
-        return;
-    }
-    if (dwProcess) {
-        return;
-    }
-    if (!cls.rendererStarted) {
-        return;
-    }
-    if (strpbrk(name, "\";\r\n") || strstr(name, "..")) {
-        Com_Printf("Demo not found: %s\n", name);
-        return;
-    }
-    if (*name && !CL_DemoWindowDemoExists(name)) {
-        Com_Printf("Demo not found: %s\n", name);
-        return;
-    }
-
     CL_DemoWindowRect(&r);
-    dwWantW = MIN(r.w, DW_MAX_W) & ~1;
-    dwWantH = MIN((int)((float)dwWantW * r.h / r.w), DW_MAX_H) & ~1;
-    Com_sprintf(sw, sizeof(sw), "%i", dwWantW);
-    Com_sprintf(sh, sizeof(sh), "%i", dwWantH);
+    w = MIN(r.w, DW_MAX_W) & ~1;
+    h = MIN((int)((float)w * r.h / r.w), DW_MAX_H) & ~1;
+    Com_sprintf(sw, sizeof(sw), "%i", w);
+    Com_sprintf(sh, sizeof(sh), "%i", h);
     Com_sprintf(exe, sizeof(exe), "%s%c%s", Sys_BinaryPath(), PATH_SEP, Sys_BinaryName());
     Com_sprintf(log, sizeof(log), "%s", FS_BuildOSPath(dwHome, BASEGAME_DIR, "demowindow.log"));
 
     dw = (dwShared_t*)Sys_SharedOpen(va("dw%d", Sys_PID()), sizeof(dwShared_t), qtrue);
     if (!dw) {
-        Com_Printf(S_COLOR_RED "Could not open the demo window\n");
-        return;
+        return qfalse;
     }
-    dw->heartbeat = dw->quit = dw->ready = dw->seq = dw->head = dw->tail = 0;
+    dwTick = Sys_SignalOpen(va("dwt%d", Sys_PID()), qtrue);
+    dwFrameSignal = Sys_SignalOpen(va("dwf%d", Sys_PID()), qtrue);
+    dw->heartbeat = dw->quit = dw->ready = dw->seq = dw->head = dw->tail = dw->playing = 0;
+    dw->load = 1;
     Q_strncpyz(dw->demo, name, sizeof(dw->demo));
 
     Sys_SetEnv(DW_ENV, va("%d", Sys_PID()));
     dwProcess = Sys_PipeOpen(argv, log);
     Sys_SetEnv(DW_ENV, "");
     if (!dwProcess) {
+        Sys_SignalClose(dwTick);
+        Sys_SignalClose(dwFrameSignal);
+        dwTick = dwFrameSignal = NULL;
         Sys_SharedClose(dw);
         dw = NULL;
+        return qfalse;
+    }
+    dwLastSeq = 0;
+    dwCloseTime = 0;
+    return qtrue;
+}
+
+static void CL_DemoWindowNames(const char* name) {
+    char* ext;
+
+    Q_strncpyz(dwTitle, name, sizeof(dwTitle));
+    ext = strrchr(dwTitle, '.');
+    if (ext && !Q_stricmpn(ext + 1, DEMOEXT, strlen(DEMOEXT))) {
+        *ext = '\0';
+    }
+}
+
+static void CL_DemoWindowPlay(const char* name) {
+    fileHandle_t f;
+
+    if (strpbrk(name, "\";\r\n") || strstr(name, "..") || !(f = CL_DemoWindowOpenDemo(name))) {
+        Com_Printf("Demo not found: %s\n", name);
+        return;
+    }
+    CL_DemoWindowReadMap(f);
+    FS_FCloseFile(f);
+
+    if (dwProcess && dwCloseTime) {
+        Sys_PipeKill(dwProcess);
+        CL_DemoWindowFinish();
+    }
+    if (dwProcess) {
+        Q_strncpyz(dw->demo, name, sizeof(dw->demo));
+        dw->load++;
+    } else if (!CL_DemoWindowLaunch(name)) {
         Com_Printf(S_COLOR_RED "Could not open the demo window\n");
         return;
     }
 
+    CL_DemoWindowNames(name);
+    dwAssets = qfalse;
+    if (uivm && (Key_GetCatcher() & KEYCATCH_UI)) {
+        VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
+    }
+    Con_Close();
     Key_ClearStates();
     dwOpen = qtrue;
-    dwLastSeq = 0;
-    dwCloseTime = 0;
+}
+
+qboolean CL_DemoWindowRoute(const char* name) {
+    if (com_demoWindowParent || clc.state != CA_ACTIVE || clc.demoplaying || cl_timedemo->integer) {
+        return qfalse;
+    }
+    CL_DemoWindowPlay(name);
+    return qtrue;
+}
+
+void CL_DemoWindow_f(void) {
+    const char* name = Cmd_Argv(1);
+
+    if (com_demoWindowParent) {
+        return;
+    }
+    if (Cmd_Argc() < 2) {
+        if (dwOpen) {
+            CL_DemoWindowClose();
+        } else {
+            Cbuf_ExecuteText(EXEC_INSERT, "ui_replays\n");
+        }
+        return;
+    }
+    if (strpbrk(name, "\";\r\n")) {
+        Com_Printf("Demo not found: %s\n", name);
+        return;
+    }
+    Cbuf_ExecuteText(EXEC_INSERT, va("demo \"%s\"\n", name));
 }
 
 void CL_DemoWindowInit(void) {
@@ -233,6 +353,7 @@ void CL_DemoWindowInit(void) {
 
 void CL_DemoWindowRendererRestart(void) {
     dwHandleReady = qfalse;
+    dwAssets = qfalse;
 }
 
 void CL_DemoWindowShutdown(void) {
@@ -294,7 +415,7 @@ qboolean CL_DemoWindowMouse(int x, int y) {
         return qfalse;
     }
     CL_DemoWindowRect(&r);
-    dwOverClose = (x >= r.x + r.w - DW_BAR && x < r.x + r.w && y >= r.y - DW_BAR && y < r.y) ? qtrue : qfalse;
+    dwOverClose = (x >= r.x + r.w - r.bar && x < r.x + r.w && y >= r.y - r.bar && y < r.y) ? qtrue : qfalse;
     if ((x != dwMouseX || y != dwMouseY) && x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h && dw->width) {
         CL_DemoWindowPush(DW_EV_MOUSE, (x - r.x) * dw->width / r.w, (y - r.y) * dw->height / r.h);
     }
@@ -303,39 +424,157 @@ qboolean CL_DemoWindowMouse(int x, int y) {
     return qtrue;
 }
 
+static void CL_DemoWindowFill(float x, float y, float w, float h, const vec4_t color) {
+    re.SetColor(color);
+    re.DrawStretchPic(x, y, w, h, 0, 0, 1, 1, cls.whiteShader);
+}
+
+static void CL_DemoWindowText(float x, float y, const char* text, int font, float size, const vec4_t color) {
+    re.SetColor(color);
+    re.Font_DrawString((int)x, (int)y, text, font, size, -1, NULL, DW_TEXT_LITERAL);
+}
+
+static float CL_DemoWindowTextWidth(const char* text, int font, float size) {
+    float e[5];
+
+    re.TextBounds(text, 0, font, size, -1, e);
+    return e[2] - e[0];
+}
+
+static int CL_DemoWindowFont(const char* path, int fallback) {
+    int f = re.Font_Register(path);
+
+    return f >= 0 ? f : fallback;
+}
+
+static void CL_DemoWindowAssets(void) {
+    if (dwAssets) {
+        return;
+    }
+    dwAssets = qtrue;
+    dwFontSans = CL_DemoWindowFont("webui/fonts/NotoSans-Regular.ttf", 1);
+    dwFontBold = CL_DemoWindowFont("webui/fonts/NotoSans-Bold.ttf", dwFontSans);
+    dwFontIcons = re.Font_Register("webui/fonts/fontawesome-webfont.ttf");
+    dwLevelshot = dwMap[0] ? re.RegisterShaderNoMip(va("levelshots/%s", dwMap)) : 0;
+    if (!dwLevelshot) {
+        dwLevelshot = re.RegisterShaderNoMip("menu/art/unknownmap");
+    }
+}
+
+static void CL_DemoWindowAwaitFrame(void) {
+    int start = Sys_Milliseconds();
+
+    while (dw->seq == dwLastSeq && Sys_PipeAlive(dwProcess)) {
+        int left = DW_FRAME_WAIT - (Sys_Milliseconds() - start);
+
+        if (left <= 0) {
+            break;
+        }
+        Sys_SignalWait(dwFrameSignal, left);
+    }
+}
+
+static void CL_DemoWindowDrawLoading(const dwRect_t* r) {
+    float s0 = ((1920.0f - 1080.0f * r->w / r->h) / 1920.0f) * 0.5f;
+
+    CL_DemoWindowFill(r->x, r->y, r->w, r->h, dwRaised);
+    if (dwLevelshot) {
+        re.SetColor(NULL);
+        re.DrawStretchPic(r->x, r->y, r->w, r->h, s0, 0.0f, 1.0f - s0, 1.0f, dwLevelshot);
+    }
+}
+
+static void CL_DemoWindowDrawBar(const dwRect_t* r, float s) {
+    char title[sizeof(dwTitle) + 4];
+    float top = (float)(r->y - r->bar);
+    float mid = top + r->bar * 0.5f;
+    float x = r->x + 16.0f * s;
+    float close = (float)(r->x + r->w - r->bar);
+    float hint = 13.0f * s;
+    float keySize = 11.0f * s;
+    float right, w, keyW;
+    int len;
+
+    CL_DemoWindowFill(r->x, top, r->w, r->bar, dwRaised);
+    CL_DemoWindowFill(r->x, r->y - 1, r->w, 1, dwBorder);
+
+    if (dwOverClose) {
+        CL_DemoWindowFill(close, top, r->bar, r->bar, dwDanger);
+    }
+    if (dwFontIcons >= 0) {
+        w = CL_DemoWindowTextWidth(DW_ICON_CLOSE, dwFontIcons, 16.0f * s);
+        CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 6.0f * s, DW_ICON_CLOSE, dwFontIcons, 16.0f * s,
+                          dwOverClose ? dwText : dwMuted);
+        CL_DemoWindowText(x, mid + 6.0f * s, DW_ICON_FILM, dwFontIcons, 16.0f * s, dwYellow);
+        x += 28.0f * s;
+    } else {
+        w = CL_DemoWindowTextWidth("X", dwFontBold, 15.0f * s);
+        CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 5.5f * s, "X", dwFontBold, 15.0f * s,
+                          dwOverClose ? dwText : dwMuted);
+    }
+
+    right = close - 16.0f * s;
+    w = CL_DemoWindowTextWidth("to close", dwFontSans, hint);
+    right -= w;
+    CL_DemoWindowText(right, mid + 4.5f * s, "to close", dwFontSans, hint, dwMuted);
+    keyW = CL_DemoWindowTextWidth("ESC", dwFontBold, keySize) + 12.0f * s;
+    right -= 8.0f * s + keyW;
+    CL_DemoWindowFill(right, mid - 10.0f * s, keyW, 20.0f * s, dwBorder);
+    CL_DemoWindowFill(right + 1, mid - 10.0f * s + 1, keyW - 2, 20.0f * s - 2, dwKey);
+    CL_DemoWindowText(right + 6.0f * s, mid + 4.0f * s, "ESC", dwFontBold, keySize, dwSoft);
+
+    Q_strncpyz(title, dwTitle, sizeof(title));
+    len = (int)strlen(title);
+    while (len > 0 && CL_DemoWindowTextWidth(title, dwFontBold, 15.0f * s) > right - 24.0f * s - x) {
+        len--;
+        Com_sprintf(title + len, sizeof(title) - len, "...");
+    }
+    CL_DemoWindowText(x, mid + 5.5f * s, title, dwFontBold, 15.0f * s, dwText);
+}
+
 void CL_DemoWindowDraw(void) {
-    static vec4_t back = {0.0f, 0.0f, 0.0f, 0.9f};
-    static vec4_t closeHover = {0.7f, 0.1f, 0.1f, 1.0f};
-    static vec4_t text = {1.0f, 1.0f, 1.0f, 1.0f};
     static byte blank[16 * 16 * 4];
     dwRect_t r;
+    float s;
+    int i;
 
+    if (com_demoWindowParent) {
+        if (dw && dwChildLoad == dw->load && clc.state >= CA_LOADING) {
+            re.TakeVideoFrame(dwCaptureW, dwCaptureH, dwCapture, dwEncode, qfalse);
+        }
+        return;
+    }
     if (!dwOpen) {
         return;
     }
+    CL_DemoWindowAssets();
     CL_DemoWindowRect(&r);
-    re.SetColor(back);
-    re.DrawStretchPic(r.x - 2, r.y - DW_BAR, r.w + 4, r.h + DW_BAR + 2, 0, 0, 1, 1, cls.whiteShader);
-    if (dwOverClose) {
-        re.SetColor(closeHover);
-        re.DrawStretchPic(r.x + r.w - DW_BAR, r.y - DW_BAR, DW_BAR, DW_BAR, 0, 0, 1, 1, cls.whiteShader);
-    }
-    re.SetColor(NULL);
-    if (dw->seq) {
-        int seq = dw->seq;
-        int slot = dw->ready;
+    s = cls.glconfig.vidHeight / 1080.0f;
 
+    for (i = 3; i > 0; i--) {
+        float pad = (i * i + 1) * s;
+        vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.12f * (4 - i)};
+
+        CL_DemoWindowFill(r.x - pad, r.y - r.bar - pad, r.w + pad * 2, r.h + r.bar + pad * 2, shadow);
+    }
+    CL_DemoWindowFill(r.x - 1, r.y - r.bar - 1, r.w + 2, r.h + r.bar + 2, dwBorder);
+    if (dw->playing == dw->load && dw->seq) {
+        int seq, slot;
+
+        CL_DemoWindowAwaitFrame();
+        seq = dw->seq;
+        slot = dw->ready;
         if (!dwHandleReady) {
             re.UploadCinematic(16, 16, 16, 16, blank, DW_HANDLE, qtrue);
             dwHandleReady = qtrue;
         }
+        re.SetColor(NULL);
         re.DrawStretchRaw(r.x, r.y, r.w, r.h, dw->width, dw->height, dw->frames[slot], DW_HANDLE, seq != dwLastSeq);
         dwLastSeq = seq;
     } else {
-        SCR_DrawSmallStringExt(r.x + r.w / 2 - 40, r.y + r.h / 2, "Loading...", text, qtrue, qtrue);
+        CL_DemoWindowDrawLoading(&r);
     }
-    SCR_DrawSmallStringExt(r.x + 6, r.y - DW_BAR + 4, "Demo - ESC to close", text, qtrue, qtrue);
-    SCR_DrawSmallStringExt(r.x + r.w - DW_BAR + 8, r.y - DW_BAR + 4, "X", text, qtrue, qtrue);
+    CL_DemoWindowDrawBar(&r, s);
     re.SetColor(NULL);
 }
 
@@ -347,7 +586,8 @@ static void CL_DemoWindowChildOpen(void) {
         Cbuf_AddText("quit\n");
         return;
     }
-    Sys_LowerPriority();
+    dwTick = Sys_SignalOpen(va("dwt%d", com_demoWindowParent), qfalse);
+    dwFrameSignal = Sys_SignalOpen(va("dwf%d", com_demoWindowParent), qfalse);
     dwCaptureW = MIN(cls.glconfig.vidWidth, DW_MAX_W);
     dwCaptureH = MIN(cls.glconfig.vidHeight, DW_MAX_H);
     need = (dwCaptureW * 4 + 64) * dwCaptureH + 64;
@@ -355,18 +595,49 @@ static void CL_DemoWindowChildOpen(void) {
     dwEncode = Z_Malloc(PAD(dwCaptureW * 3, 4) * dwCaptureH);
     dw->width = dwCaptureW;
     dw->height = dwCaptureH;
-    dwChildSeenTime = Sys_Milliseconds();
-    if (dw->demo[0]) {
-        Cbuf_AddText(va("demo \"%s\"\n", dw->demo));
-    } else {
-        Cbuf_AddText("ui_replays\n");
+    dwChildBeat = dw->heartbeat;
+    dwChildBeatTime = Sys_Milliseconds();
+}
+
+void CL_DemoWindowWait(void) {
+    int start;
+
+    if (!com_demoWindowParent) {
+        if (dwProcess) {
+            dw->heartbeat++;
+            Sys_SignalRaise(dwTick);
+            if (dwOpen && dw->playing != dw->load) {
+                Sys_SignalWait(dwFrameSignal, DW_LOAD_PACE);
+            }
+        }
+        return;
     }
+    if (!dw) {
+        return;
+    }
+    start = Sys_Milliseconds();
+    while (dw->heartbeat == dwChildBeat && !dw->quit) {
+        int left = DW_CHILD_WAIT - (Sys_Milliseconds() - start);
+
+        if (left <= 0) {
+            break;
+        }
+        Sys_SignalWait(dwTick, left);
+    }
+    if (dw->heartbeat != dwChildBeat) {
+        dwChildBeat = dw->heartbeat;
+        dwChildBeatTime = Sys_Milliseconds();
+    }
+}
+
+static void CL_DemoWindowChildQuit(void) {
+    dw->quit = 1;
+    Cbuf_AddText("quit\n");
 }
 
 void CL_DemoWindowFrame(void) {
     if (!com_demoWindowParent) {
         if (dwProcess) {
-            dw->heartbeat++;
             if (!Sys_PipeAlive(dwProcess)) {
                 CL_DemoWindowFinish();
             } else if (dwCloseTime && Sys_Milliseconds() > dwCloseTime) {
@@ -387,13 +658,8 @@ void CL_DemoWindowFrame(void) {
         }
     }
 
-    if (dw->heartbeat != dwChildSeenBeat) {
-        dwChildSeenBeat = dw->heartbeat;
-        dwChildSeenTime = Sys_Milliseconds();
-    }
-    if (dw->quit || Sys_Milliseconds() - dwChildSeenTime > DW_PARENT_SILENCE) {
-        dw->quit = 1;
-        Cbuf_AddText("quit\n");
+    if (dw->quit || Sys_Milliseconds() - dwChildBeatTime > DW_PARENT_SILENCE) {
+        CL_DemoWindowChildQuit();
         return;
     }
 
@@ -414,14 +680,16 @@ void CL_DemoWindowFrame(void) {
         }
     }
 
-    if (clc.demoplaying) {
-        dwChildPlayed = qtrue;
-    } else if (dwChildPlayed && clc.state == CA_DISCONNECTED) {
-        dwChildPlayed = qfalse;
-        Cbuf_AddText("ui_replays\n");
+    if (dw->load != dwChildLoad) {
+        dwChildLoad = dw->load;
+        dw->playing = 0;
+        dwChildIssued = cls.framecount;
+        Cbuf_AddText(va("demo \"%s\"\n", dw->demo));
+        return;
     }
-
-    re.TakeVideoFrame(dwCaptureW, dwCaptureH, dwCapture, dwEncode, qfalse);
+    if (!clc.demoplaying && cls.framecount - dwChildIssued > 1) {
+        CL_DemoWindowChildQuit();
+    }
 }
 
 qboolean CL_DemoWindowTakeFrame(const byte* image, int size) {
@@ -455,5 +723,7 @@ qboolean CL_DemoWindowTakeFrame(const byte* image, int size) {
     }
     dw->ready = slot;
     dw->seq++;
+    dw->playing = dwChildLoad;
+    Sys_SignalRaise(dwFrameSignal);
     return qtrue;
 }
