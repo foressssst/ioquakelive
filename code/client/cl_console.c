@@ -55,6 +55,7 @@ int g_console_field_width = 119;
 #define CON_MAX_IMAGES 32
 #define CON_MAX_AVATARS 64
 #define CON_AVATAR_CELLS 3
+#define CON_FLAG_CELLS 4
 
 typedef struct {
     float x, y, w, h;
@@ -72,6 +73,7 @@ typedef struct {
     int line;
     int col;
     uint64_t steamId;
+    qboolean flag;
     char icon[MAX_QPATH];
 } conAvatar_t;
 
@@ -600,8 +602,8 @@ void Con_SetPendingAvatar(uint64_t steamId, const char* icon) {
 }
 
 static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, float adv) {
-    qhandle_t shader;
-    float size;
+    qhandle_t shader, flag;
+    float size, x, gap;
     int i;
 
     for (i = 0; i < CON_MAX_AVATARS; i++) {
@@ -616,13 +618,24 @@ static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, floa
     if (!shader && con.avatars[i].icon[0]) {
         shader = re.RegisterShaderNoMip(con.avatars[i].icon);
     }
-    if (!shader) {
+    flag = con.avatars[i].flag ? CL_ClubFlag(con.avatars[i].steamId) : 0;
+    size = cellH * 0.85f;
+    x = x0 + con.avatars[i].col * adv;
+    re.SetColor(NULL);
+    if (!flag) {
+        if (shader) {
+            re.DrawStretchPic(x + (CON_AVATAR_CELLS * adv - size) * 0.5f, rowTop + (cellH - size) * 0.5f, size, size,
+                              0.0f, 0.0f, 1.0f, 1.0f, shader);
+        }
         return;
     }
-    size = cellH * 0.85f;
-    re.SetColor(NULL);
-    re.DrawStretchPic(x0 + con.avatars[i].col * adv + (CON_AVATAR_CELLS * adv - size) * 0.5f,
-                      rowTop + (cellH - size) * 0.5f, size, size, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+    gap = shader ? size * 0.2f : 0.0f;
+    x += ((CON_AVATAR_CELLS + CON_FLAG_CELLS) * adv - (shader ? size : 0.0f) - gap - size * 2.0f) * 0.5f;
+    if (shader) {
+        re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size, size, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+        x += size + gap;
+    }
+    re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size * 2.0f, size, 0.0f, 0.0f, 1.0f, 1.0f, flag);
 }
 
 static void Con_FindImageLink(const char* txt, char* url, int size) {
@@ -1376,10 +1389,11 @@ void CL_ConsolePrint(char* txt) {
         av->line = con.current;
         av->col = con.x;
         av->steamId = con.pendingAvatar;
+        av->flag = (qboolean)(av->steamId && CL_ClubFlag(av->steamId));
         Q_strncpyz(av->icon, con.pendingIcon, sizeof(av->icon));
         con.pendingAvatar = 0;
         con.pendingIcon[0] = 0;
-        for (l = 0; l < CON_AVATAR_CELLS && con.x < con.linewidth - 1; l++) {
+        for (l = 0; l < CON_AVATAR_CELLS + (av->flag ? CON_FLAG_CELLS : 0) && con.x < con.linewidth - 1; l++) {
             if (con.x == 0) {
                 con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;
             }
