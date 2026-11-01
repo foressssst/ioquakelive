@@ -571,6 +571,19 @@ static qboolean CG_PlaceIsIndividual(void) {
     return cgs.gametype >= GT_FFA && (cgs.gametype <= GT_RACE || cgs.gametype == GT_RR);
 }
 
+static qboolean CG_LocalTiedAndListedFirst(void) {
+    const char* name;
+
+    if (!cg.snap || cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR || !CG_PlaceIsIndividual()) {
+        return qfalse;
+    }
+    if (cg.snap->ps.persistant[PERS_RANK] != RANK_TIED_FLAG) {
+        return qfalse;
+    }
+    name = Info_ValueForKey(CG_ConfigString(CS_PLAYERS + cg.snap->ps.clientNum), "n");
+    return (name[0] && !strcmp(cgs.firstPlaceName, name)) ? qtrue : qfalse;
+}
+
 static void CG_DrawPlaceLine(rectDef_t* rect, float scale, vec4_t color, int textStyle,
                              const char* place, const char* name, const char* score) {
     int placeW, scoreW, dotsW;
@@ -679,7 +692,8 @@ static void CG_DrawSecondPlaceScore(rectDef_t* rect, float scale, vec4_t color, 
         clientNum = cg.snap->ps.clientNum;
         rank = cg.snap->ps.persistant[PERS_RANK] & ~RANK_TIED_FLAG;
 
-        if (!CG_LocalPlayerLeads() && cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
+        if (!CG_LocalPlayerLeads() && !CG_LocalTiedAndListedFirst() &&
+            cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
             Q_strncpyz(name, cgs.clientinfo[clientNum].name, sizeof(name));
             place = rank + 1;
             if (cgs.gametype == GT_RACE) {
@@ -1061,7 +1075,7 @@ static qboolean CG_PlayerIsFirstPlace(void) {
     }
 
     if (cgs.gametype < GT_TEAM || cgs.gametype == GT_RR) {
-        return (ps->persistant[PERS_RANK] == 0) ? qtrue : qfalse;
+        return (ps->persistant[PERS_RANK] == 0 || CG_LocalTiedAndListedFirst()) ? qtrue : qfalse;
     }
 
     switch (cgs.clientinfo[ps->clientNum].team) {
