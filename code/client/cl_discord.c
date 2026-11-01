@@ -109,6 +109,9 @@ static qboolean Discord_PeerIsUser(int s) {
     socklen_t len = sizeof(cred);
 
     return (qboolean)(getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0 && cred.uid == getuid());
+#elif defined(__EMSCRIPTEN__)
+    (void)s;
+    return qfalse;
 #else
     uid_t uid;
     gid_t gid;

@@ -851,7 +851,7 @@ ifeq ($(PLATFORM),emscripten)
   DEBUG_LDFLAGS=$(DEBUG_CFLAGS)
 
   SHLIBEXT=wasm
-  SHLIBCFLAGS=-fPIC
+  SHLIBCFLAGS=-fPIC -fvisibility=hidden
   SHLIBLDFLAGS=-s SIDE_MODULE
 
 else

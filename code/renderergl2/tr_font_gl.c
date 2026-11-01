@@ -46,11 +46,21 @@ static unsigned int R_Font_PackColor(const vec4_t c) {
     return ((unsigned int)r) | ((unsigned int)g << 8) | ((unsigned int)b << 16) | ((unsigned int)a << 24);
 }
 
+#ifdef __EMSCRIPTEN__
+#define FONT_GL_INTERNAL GL_RGBA8
+#define FONT_GL_FORMAT GL_RGBA
+#else
+#define FONT_GL_INTERNAL GL_R8
+#define FONT_GL_FORMAT GL_RED
+#endif
+
 static void R_Font_SetTexParams(GLuint tex) {
+#ifndef __EMSCRIPTEN__
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_ONE);
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_ONE);
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_ONE);
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+#endif
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 }
@@ -70,9 +80,9 @@ static int RB_Font_renderCreate(void *uptr, int width, int height) {
     if (fontImage == NULL)
         return 0;
 
-    qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+    qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, FONT_GL_INTERNAL, width, height, 0, FONT_GL_FORMAT, GL_UNSIGNED_BYTE, NULL);
     R_Font_SetTexParams(fontImage->texnum);
-    fontImage->internalFormat = GL_R8;
+    fontImage->internalFormat = FONT_GL_INTERNAL;
     fontImage->width = fontImage->uploadWidth = width;
     fontImage->height = fontImage->uploadHeight = height;
 
@@ -89,7 +99,7 @@ static int RB_Font_renderResize(void *uptr, int width, int height) {
     if (fontImage == NULL)
         return RB_Font_renderCreate(uptr, width, height);
 
-    qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+    qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, FONT_GL_INTERNAL, width, height, 0, FONT_GL_FORMAT, GL_UNSIGNED_BYTE, NULL);
     R_Font_SetTexParams(fontImage->texnum);
     fontImage->width = fontImage->uploadWidth = width;
     fontImage->height = fontImage->uploadHeight = height;
@@ -110,6 +120,28 @@ static void RB_Font_renderUpdate(void *uptr, int *rect, const unsigned char *dat
     if (fontImage == NULL || w <= 0 || h <= 0)
         return;
 
+#ifdef __EMSCRIPTEN__
+    {
+        byte* rgba = (byte*)malloc((size_t)w * h * 4);
+        int x, y;
+
+        if (rgba == NULL)
+            return;
+        for (y = 0; y < h; y++) {
+            const unsigned char* src = data + (size_t)(rect[1] + y) * fontAtlasWidth + rect[0];
+            byte* dst = rgba + (size_t)y * w * 4;
+
+            for (x = 0; x < w; x++) {
+                dst[x * 4 + 0] = dst[x * 4 + 1] = dst[x * 4 + 2] = 255;
+                dst[x * 4 + 3] = src[x];
+            }
+        }
+        qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        qglTextureSubImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        free(rgba);
+        return;
+    }
+#endif
     qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     qglPixelStorei(GL_UNPACK_ROW_LENGTH, fontAtlasWidth);
     qglPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
