@@ -79,6 +79,8 @@ static ID_INLINE void SafeFS_Write(const void* buffer, int len, fileHandle_t f) 
         Com_Error(ERR_DROP, "Failed to write avi file");
 }
 
+static char cl_videoHome[MAX_OSPATH];
+
 static void CL_AviOut(const void* data, int len) {
     if (afd.pipe) {
         if (!afd.pipeFailed && !Sys_PipeWrite(afd.pipe, data, len)) {
@@ -508,7 +510,7 @@ qboolean CL_CloseAVI(void) {
         Z_Free(afd.eBuffer);
         code = Sys_PipeClose(afd.pipe);
         afd.pipe = NULL;
-        Com_sprintf(log, sizeof(log), "%s", FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(),
+        Com_sprintf(log, sizeof(log), "%s", FS_BuildOSPath(cl_videoHome, FS_GetCurrentGameDir(),
                                                            va("%s.log", afd.fileName)));
         if (code) {
             Com_Printf(S_COLOR_RED "ffmpeg could not finish %s (code %d), see %s\n", afd.fileName, code, log);
@@ -570,11 +572,6 @@ qboolean CL_VideoRecording(void) {
     return afd.fileOpen;
 }
 
-#define CL_VIDEO_ARGS                                                                                                 \
-    "-hide_banner -loglevel warning -f avi -i - -vf scale=out_color_matrix=bt709:out_range=tv,format=yuv420p "        \
-    "-c:v libx264 -preset medium -crf %i -colorspace bt709 -color_primaries bt709 -color_trc bt709 "                  \
-    "-c:a aac -b:a 320k -movflags +faststart -y \"%s\""
-
 static void CL_VideoFileName(char* out, int size, const char* arg, const char* ext) {
     char name[64];
     int i = 0, n = 0;
@@ -600,28 +597,80 @@ static void CL_VideoFileName(char* out, int size, const char* arg, const char* e
     }
 }
 
+static qboolean CL_VideoExeAt(char* exe, int size, const char* dir, int dirLen) {
+    FILE* f;
+
+#ifdef _WIN32
+    Com_sprintf(exe, size, "%.*s%cffmpeg.exe", dirLen, dir, PATH_SEP);
+#else
+    Com_sprintf(exe, size, "%.*s%cffmpeg", dirLen, dir, PATH_SEP);
+#endif
+    f = Sys_FOpen(exe, "rb");
+    if (!f) {
+        return qfalse;
+    }
+    fclose(f);
+    return qtrue;
+}
+
+static qboolean CL_VideoFindExe(char* exe, int size) {
+    const char* binary = Sys_BinaryPath();
+    const char* path = getenv("PATH");
+#ifdef _WIN32
+    const char sep = ';';
+#else
+    const char sep = ':';
+#endif
+
+    if (CL_VideoExeAt(exe, size, binary, (int)strlen(binary))) {
+        return qtrue;
+    }
+    while (path && *path) {
+        const char* end = strchr(path, sep);
+        int len = end ? (int)(end - path) : (int)strlen(path);
+
+        if (len && path[0] != '.' && CL_VideoExeAt(exe, size, path, len)) {
+            return qtrue;
+        }
+        path = end ? end + 1 : NULL;
+    }
+    return qfalse;
+}
+
 static void* CL_VideoOpenFfmpeg(const char* file) {
     char out[MAX_OSPATH];
     char log[MAX_OSPATH];
     char exe[MAX_OSPATH];
-    char args[MAX_OSPATH + 400];
-    FILE* f;
+    char crf[16];
+    const char* argv[] = {exe,           "-hide_banner",
+                          "-loglevel",   "warning",
+                          "-f",          "avi",
+                          "-i",          "-",
+                          "-vf",         "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+                          "-c:v",        "libx264",
+                          "-preset",     "medium",
+                          "-crf",        crf,
+                          "-colorspace", "bt709",
+                          "-color_primaries", "bt709",
+                          "-color_trc",  "bt709",
+                          "-c:a",        "aac",
+                          "-b:a",        "320k",
+                          "-movflags",   "+faststart",
+                          "-y",          out,
+                          NULL};
 
-    Q_strncpyz(out, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), file), sizeof(out));
-    Com_sprintf(log, sizeof(log), "%s.log", out);
-    FS_CreatePath(out);
-    Com_sprintf(args, sizeof(args), CL_VIDEO_ARGS, (int)Com_Clamp(0, 51, cl_videoCrf->value), out);
-#ifdef _WIN32
-    Com_sprintf(exe, sizeof(exe), "%s%cffmpeg.exe", Cvar_VariableString("fs_basepath"), PATH_SEP);
-#else
-    Com_sprintf(exe, sizeof(exe), "%s%cffmpeg", Cvar_VariableString("fs_basepath"), PATH_SEP);
-#endif
-    f = Sys_FOpen(exe, "rb");
-    if (f) {
-        fclose(f);
-        return Sys_PipeOpen(exe, args, log);
+    if (!CL_VideoFindExe(exe, sizeof(exe))) {
+        return NULL;
     }
-    return Sys_PipeOpen("ffmpeg", args, log);
+    Q_strncpyz(out, FS_BuildOSPath(cl_videoHome, FS_GetCurrentGameDir(), file), sizeof(out));
+    Com_sprintf(log, sizeof(log), "%s.log", out);
+    Com_sprintf(crf, sizeof(crf), "%i", (int)Com_Clamp(0, 51, cl_videoCrf->value));
+    FS_CreatePath(out);
+    return Sys_PipeOpen(argv, log);
+}
+
+void CL_VideoInit(void) {
+    Q_strncpyz(cl_videoHome, Cvar_VariableString("fs_homepath"), sizeof(cl_videoHome));
 }
 
 void CL_Video_f(void) {

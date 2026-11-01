@@ -286,8 +286,7 @@ typedef struct {
     int input;
 } sysPipe_t;
 
-void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
-    char line[2048];
+void* Sys_PipeOpen(const char* const* argv, const char* logPath) {
     int fds[2];
     int err[2];
     int log;
@@ -295,7 +294,6 @@ void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
     pid_t pid;
     sysPipe_t* p;
 
-    Com_sprintf(line, sizeof(line), "exec \"%s\" %s", exe, args);
     if (pipe(fds)) {
         return NULL;
     }
@@ -308,7 +306,8 @@ void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
         close(fds[1]);
         return NULL;
     }
-    pid = fork();
+    p = (sysPipe_t*)malloc(sizeof(*p));
+    pid = p ? fork() : -1;
     if (pid == 0) {
         dup2(fds[0], 0);
         dup2(log, 1);
@@ -318,46 +317,26 @@ void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
         close(log);
         close(err[0]);
         fcntl(err[1], F_SETFD, FD_CLOEXEC);
-        execlp(exe, exe, "-version", (char*)NULL);
+        execv(argv[0], (char* const*)argv);
         failed = 1;
         if (write(err[1], &failed, 1) < 0) {
             _exit(127);
         }
         _exit(127);
     }
+    close(fds[0]);
+    close(log);
     close(err[1]);
-    if (pid > 0) {
-        int status;
-
-        if (read(err[0], &failed, 1) < 0) {
-            failed = 1;
-        }
-        waitpid(pid, &status, 0);
+    if (pid > 0 && read(err[0], &failed, 1) < 0) {
+        failed = 1;
     }
     close(err[0]);
     if (pid < 0 || failed) {
-        close(log);
-        close(fds[0]);
+        if (pid > 0) {
+            waitpid(pid, NULL, 0);
+        }
         close(fds[1]);
         unlink(logPath);
-        return NULL;
-    }
-    pid = fork();
-    if (pid == 0) {
-        dup2(fds[0], 0);
-        dup2(log, 1);
-        dup2(log, 2);
-        close(fds[0]);
-        close(fds[1]);
-        close(log);
-        execl("/bin/sh", "sh", "-c", line, (char*)NULL);
-        _exit(127);
-    }
-    close(fds[0]);
-    close(log);
-    p = (sysPipe_t*)malloc(sizeof(*p));
-    if (pid < 0 || !p) {
-        close(fds[1]);
         free(p);
         return NULL;
     }

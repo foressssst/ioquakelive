@@ -3616,6 +3616,7 @@ void CL_Init(void) {
     Cmd_AddCommand("vid_restart", CL_Vid_Restart_f);
     Cmd_AddCommand("disconnect", CL_Disconnect_f);
     Cmd_AddCommand("record", CL_Record_f);
+    CL_VideoInit();
     Cmd_AddCommand("video", CL_Video_f);
     Cmd_AddCommand("stopvideo", CL_StopVideo_f);
     Cmd_AddCommand("demo", CL_PlayDemo_f);

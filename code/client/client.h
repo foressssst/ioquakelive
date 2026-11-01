@@ -518,6 +518,7 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size);
 void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size);
 qboolean CL_CloseAVI(void);
 qboolean CL_VideoRecording(void);
+void CL_VideoInit(void);
 void CL_Video_f(void);
 void CL_StopVideo_f(void);
 

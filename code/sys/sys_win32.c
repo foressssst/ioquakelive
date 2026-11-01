@@ -451,16 +451,48 @@ typedef struct {
     HANDLE input;
 } sysPipe_t;
 
-void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
+static void Sys_PipeQuote(char* line, int size, const char* arg) {
+    int n = (int)strlen(line);
+    int slashes = 0;
+
+    if (n + 2 >= size) {
+        return;
+    }
+    if (n) {
+        line[n++] = ' ';
+    }
+    line[n++] = '"';
+    for (; *arg && n + 4 < size; arg++) {
+        if (*arg == '\\') {
+            slashes++;
+        } else {
+            if (*arg == '"') {
+                while (slashes-- > -1 && n + 4 < size) {
+                    line[n++] = '\\';
+                }
+            }
+            slashes = 0;
+        }
+        line[n++] = *arg;
+    }
+    while (slashes-- > 0 && n + 4 < size) {
+        line[n++] = '\\';
+    }
+    line[n++] = '"';
+    line[n] = '\0';
+}
+
+void* Sys_PipeOpen(const char* const* argv, const char* logPath) {
     SECURITY_ATTRIBUTES sa;
     STARTUPINFOEXA si;
     PROCESS_INFORMATION pi;
     HANDLE readEnd, writeEnd, log;
     HANDLE inherit[2];
     SIZE_T attrSize = 0;
-    char line[2048];
+    char line[4096];
     sysPipe_t* p = NULL;
     BOOL ok = FALSE;
+    int i;
 
     Com_Memset(&sa, 0, sizeof(sa));
     sa.nLength = sizeof(sa);
@@ -483,13 +515,16 @@ void* Sys_PipeOpen(const char* exe, const char* args, const char* logPath) {
     si.StartupInfo.hStdInput = readEnd;
     si.StartupInfo.hStdOutput = log;
     si.StartupInfo.hStdError = log;
+    line[0] = '\0';
+    for (i = 0; argv[i]; i++) {
+        Sys_PipeQuote(line, sizeof(line), argv[i]);
+    }
     InitializeProcThreadAttributeList(NULL, 1, 0, &attrSize);
     si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(attrSize);
     if (si.lpAttributeList && InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &attrSize)) {
         if (UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit, sizeof(inherit),
                                       NULL, NULL)) {
-            Com_sprintf(line, sizeof(line), "\"%s\" %s", exe, args);
-            ok = CreateProcessA(NULL, line, NULL, NULL, TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, NULL, NULL,
+            ok = CreateProcessA(argv[0], line, NULL, NULL, TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, NULL, NULL,
                                 &si.StartupInfo, &pi);
         }
         DeleteProcThreadAttributeList(si.lpAttributeList);
