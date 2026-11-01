@@ -778,10 +778,22 @@ void UI_Home_Leave(void) {
     }
 }
 
+static qhandle_t UI_Home_CustomBackground(void) {
+    static char name[MAX_QPATH];
+    static qhandle_t pic;
+
+    if (strcmp(name, ui_background.string)) {
+        Q_strncpyz(name, ui_background.string, sizeof(name));
+        pic = name[0] ? trap_R_RegisterShaderNoMip(name) : 0;
+    }
+    return pic;
+}
+
 void UI_Home_RetailBackdrop(void) {
     static const vec4_t ingame = {19 / 255.0f, 68 / 255.0f, 92 / 255.0f, 0.7f};
     float top = -smTop / smScale;
-    float x, y;
+    float x, y, w, h, crop;
+    qhandle_t custom;
 
     UI_Home_LoadRetail();
     if (UI_Home_InMatch()) {
@@ -789,6 +801,19 @@ void UI_Home_RetailBackdrop(void) {
         return;
     }
     SM_FillScreen(smPage);
+    custom = UI_Home_CustomBackground();
+    if (custom) {
+        w = smVW;
+        h = smBottom - top;
+        if (w / h > 16.0f / 9.0f) {
+            crop = (1.0f - (16.0f / 9.0f) / (w / h)) * 0.5f;
+            SM_PicPart(0, top, w, h, 0, crop, 1, 1.0f - crop, custom);
+        } else {
+            crop = (1.0f - (w / h) / (16.0f / 9.0f)) * 0.5f;
+            SM_PicPart(0, top, w, h, crop, 0, 1.0f - crop, 1, custom);
+        }
+        return;
+    }
     if (hr.bg) {
         for (y = top; y < smBottom; y += 1080.0f) {
             for (x = 0; x < smVW; x += 1920.0f) {
@@ -1318,7 +1343,7 @@ void UI_Home_Paint(void) {
     top = -smTop / smScale;
 
     UI_Home_RetailBackdrop();
-    if (hr.ranger) {
+    if (hr.ranger && !UI_Home_CustomBackground()) {
         SM_Pic(smVW * 0.24f, smBottom - 959.0f, 1350.0f, 959.0f, hr.ranger, NULL);
     }
     UI_Home_DrawColumn();

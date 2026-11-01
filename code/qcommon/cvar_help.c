@@ -383,6 +383,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"ui_browserSortKey", "column the server browser sorts by"},
     {"ui_legalsViewed", "set once the legal notice at startup has gone by, for the rest of the session"},
     {"ui_browserShowFull", "the server browser lists full servers"},
+    {"ui_background", "your own image for the menu background, in place of the retail art: a 16:9 jpg, png or tga (1920x1080) from the baseq3 folder of your files, e.g. fondos/mio.jpg; empty = retail"},
     {"ui_browserShowEmpty", "the server browser lists empty servers"},
     {"ui_browserMaster", "master server the server browser asks"},
     {"ui_browserGameType", "game type the server browser shows"},

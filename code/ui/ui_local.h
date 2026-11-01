@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 extern vmCvar_t ui_ffa_fraglimit;
 extern vmCvar_t ui_ffa_timelimit;
+extern vmCvar_t ui_background;
 
 extern vmCvar_t ui_tourney_fraglimit;
 extern vmCvar_t ui_tourney_timelimit;

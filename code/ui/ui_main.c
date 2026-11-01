@@ -5630,6 +5630,7 @@ vmCvar_t ui_mainmenu;
 vmCvar_t ui_currentTier;
 vmCvar_t ui_opponentModel;
 vmCvar_t ui_mousePitch;
+vmCvar_t ui_background;
 vmCvar_t ui_favoriteName;
 vmCvar_t ui_favoriteAddress;
 
@@ -5812,6 +5813,7 @@ static cvarTable_t cvarTable[] = {
 
     {NULL, "ui_videomode", "", CVAR_ROM},
     {&ui_cg_announcer, "cg_announcer", "1", CVAR_TEMP, UI_OnAnnouncerChanged},
+    {&ui_background, "ui_background", "", CVAR_ARCHIVE},
     {&ui_cdkeychecked, "ui_cdkeychecked", "0", CVAR_ROM},
     {&ui_opponentName, "ui_opponentName", "Stroggs", CVAR_ARCHIVE},
     {&ui_singlePlayerActive, "ui_singlePlayerActive", "0", 0},
