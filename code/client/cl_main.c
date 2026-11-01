@@ -108,6 +108,7 @@ cvar_t* cl_rate;
 cvar_t* cl_steamId;
 
 cvar_t* cl_followRedirect;
+cvar_t* cl_autoReconnect;
 static int clRedirectHops;
 static qboolean clRedirecting;
 static qboolean clRedirectPending;
@@ -1605,7 +1606,40 @@ void CL_ForwardToServer_f(void) {
     }
 }
 
+#define CL_RECONNECT_TIME 60000
+#define CL_RECONNECT_SILENCE 30000
+
+static qboolean clReconnectActive;
+static int clReconnectStart;
+static char clReconnectServer[MAX_OSPATH];
+static char clReconnectReason[MAX_STRING_CHARS];
+
+static qboolean CL_ReconnectArm(const char* reason) {
+    if (!cl_autoReconnect->integer || clc.demoplaying || !CL_ServerVerified(&clc.serverAddress)) {
+        return qfalse;
+    }
+    Q_strncpyz(clReconnectServer, NET_AdrToStringwPort(clc.serverAddress), sizeof(clReconnectServer));
+    Q_strncpyz(clReconnectReason, reason, sizeof(clReconnectReason));
+    clReconnectStart = cls.realtime;
+    clReconnectActive = qtrue;
+    return qtrue;
+}
+
+void CL_ServerDropped(const char* reason) {
+    static const char* const down[] = {"Received signal",   "Server quit", "Server crashed",   "Server fatal crashed",
+                                       "Server was killed", "killserver",  "Restarting server"};
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(down); i++) {
+        if (!Q_stricmpn(reason, down[i], (int)strlen(down[i]))) {
+            CL_ReconnectArm(va("Server disconnected - %s", reason));
+            return;
+        }
+    }
+}
+
 void CL_Disconnect_f(void) {
+    clReconnectActive = qfalse;
     SCR_StopCinematic();
     if (clc.state != CA_DISCONNECTED && clc.state != CA_CINEMATIC) {
         Com_Error(ERR_DISCONNECT, "Disconnected from server");
@@ -1640,6 +1674,10 @@ void CL_Connect_f(void) {
             Com_Printf("warning: only -4 or -6 as address type understood.\n");
 
         Q_strncpyz(server, Cmd_Argv(2), sizeof(server));
+    }
+
+    if (clReconnectActive && Q_stricmp(server, clReconnectServer)) {
+        clReconnectActive = qfalse;
     }
 
     if (clRedirecting) {
@@ -2760,6 +2798,38 @@ void CL_LowLatencyWait(void) {
     }
 }
 
+static void CL_ReconnectFrame(void) {
+    char reason[MAX_STRING_CHARS];
+    int left;
+
+    if (!clReconnectActive) {
+        if (clc.state == CA_ACTIVE && cls.realtime - clc.lastPacketTime > CL_RECONNECT_SILENCE &&
+            CL_ReconnectArm("Server not responding")) {
+            CL_Disconnect(qtrue);
+        }
+        if (!clReconnectActive) {
+            return;
+        }
+    }
+    if (clc.state >= CA_CONNECTED || clRedirectWaiting) {
+        clReconnectActive = qfalse;
+        return;
+    }
+    left = (CL_RECONNECT_TIME - (cls.realtime - clReconnectStart) + 999) / 1000;
+    if (left <= 0) {
+        Q_strncpyz(reason, clReconnectReason, sizeof(reason));
+        clReconnectActive = qfalse;
+        Com_Error(ERR_SERVERDISCONNECT, "%s", reason);
+    }
+    if (clc.state == CA_DISCONNECTED) {
+        Cvar_Set("com_errorMessage", "");
+        Cbuf_ExecuteText(EXEC_NOW, va("connect %s", clReconnectServer));
+    }
+    if (clReconnectActive && !clRedirectPending) {
+        Com_sprintf(clc.serverMessage, sizeof(clc.serverMessage), "%s. Reconnecting... %i", clReconnectReason, left);
+    }
+}
+
 void CL_Frame(int msec) {
     if (!com_cl_running->integer) {
         return;
@@ -2780,6 +2850,8 @@ void CL_Frame(int msec) {
         }
     }
 #endif
+
+    CL_ReconnectFrame();
 
     if (clc.state == CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_UI) && !com_sv_running->integer && uivm) {
         S_StopAllSounds();
@@ -3458,6 +3530,7 @@ void CL_Init(void) {
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
     cl_followRedirect = Cvar_Get("cl_followRedirect", "1", CVAR_ARCHIVE);
+    cl_autoReconnect = Cvar_Get("cl_autoReconnect", "1", CVAR_ARCHIVE);
     Cvar_Get("cl_redirectButtons", "", CVAR_ROM);
     CL_UpdateInit();
 #ifdef USE_CURL_DLOPEN

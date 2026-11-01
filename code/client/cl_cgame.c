@@ -210,9 +210,10 @@ rescan:
     argc = Cmd_Argc();
 
     if (!strcmp(cmd, "disconnect")) {
-        if (argc >= 2)
+        if (argc >= 2) {
+            CL_ServerDropped(Cmd_Argv(1));
             Com_Error(ERR_SERVERDISCONNECT, "Server disconnected - %s", Cmd_Argv(1));
-        else
+        } else
             Com_Error(ERR_SERVERDISCONNECT, "Server disconnected");
     }
 
