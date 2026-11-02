@@ -60,9 +60,14 @@ void HV_ItemHitRect(itemDef_t* item, float* out);
 qboolean HV_ItemPaintRect(const itemDef_t* item, float* out);
 qboolean HV_ItemShown(const itemDef_t* item);
 const char* HV_OwnerDrawName(int ownerDraw);
+enum { HV_CAT_PLAYER, HV_CAT_MATCH, HV_CAT_TEAM, HV_CAT_MESSAGES, HV_CAT_SHAPES, HV_CAT_COUNT };
+
+int HV_ItemCategory(const itemDef_t* item);
+const char* HV_CategoryName(int category);
+qboolean HV_ItemInvisible(const itemDef_t* item);
+const char* HV_ItemWhen(const itemDef_t* item);
+const char* HV_ItemWhenShort(const itemDef_t* item);
 const char* HV_ItemLabel(const itemDef_t* item);
 const char* HV_ItemKind(const itemDef_t* item);
-qhandle_t HV_ItemThumb(const itemDef_t* item, const char** text);
-const char* HV_MenuLabel(const menuDef_t* menu);
 
 #endif

@@ -31,17 +31,18 @@ void Item_UpdatePosition(itemDef_t* item);
 #define HE_MAX_UNDO 1024
 #define HE_GRID 10.0f
 #define HE_FONT FONT_SANS
-#define HE_G 16.0f
-#define HE_BAR 64.0f
-#define HE_LEFT_W 320.0f
-#define HE_RIGHT_W 340.0f
-#define HE_STATUS_H 48.0f
+#define HE_G 0.0f
+#define HE_M 12.0f
+#define HE_BAR 60.0f
+#define HE_LEFT_W 330.0f
+#define HE_RIGHT_W 360.0f
+#define HE_STATUS_H 44.0f
 #define HE_HEAD_H 56.0f
-#define HE_ROW_H 34.0f
-#define HE_GROUP_H 32.0f
-#define HE_R_PANEL 20.0f
-#define HE_R 10.0f
-#define HE_SPACING 1.4f
+#define HE_ROW_H 36.0f
+#define HE_GROUP_H 34.0f
+#define HE_R_PANEL 0.0f
+#define HE_R 4.0f
+#define HE_R_MAX 4.0f
 #define HE_CTRL_H 40.0f
 
 #define HE_FA_UNDO 0xf0e2
@@ -141,14 +142,34 @@ static const hePal_t hePal[] = {
     {"Powerups", "Player", "powerups", CG_AREA_POWERUP, 35, 35, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 4},
     {"Timer", "Match", "timer", CG_LEVELTIMER, 50, 12, 0.28f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
     {"Round timer", "Match", "roundtimer", CG_ROUNDTIMER, 50, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {0.73f, 0.73f, 0.73f, 0.7f}, 0},
-    {"Score", "Match", "score", CG_PLAYER_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Your score", "Match", "score", CG_PLAYER_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
     {"Red score", "Match", "redscore", CG_RED_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
     {"Blue score", "Match", "bluescore", CG_BLUE_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Game type", "Match", "gametype", CG_GAME_TYPE_ICON, 19, 19, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
     {"Clock", "Match", "clock", CG_LOCALTIME, 60, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
     {"Kill feed", "Messages", "killfeed", CG_PLAYER_OBIT, 65, 12, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
     {"Chat", "Messages", "chat", CG_AREA_NEW_CHAT, 300, 60, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
     {"Box", "Shapes", "box", 0, 64, 32, 0, 0, 0, WINDOW_STYLE_FILLED, NULL, {0, 0, 0, 0.5f}, 0},
+};
+
+static const char* hePalDesc[ARRAY_LEN(hePal)] = {
+    "Your health number",
+    "Your armor number",
+    "Ammo left in your weapon",
+    "Icon of your current ammo",
+    "Icon of your armor",
+    "Your health as a bar",
+    "Your armor as a bar",
+    "The medkit or teleporter you carry",
+    "Quad, regen and others, with their time",
+    "The match clock",
+    "Time left in the round",
+    "Your points in the match",
+    "Points of the red team",
+    "Points of the blue team",
+    "The time on your computer",
+    "Who fragged who",
+    "What players write",
+    "A rectangle to put behind other things",
 };
 
 typedef struct {
@@ -185,6 +206,8 @@ typedef enum {
     HE_HIT_SAVE,
     HE_HIT_CLOSE,
     HE_HIT_LAYER,
+    HE_HIT_HIDDEN,
+    HE_HIT_MAPITEM,
     HE_HIT_FIELD,
     HE_HIT_STEP,
     HE_HIT_ANCHOR,
@@ -276,6 +299,10 @@ static struct {
     char pending[MAX_QPATH];
     qboolean hudMenu;
     float hudMenuX;
+    qboolean mapMenu;
+    float mapMenuX;
+    qboolean hiddenOpen;
+    int layerHover;
     qboolean saveAs;
     qboolean afterSave;
     char saveName[33];
@@ -299,29 +326,27 @@ static struct {
     const char* tip;
     float tipX, tipY;
     qhandle_t round;
-    qhandle_t hole;
 } he;
 
 static hdDoc_t heDocs[HE_MAX_DOCS];
 static char heText[HD_MAX_TEXT];
 static char heOut[HD_MAX_TEXT + 65536];
 
-static const vec4_t heBg = {0.042f, 0.039f, 0.036f, 1.0f};
-static const vec4_t hePanel = {0.077f, 0.072f, 0.068f, 1.0f};
-static const vec4_t heCard = {0.104f, 0.098f, 0.094f, 1.0f};
-static const vec4_t heRow = {0.122f, 0.117f, 0.112f, 1.0f};
-static const vec4_t heRowHover = {0.169f, 0.164f, 0.159f, 1.0f};
-static const vec4_t heEdge = {0.165f, 0.159f, 0.154f, 1.0f};
-static const vec4_t heGold = {0.897f, 0.675f, 0.297f, 1.0f};
-static const vec4_t heGoldHover = {0.963f, 0.738f, 0.364f, 1.0f};
-static const vec4_t heGoldText = {0.078f, 0.075f, 0.063f, 1.0f};
-static const vec4_t heHi = {0.925f, 0.902f, 0.859f, 1.0f};
-static const vec4_t heMd = {0.749f, 0.718f, 0.659f, 1.0f};
-static const vec4_t heLo = {0.604f, 0.576f, 0.522f, 1.0f};
-static const vec4_t heGhost = {0.388f, 0.365f, 0.329f, 1.0f};
+static const vec4_t heBg = {0.086f, 0.09f, 0.098f, 1.0f};
+static const vec4_t hePanel = {0.133f, 0.137f, 0.149f, 1.0f};
+static const vec4_t heCard = {0.188f, 0.196f, 0.212f, 1.0f};
+static const vec4_t heRow = {0.204f, 0.212f, 0.231f, 1.0f};
+static const vec4_t heRowHover = {0.275f, 0.286f, 0.31f, 1.0f};
+static const vec4_t heEdge = {0.243f, 0.251f, 0.271f, 1.0f};
+static const vec4_t heGold = {0.949f, 0.647f, 0.149f, 1.0f};
+static const vec4_t heGoldHover = {1.0f, 0.725f, 0.275f, 1.0f};
+static const vec4_t heGoldText = {0.086f, 0.09f, 0.098f, 1.0f};
+static const vec4_t heHi = {1.0f, 1.0f, 1.0f, 1.0f};
+static const vec4_t heMd = {0.851f, 0.863f, 0.882f, 1.0f};
+static const vec4_t heLo = {0.651f, 0.667f, 0.694f, 1.0f};
+static const vec4_t heGhost = {0.455f, 0.471f, 0.498f, 1.0f};
 static const vec4_t heWarn = {0.86f, 0.42f, 0.38f, 1.0f};
 static const vec4_t heShade = {0.0f, 0.0f, 0.0f, 0.6f};
-static const vec4_t heShadow = {0.0f, 0.0f, 0.0f, 0.3f};
 static const vec4_t heHoverLine = {1.0f, 1.0f, 1.0f, 0.55f};
 static const vec4_t heGuide = {1.0f, 0.25f, 0.65f, 0.95f};
 static const vec4_t heGridLine = {1.0f, 1.0f, 1.0f, 0.06f};
@@ -716,6 +741,13 @@ static void HE_ScanHuds(void) {
     }
 }
 
+static qboolean HE_SafeMenuPath(const char* p) {
+    return !Q_stricmpn(p, "ui/", 3) && !strstr(p, "..") && !strchr(p, ':') && !strchr(p, '\\') &&
+                   !Q_stricmp(COM_GetExtension(p), "menu")
+               ? qtrue
+               : qfalse;
+}
+
 static qboolean HE_IsMine(void) {
     int k;
 
@@ -723,7 +755,7 @@ static qboolean HE_IsMine(void) {
         return qfalse;
     }
     for (k = 0; k < he.numDocs; k++) {
-        if (!HE_Loose(he.files[he.docFile[k]])) {
+        if (!HE_SafeMenuPath(he.files[he.docFile[k]]) || !HE_Loose(he.files[he.docFile[k]])) {
             return qfalse;
         }
     }
@@ -1333,6 +1365,9 @@ static qboolean HE_ItemPickable(int i) {
     if (!(he.items[i].item->window.flags & WINDOW_VISIBLE) && i != he.selected) {
         return qfalse;
     }
+    if (HV_ItemInvisible(he.items[i].item) && i != he.selected) {
+        return qfalse;
+    }
     return HV_ItemShown(he.items[i].item) || hvScene.showAll || i == he.selected;
 }
 
@@ -1475,10 +1510,48 @@ static void HE_Remove(int i) {
     HE_Status("Deleted. Ctrl+Z brings it back.");
 }
 
-static int HE_ItemIcon(const itemDef_t* it);
 
 static qboolean HE_TextLike(int i) {
-    return HE_ItemIcon(he.items[i].item) == HE_FA_TEXT;
+    const itemDef_t* it = he.items[i].item;
+
+    switch (it->window.ownerDraw) {
+        case CG_PLAYER_ARMOR_ICON:
+        case CG_PLAYER_ARMOR_ICON2D:
+        case CG_PLAYER_AMMO_ICON:
+        case CG_PLAYER_AMMO_ICON2D:
+        case CG_PLAYER_ITEM:
+        case CG_PLAYER_HEAD:
+        case CG_GAME_TYPE_ICON:
+        case CG_TEAM_COLORIZED:
+        case CG_ARMORTIERED_COLORIZED:
+        case CG_HEALTH_COLORIZED:
+        case CG_CTF_POWERUP:
+        case CG_AREA_POWERUP:
+        case CG_PLAYER_HASFLAG:
+        case CG_PLAYER_HASFLAG2D:
+        case CG_RED_FLAGSTATUS:
+        case CG_BLUE_FLAGSTATUS:
+        case CG_RED_BASESTATUS:
+        case CG_BLUE_BASESTATUS:
+        case CG_ONEFLAG_STATUS:
+        case CG_IMPRESSIVE:
+        case CG_EXCELLENT:
+        case CG_GAUNTLET:
+        case CG_PLAYER_HASKEY:
+        case CG_TEAM_COLOR:
+        case CG_SELECTED_PLYR_TEAM_COLOR:
+        case CG_PLAYER_HEALTH_BAR_100:
+        case CG_PLAYER_HEALTH_BAR_200:
+        case CG_PLAYER_ARMOR_BAR_100:
+        case CG_PLAYER_ARMOR_BAR_200:
+            return qfalse;
+        default:
+            break;
+    }
+    if (it->window.ownerDraw && !it->window.background) {
+        return qtrue;
+    }
+    return it->text && it->text[0] ? qtrue : qfalse;
 }
 
 static void HE_ItemBox(int i, float* out) {
@@ -1822,20 +1895,20 @@ static void HE_Nudge(float dx, float dy, float dw, float dh) {
 }
 
 static float HE_ColX0(void) {
-    return HE_G + HE_LEFT_W + HE_G;
+    return HE_LEFT_W + HE_M;
 }
 
 static float HE_ColX1(void) {
-    return smVW - HE_G - HE_RIGHT_W - HE_G;
+    return smVW - HE_RIGHT_W - HE_M;
 }
 
 static float HE_PanelH(void) {
-    return smBottom - HE_BAR - HE_G;
+    return smBottom - HE_BAR;
 }
 
 static void HE_Layout(void) {
     float x0 = HE_ColX0(), x1 = HE_ColX1();
-    float y0 = HE_BAR, y1 = smBottom - HE_G - HE_STATUS_H - HE_G;
+    float y0 = HE_BAR + HE_M, y1 = smBottom - HE_STATUS_H - HE_M;
     float aspect = (float)uiInfo.uiDC.glconfig.vidWidth / (float)uiInfo.uiDC.glconfig.vidHeight;
     float w = x1 - x0, h = w / aspect;
 
@@ -1893,6 +1966,9 @@ static void HE_RoundPx(float x, float y, float w, float h, float r, const float*
 }
 
 static void HE_Round(float x, float y, float w, float h, float r, const float* color) {
+    if (r > HE_R_MAX) {
+        r = HE_R_MAX;
+    }
     HE_RoundPx(x * smScale, smTop + y * smScale, w * smScale, h * smScale, r * smScale, color);
 }
 
@@ -1906,24 +1982,7 @@ static void HE_RoundIn(float x, float y, float w, float h, float r, const smRect
     }
 }
 
-static void HE_Corners(float x, float y, float w, float h, float r, const float* color) {
-    float x0 = (float)floor(x + 0.5f), y0 = (float)floor(y + 0.5f);
-    float x1 = (float)floor(x + w + 0.5f), y1 = (float)floor(y + h + 0.5f);
-    float rr = (float)floor(r + 0.5f);
-
-    if (!he.hole || rr < 1.0f) {
-        return;
-    }
-    trap_R_SetColor(color);
-    trap_R_DrawStretchPic(x0, y0, rr, rr, 0, 0, 0.5f, 0.5f, he.hole);
-    trap_R_DrawStretchPic(x1 - rr, y0, rr, rr, 0.5f, 0, 1, 0.5f, he.hole);
-    trap_R_DrawStretchPic(x0, y1 - rr, rr, rr, 0, 0.5f, 0.5f, 1, he.hole);
-    trap_R_DrawStretchPic(x1 - rr, y1 - rr, rr, rr, 0.5f, 0.5f, 1, 1, he.hole);
-    trap_R_SetColor(NULL);
-}
-
 static void HE_Floating(float x, float y, float w, float h, float r, const float* color) {
-    HE_Round(x - 1.0f, y + 6.0f, w + 2.0f, h + 4.0f, r + 2.0f, heShadow);
     HE_Round(x - 1.0f, y - 1.0f, w + 2.0f, h + 2.0f, r + 1.0f, heEdge);
     HE_Round(x, y, w, h, r, color);
 }
@@ -1946,27 +2005,12 @@ static void HE_TextCenter(float x, float y, float w, float h, float size, const 
     HE_Text(x + (w - HE_TextW(text, size, bold)) * 0.5f, y, h, size, color, text, bold);
 }
 
-static const char* HE_Upper(const char* s) {
-    static char buf[4][96];
-    static int which;
-    char* o = buf[which = (which + 1) & 3];
-    int i;
-
-    for (i = 0; s[i] && i < (int)sizeof(buf[0]) - 1; i++) {
-        o[i] = (s[i] >= 'a' && s[i] <= 'z') ? (char)(s[i] - 'a' + 'A') : s[i];
-    }
-    o[i] = 0;
-    return o;
-}
-
 static float HE_CapsW(const char* text, float size) {
-    const char* up = HE_Upper(text);
-
-    return SM_SpacedWidth(HE_FONT, size, up, HE_SPACING, qtrue) - SM_LetterSpacing(HE_SPACING);
+    return HE_TextW(text, size + 2.0f, qtrue);
 }
 
 static void HE_Caps(float x, float top, float height, float size, const float* color, const char* text) {
-    SM_SpacedText(x, HE_Base(size, top, height), HE_FONT, size, color, HE_Upper(text), HE_SPACING, qtrue);
+    HE_Text(x, top, height, size + 2.0f, color, text, qtrue);
 }
 
 static void HE_CapsCenter(float x, float y, float w, float h, float size, const float* color, const char* text) {
@@ -2094,12 +2138,15 @@ static void HE_Segment(float x, float y, float w, float h, const char** labels, 
         qboolean over = enabled && SM_Over(hit, i);
 
         if (on) {
-            HE_Round(sx, y + 4.0f, sw, h - 8.0f, (h - 8.0f) * 0.5f, enabled ? heGold : heRowHover);
+            HE_Round(sx, y + 4.0f, sw, h - 8.0f, 3.0f, heRowHover);
+            if (enabled) {
+                SM_Fill(sx, y + h - 6.0f, sw, 2.0f, heGold, NULL);
+            }
         } else if (over) {
-            HE_Round(sx, y + 4.0f, sw, h - 8.0f, (h - 8.0f) * 0.5f, heRow);
+            HE_Round(sx, y + 4.0f, sw, h - 8.0f, 3.0f, heRow);
         }
-        HE_CapsCenter(sx, y + 4.0f, sw, h - 8.0f, 12.0f,
-                      on ? (enabled ? heGoldText : heHi) : over ? heHi : enabled ? heMd : heGhost, labels[i]);
+        HE_CapsCenter(sx, y + 4.0f, sw, h - 8.0f, 12.0f, on ? heHi : over ? heHi : enabled ? heMd : heGhost,
+                      labels[i]);
         if (enabled) {
             SM_Hit(sx, y + 4.0f, sw, h - 8.0f, hit, i, NULL);
         }
@@ -2118,16 +2165,16 @@ static void HE_PaintTop(void) {
             sel = i;
         }
     }
-    x = HE_G + 6.0f;
-    HE_Caps(x, 0, HE_BAR, 15.0f, heHi, "HUD Editor");
-    x += HE_CapsW("HUD Editor", 15.0f) + 14.0f;
+    SM_Fill(0.0f, 0.0f, smVW, HE_BAR, hePanel, NULL);
+    SM_Fill(0.0f, HE_BAR - 1.0f, smVW, 1.0f, heEdge, NULL);
+    x = HE_M;
     he.hudMenuX = x;
     {
         const char* name = HE_HudName(he.list);
-        float pw = HE_TextW(name, 14.0f, qtrue) + 54.0f;
+        float pw = HE_TextW(name, 15.0f, qtrue) + 54.0f;
 
-        HE_Round(x, y, pw, HE_CTRL_H, HE_CTRL_H * 0.5f, SM_Over(HE_HIT_HUD, 0) || he.hudMenu ? heRowHover : heCard);
-        HE_Text(x + 16.0f, y, HE_CTRL_H, 14.0f, heHi, name, qtrue);
+        HE_Round(x, y, pw, HE_CTRL_H, HE_R, SM_Over(HE_HIT_HUD, 0) || he.hudMenu ? heRowHover : heCard);
+        HE_Text(x + 16.0f, y, HE_CTRL_H, 15.0f, heHi, name, qtrue);
         HE_Icon(x + pw - 28.0f, y, HE_CTRL_H, 11.0f, heMd, HE_FA_CHEVRON);
         SM_Hit(x, y, pw, HE_CTRL_H, HE_HIT_HUD, 0, NULL);
         if (SM_Over(HE_HIT_HUD, 0) && !he.hudMenu) {
@@ -2147,17 +2194,18 @@ static void HE_PaintTop(void) {
                  hvScene.team == TEAM_BLUE ? heTeamBlue : heTeamRed, HE_PILL_SECONDARY, HE_HIT_TEAM, 0,
                  "Switch team") +
          10.0f;
+    he.mapMenuX = x;
     HE_Pill(x, y, HE_CTRL_H, heMapNames[he.map], HE_FA_MAP, NULL, HE_PILL_SECONDARY, HE_HIT_MAP, 0,
             "Change the background");
 
-    right = smVW - HE_G;
+    right = smVW - HE_M;
     right -= HE_CTRL_H;
     HE_IconButton(right, y, HE_CTRL_H, HE_FA_CLOSE, HE_HIT_CLOSE, 0, qfalse, qfalse, "Close (Esc)");
     right -= 8.0f + HE_PillW("Save", HE_FA_SAVE);
     HE_Pill(right, y, HE_CTRL_H, "Save", HE_FA_SAVE, NULL, he.dirty ? HE_PILL_PRIMARY : HE_PILL_SECONDARY,
             HE_HIT_SAVE, 0, "Save (Ctrl+S)");
     right -= 12.0f + 4.0f * 36.0f + 8.0f + 13.0f;
-    HE_Round(right, y, 4.0f * 36.0f + 8.0f + 13.0f, HE_CTRL_H, HE_CTRL_H * 0.5f, heCard);
+    HE_Round(right, y, 4.0f * 36.0f + 8.0f + 13.0f, HE_CTRL_H, HE_R, heCard);
     HE_IconButton(right + 4.0f, y + 2.0f, 36.0f, HE_FA_UNDO, HE_HIT_UNDO, 0, qfalse, he.numUndo == 0,
                   "Undo (Ctrl+Z)");
     HE_IconButton(right + 40.0f, y + 2.0f, 36.0f, HE_FA_REDO, HE_HIT_REDO, 0, qfalse, he.numRedo == 0,
@@ -2168,85 +2216,12 @@ static void HE_PaintTop(void) {
                   hvScene.showAll, qfalse, "Show hidden elements");
 }
 
-static int HE_ItemIcon(const itemDef_t* it) {
-    switch (it->window.ownerDraw) {
-    case CG_PLAYER_ARMOR_ICON:
-    case CG_PLAYER_ARMOR_ICON2D:
-    case CG_PLAYER_AMMO_ICON:
-    case CG_PLAYER_AMMO_ICON2D:
-    case CG_PLAYER_ITEM:
-    case CG_PLAYER_HEAD:
-    case CG_GAME_TYPE_ICON:
-    case CG_TEAM_COLORIZED:
-    case CG_ARMORTIERED_COLORIZED:
-    case CG_HEALTH_COLORIZED:
-    case CG_CTF_POWERUP:
-    case CG_AREA_POWERUP:
-    case CG_PLAYER_HASFLAG:
-    case CG_PLAYER_HASFLAG2D:
-    case CG_RED_FLAGSTATUS:
-    case CG_BLUE_FLAGSTATUS:
-    case CG_RED_BASESTATUS:
-    case CG_BLUE_BASESTATUS:
-    case CG_ONEFLAG_STATUS:
-    case CG_IMPRESSIVE:
-    case CG_EXCELLENT:
-    case CG_GAUNTLET:
-    case CG_PLAYER_HASKEY:
-        return HE_FA_IMAGE;
-    case CG_TEAM_COLOR:
-    case CG_SELECTED_PLYR_TEAM_COLOR:
-    case CG_PLAYER_HEALTH_BAR_100:
-    case CG_PLAYER_HEALTH_BAR_200:
-    case CG_PLAYER_ARMOR_BAR_100:
-    case CG_PLAYER_ARMOR_BAR_200:
-        return HE_FA_BOX;
-    default:
-        break;
-    }
-    if (it->window.ownerDraw && !it->window.background) {
-        return HE_FA_TEXT;
-    }
-    if (it->text && it->text[0]) {
-        return HE_FA_TEXT;
-    }
-    if (it->window.background) {
-        return HE_FA_IMAGE;
-    }
-    return HE_FA_BOX;
-}
-
 static float HE_ListTop(void) {
     return HE_BAR + HE_HEAD_H;
 }
 
 static float HE_ListH(void) {
     return HE_PanelH() - HE_HEAD_H - 8.0f;
-}
-
-static void HE_Thumb(float x, float y, float size, const itemDef_t* it, qboolean selected) {
-    const char* text;
-    qhandle_t shader = HV_ItemThumb(it, &text);
-
-    HE_Round(x, y, size, size, 6.0f, selected ? heEdge : heCard);
-    if (shader) {
-        float pad = 3.0f;
-
-        trap_R_SetColor(NULL);
-        trap_R_DrawStretchPic(HE_PxX(x + pad), HE_PxY(y + pad), (size - pad * 2.0f) * smScale,
-                              (size - pad * 2.0f) * smScale, 0, 0, 1, 1, shader);
-        return;
-    }
-    if (text && text[0] && strlen(text) <= 5) {
-        float ts = 13.0f;
-
-        while (ts > 7.0f && HE_TextW(text, ts, qtrue) > size - 4.0f) {
-            ts -= 1.0f;
-        }
-        HE_TextCenter(x, y, size, size, ts, selected ? heHi : heMd, text, qtrue);
-        return;
-    }
-    HE_IconCenter(x, y, size, size, 12.0f, selected ? heGold : heLo, HE_ItemIcon(it));
 }
 
 static void HE_RestoreCanvas(void) {
@@ -2340,6 +2315,10 @@ static void HE_PaintAdd(float px, float pw, float top, float bottom) {
 
     y = top - he.addScroll;
     he.addNumStops = 0;
+    if (y >= top) {
+        HE_Text(x0 + 4.0f, y, 26.0f, 15.0f, heMd, "Drag one onto your HUD.", qfalse);
+    }
+    y += 26.0f;
     for (i = 0; i < (int)ARRAY_LEN(hePal); i++) {
         float tx, prev = 70.0f;
 
@@ -2365,9 +2344,12 @@ static void HE_PaintAdd(float px, float pw, float top, float bottom) {
             HE_Round(tx, y, tw, th, 12.0f, over ? heRowHover : heCard);
             HE_Round(tx + 6.0f, y + 6.0f, tw - 12.0f, prev, 8.0f, heBg);
             HE_PalPreview(i, tx + 6.0f, y + 6.0f, tw - 12.0f, prev);
-            HE_TextCenter(tx, y + prev + 6.0f, tw, th - prev - 6.0f, 14.0f, over ? heHi : heMd, hePal[i].label,
+            HE_TextCenter(tx, y + prev + 6.0f, tw, th - prev - 6.0f, 15.0f, over ? heHi : heMd, hePal[i].label,
                           qfalse);
             SM_Hit(tx, y, tw, th, HE_HIT_ADD, i, NULL);
+            if (SM_Over(HE_HIT_ADD, i) && he.drag == HE_DRAG_NONE) {
+                HE_Tip(tx, y, tw, th, hePalDesc[i]);
+            }
         }
         if (++col == 2) {
             col = 0;
@@ -2448,28 +2430,112 @@ static void HE_DropNew(void) {
     }
 }
 
-static int HE_AliveCount(void) {
-    int i, n = 0;
+enum { HE_LINE_HEAD, HE_LINE_ROW, HE_LINE_HIDDEN };
 
+typedef struct {
+    int kind;
+    int value;
+} heLine_t;
+
+static heLine_t heLines[HE_MAX_ITEMS + HV_CAT_COUNT * 2 + 1];
+static int heNumLines;
+
+static void HE_AddLine(int kind, int value) {
+    heLines[heNumLines].kind = kind;
+    heLines[heNumLines].value = value;
+    heNumLines++;
+}
+
+static float HE_LineH(int kind) {
+    return kind == HE_LINE_ROW ? HE_ROW_H : kind == HE_LINE_HIDDEN ? 42.0f : HE_GROUP_H;
+}
+
+static void HE_BuildLines(void) {
+    static qboolean shown[HE_MAX_ITEMS];
+    int i, pass, cat, hidden = 0;
+
+    heNumLines = 0;
     for (i = 0; i < he.numItems; i++) {
-        n += !he.items[i].removed;
+        shown[i] = HV_ItemShown(he.items[i].item) ? qtrue : qfalse;
+        if (!he.items[i].removed && !shown[i]) {
+            hidden++;
+        }
     }
-    return n;
+    for (pass = 0; pass < 2; pass++) {
+        if (pass == 1) {
+            if (!hidden) {
+                return;
+            }
+            HE_AddLine(HE_LINE_HIDDEN, hidden);
+            if (!he.hiddenOpen) {
+                return;
+            }
+        }
+        for (cat = 0; cat < HV_CAT_COUNT; cat++) {
+            qboolean head = qfalse;
+
+            for (i = 0; i < he.numItems; i++) {
+                if (he.items[i].removed || shown[i] != (pass == 0 ? qtrue : qfalse) ||
+                    HV_ItemCategory(he.items[i].item) != cat) {
+                    continue;
+                }
+                if (!head) {
+                    HE_AddLine(HE_LINE_HEAD, cat);
+                    head = qtrue;
+                }
+                HE_AddLine(HE_LINE_ROW, i);
+            }
+        }
+    }
+}
+
+static void HE_PaintRow(int i, float rx, float rw, float y, const smRect_t* clip, float top, float bottom) {
+    heItem_t* e = &he.items[i];
+    qboolean selected = i == he.selected, shown = HV_ItemShown(e->item);
+    float base = HE_Base(16.0f, y, HE_ROW_H), right = rx + rw - 10.0f;
+    const char* when = HV_ItemInvisible(e->item) ? "Invisible" : HV_ItemWhenShort(e->item);
+    const char* name = HV_ItemLabel(e->item);
+    int fit;
+
+    if (SM_Over(HE_HIT_LAYER, i)) {
+        he.layerHover = i;
+    }
+    if (selected) {
+        HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, clip, heRowHover);
+    } else if (SM_Over(HE_HIT_LAYER, i)) {
+        HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, clip, heRow);
+    }
+    if (y >= top && y + HE_ROW_H <= bottom) {
+        if (e->locked) {
+            right -= HE_IconW(13.0f, HE_FA_LOCK);
+            HE_Icon(right, y, HE_ROW_H, 13.0f, heLo, HE_FA_LOCK);
+            right -= 8.0f;
+        }
+        if (when[0]) {
+            float limit = rw * 0.55f, tw;
+
+            fit = SM_Fit(HE_FONT, 13.0f, when, limit);
+            tw = SM_AdvanceBold(HE_FONT, 13.0f, when, fit, qfalse);
+            right -= tw;
+            SM_Text(right, HE_Base(13.0f, y, HE_ROW_H), HE_FONT, 13.0f, heLo, when, fit, qfalse);
+            right -= 10.0f;
+        }
+        fit = SM_Fit(HE_FONT, 16.0f, name, right - (rx + 10.0f));
+        SM_Text(rx + 10.0f, base, HE_FONT, 16.0f, selected ? heHi : shown ? heMd : heLo, name, fit, selected);
+    }
+    SM_Hit(rx, y, rw, HE_ROW_H, HE_HIT_LAYER, i, clip);
 }
 
 static void HE_PaintLayers(void) {
     float px = HE_G, py = HE_BAR, pw = HE_LEFT_W, ph = HE_PanelH();
     float top = HE_ListTop(), bottom = top + HE_ListH(), y;
     smRect_t clip = SM_R(px + 8.0f, top, pw - 16.0f, bottom - top);
-    menuDef_t* last = NULL;
-    static char layers[32];
-    const char* tabs[2];
-    int i;
+    const char* tabs[2] = {"Elements", "Add"};
+    int k;
 
-    Com_sprintf(layers, sizeof(layers), "Layers  %d", HE_AliveCount());
-    tabs[0] = layers;
-    tabs[1] = "Add";
+    he.layerHover = -1;
     HE_Round(px, py, pw, ph, HE_R_PANEL, hePanel);
+    SM_Fill(px + pw - 1.0f, py, 1.0f, ph, heEdge, NULL);
     SM_Hit(px, py, pw, ph, HE_HIT_PANEL, 0, NULL);
     HE_Segment(px + 12.0f, py + 10.0f, pw - 24.0f, 36.0f, tabs, 2, he.leftTab, HE_HIT_LTAB, qtrue, qtrue);
     if (he.leftTab == 1) {
@@ -2477,54 +2543,33 @@ static void HE_PaintLayers(void) {
         return;
     }
 
+    HE_BuildLines();
     y = top - he.scroll;
-    for (i = 0; i < he.numItems; i++) {
-        heItem_t* e = &he.items[i];
-        qboolean shown = HV_ItemShown(e->item) && (e->item->window.flags & WINDOW_VISIBLE);
-        qboolean selected = i == he.selected;
+    for (k = 0; k < heNumLines; k++) {
+        const heLine_t* l = &heLines[k];
+        float lh = HE_LineH(l->kind);
 
-        if (e->removed) {
-            continue;
-        }
-        if (e->menu != last) {
-            last = e->menu;
-            if (y + HE_GROUP_H > top && y < bottom &&
-                SM_TextInside(HE_Base(12.0f, y + 6.0f, HE_GROUP_H - 6.0f), 12.0f, &clip)) {
-                HE_Caps(px + 20.0f, y + 6.0f, HE_GROUP_H - 6.0f, 12.0f, heLo, HV_MenuLabel(e->menu));
-            }
-            y += HE_GROUP_H;
-        }
-        if (y + HE_ROW_H > top && y < bottom) {
-            float rx = px + 8.0f, rw = pw - 16.0f, base = HE_Base(14.0f, y, HE_ROW_H);
-            const float* fg = selected ? heHi : shown ? heMd : heGhost;
-            float rightX = rx + rw - 12.0f;
-            int fit;
+        if (y + lh > top && y < bottom) {
+            if (l->kind == HE_LINE_ROW) {
+                HE_PaintRow(l->value, px + 8.0f, pw - 16.0f, y, &clip, top, bottom);
+            } else if (y >= top && y + lh <= bottom) {
+                if (l->kind == HE_LINE_HEAD) {
+                    HE_Text(px + 18.0f, y + 8.0f, lh - 8.0f, 14.0f, heLo, HV_CategoryName(l->value), qtrue);
+                } else {
+                    const char* text = va("Not in this view (%d)", l->value);
 
-            if (selected) {
-                HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, &clip, heRowHover);
-            } else if (SM_Over(HE_HIT_LAYER, i)) {
-                HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, &clip, heRow);
+                    if (SM_Over(HE_HIT_HIDDEN, 0)) {
+                        HE_Round(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_R, heRow);
+                    } else {
+                        HE_Round(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_R, heCard);
+                    }
+                    HE_Text(px + 18.0f, y, lh, 15.0f, heMd, text, qfalse);
+                    HE_Icon(px + pw - 34.0f, y, lh, 11.0f, heMd, he.hiddenOpen ? HE_FA_MINUS : HE_FA_PLUS);
+                    SM_Hit(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_HIT_HIDDEN, 0, NULL);
+                }
             }
-            if (SM_TextInside(base, 14.0f, &clip)) {
-                if (e->locked) {
-                    rightX -= HE_IconW(12.0f, HE_FA_LOCK);
-                    HE_Icon(rightX, y, HE_ROW_H, 12.0f, heGhost, HE_FA_LOCK);
-                    rightX -= 8.0f;
-                }
-                if (!shown) {
-                    rightX -= HE_IconW(12.0f, HE_FA_EYE_OFF);
-                    HE_Icon(rightX, y, HE_ROW_H, 12.0f, heGhost, HE_FA_EYE_OFF);
-                    rightX -= 8.0f;
-                }
-                if (y >= top && y + HE_ROW_H <= bottom) {
-                    HE_Thumb(rx + 5.0f, y + 4.0f, HE_ROW_H - 8.0f, e->item, selected);
-                }
-                fit = SM_Fit(HE_FONT, 14.0f, HV_ItemLabel(e->item), rightX - (rx + 44.0f) - 4.0f);
-                SM_Text(rx + 44.0f, base, HE_FONT, 14.0f, fg, HV_ItemLabel(e->item), fit, selected);
-            }
-            SM_Hit(rx, y, rw, HE_ROW_H, HE_HIT_LAYER, i, &clip);
         }
-        y += HE_ROW_H;
+        y += lh;
     }
     he.scrollMax = y + he.scroll - top - (bottom - top) + 8.0f;
     if (he.scrollMax < 0) {
@@ -2536,21 +2581,18 @@ static void HE_PaintLayers(void) {
 }
 
 static void HE_ScrollTo(int i) {
-    float y = 0, view = HE_ListH();
-    menuDef_t* last = NULL;
+    float y = 0.0f, view = HE_ListH();
     int k;
 
-    for (k = 0; k <= i && k < he.numItems; k++) {
-        if (he.items[k].removed) {
-            continue;
+    if (!HV_ItemShown(he.items[i].item)) {
+        he.hiddenOpen = qtrue;
+    }
+    HE_BuildLines();
+    for (k = 0; k < heNumLines; k++) {
+        if (heLines[k].kind == HE_LINE_ROW && heLines[k].value == i) {
+            break;
         }
-        if (he.items[k].menu != last) {
-            last = he.items[k].menu;
-            y += HE_GROUP_H;
-        }
-        if (k < i) {
-            y += HE_ROW_H;
-        }
+        y += HE_LineH(heLines[k].kind);
     }
     if (y - HE_GROUP_H < he.scroll) {
         he.scroll = y - HE_GROUP_H;
@@ -2739,7 +2781,7 @@ static void HE_PaintEmpty(float x, float y, float w) {
     HE_IconCenter(x, y + 40.0f, w, 50.0f, 34.0f, heGhost, HE_FA_MOVE);
     HE_TextCenter(x, y + 104.0f, w, 26.0f, 17.0f, heHi, "Select an element", qtrue);
     HE_TextCenter(x, y + 134.0f, w, 22.0f, 14.0f, heMd, "Click it on the HUD or pick it", qfalse);
-    HE_TextCenter(x, y + 156.0f, w, 22.0f, 14.0f, heMd, "from the layers list.", qfalse);
+    HE_TextCenter(x, y + 156.0f, w, 22.0f, 14.0f, heMd, "from the list.", qfalse);
 }
 
 enum { HE_OG_WEAPON, HE_OG_HUD, HE_OG_CROSSHAIR, HE_OG_MESSAGES, HE_OG_COUNT };
@@ -3003,7 +3045,7 @@ static qboolean HE_PaintsBack(const itemDef_t* it) {
 }
 
 static void HE_PaintProps(void) {
-    static const char* anchors[5] = {"Menu", "Stretch", "Left", "Center", "Right"};
+    static const char* anchors[5] = {"Auto", "Stretch", "Left", "Center", "Right"};
     static const char* tabs[2] = {"Properties", "Options"};
     float px = smVW - HE_G - HE_RIGHT_W, py = HE_BAR, ph = HE_PanelH();
     float x = px + 20.0f, w = HE_RIGHT_W - 40.0f, y = py + HE_HEAD_H, half = (w - 8.0f) * 0.5f;
@@ -3013,6 +3055,7 @@ static void HE_PaintProps(void) {
     int anchor;
 
     HE_Round(px, py, HE_RIGHT_W, ph, HE_R_PANEL, hePanel);
+    SM_Fill(px, py, 1.0f, ph, heEdge, NULL);
     SM_Hit(px, py, HE_RIGHT_W, ph, HE_HIT_PANEL, 0, NULL);
     HE_Segment(px + 12.0f, py + 10.0f, HE_RIGHT_W - 24.0f, 36.0f, tabs, 2, he.rightTab, HE_HIT_RTAB, qtrue, qtrue);
     if (he.rightTab == 1) {
@@ -3028,20 +3071,19 @@ static void HE_PaintProps(void) {
     it = e->item;
     editable = !e->locked;
     {
-        float tx = x + 56.0f, tw = w - 56.0f;
-        int fit;
+        const char* when = HV_ItemInvisible(it) ? "Invisible" : HV_ItemWhen(it);
+        const char* sub = when[0] ? when : "Always visible";
+        float tx = x, tw = w;
+        int fit, fit2;
 
         if (HE_Removable(he.selected)) {
             tw -= 44.0f;
             HE_IconButton(x + w - 36.0f, y + 1.0f, 36.0f, HE_FA_TRASH, HE_HIT_DELETE, 0, qfalse, qfalse, "Delete");
         }
         fit = SM_Fit(HE_FONT, 18.0f, HV_ItemLabel(it), tw);
-        int fit2 = SM_Fit(HE_FONT, 13.0f, va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), tw);
-
-        HE_Thumb(x, y - 4.0f, 46.0f, it, qtrue);
+        fit2 = SM_Fit(HE_FONT, 14.0f, sub, tw);
         SM_Text(tx, HE_Base(18.0f, y - 6.0f, 30.0f), HE_FONT, 18.0f, heHi, HV_ItemLabel(it), fit, qtrue);
-        SM_Text(tx, HE_Base(13.0f, y + 20.0f, 22.0f), HE_FONT, 13.0f, heLo,
-                va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), fit2, qfalse);
+        SM_Text(tx, HE_Base(14.0f, y + 20.0f, 22.0f), HE_FONT, 14.0f, heLo, sub, fit2, qfalse);
     }
     y += 58.0f;
     if (!editable) {
@@ -3062,7 +3104,7 @@ static void HE_PaintProps(void) {
     y += 58.0f;
 
     if (!(it->type == ITEM_TYPE_OWNERDRAW && it->window.ownerDraw == CG_AREA_NEW_CHAT)) {
-        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Screen anchor");
+        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Stick to screen side");
         y += 26.0f;
         anchor = it->widescreenFlag ? it->widescreen + 1 : 0;
         HE_Segment(x, y, w, 40.0f, anchors, 5, anchor, HE_HIT_ANCHOR, editable, qtrue);
@@ -3214,6 +3256,36 @@ static void HE_PaintHudMenu(void) {
     }
 }
 
+static void HE_PaintMapMenu(void) {
+    float w = 280.0f, row = 52.0f, pad = 8.0f, x = he.mapMenuX, y = HE_BAR + 2.0f, h, ry;
+    int i;
+
+    if (!he.mapMenu) {
+        return;
+    }
+    h = pad * 2.0f + row * (float)ARRAY_LEN(heMaps);
+    SM_Hit(0, 0, smVW, smBottom, HE_HIT_POPUP, 1, NULL);
+    HE_Floating(x, y, w, h, HE_R, heCard);
+    SM_Hit(x, y, w, h, HE_HIT_POPUP, 0, NULL);
+    ry = y + pad;
+    for (i = 0; i < (int)ARRAY_LEN(heMaps); i++) {
+        qboolean current = i == he.map;
+
+        if (SM_Over(HE_HIT_MAPITEM, i)) {
+            HE_Round(x + 6.0f, ry, w - 12.0f, row, HE_R, heRowHover);
+        }
+        trap_R_SetColor(NULL);
+        trap_R_DrawStretchPic(HE_PxX(x + 12.0f), HE_PxY(ry + 5.0f), 75.0f * smScale, 42.0f * smScale, 0, 0, 1, 1,
+                              trap_R_RegisterShaderNoMip(va("gfx/hudeditor/%s", heMaps[i])));
+        HE_Text(x + 98.0f, ry, row, 15.0f, current ? heHi : heMd, heMapNames[i], current);
+        if (current) {
+            HE_Icon(x + w - 30.0f, ry, row, 12.0f, heGold, HE_FA_CHECK);
+        }
+        SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_MAPITEM, i, NULL);
+        ry += row;
+    }
+}
+
 static void HE_PaintSaveAs(void) {
     float w = 500.0f, h = 230.0f, x = (smVW - w) * 0.5f, y = (smBottom - h) * 0.5f, bx, by, fx, fy, fw, fh, tw;
 
@@ -3225,7 +3297,10 @@ static void HE_PaintSaveAs(void) {
     HE_Floating(x, y, w, h, HE_R_PANEL, hePanel);
     SM_Hit(x, y, w, h, HE_HIT_POPUP, 0, NULL);
     HE_Text(x + 28.0f, y + 24.0f, 30.0f, 20.0f, heHi, "Save as", qtrue);
-    HE_Text(x + 28.0f, y + 62.0f, 22.0f, 15.0f, heMd, "Name your HUD. It goes to your HUD folder.", qfalse);
+    HE_Text(x + 28.0f, y + 62.0f, 22.0f, 15.0f, heMd,
+            HE_IsMine() ? "Name your copy. It goes to your ui folder."
+                        : "Quake Live HUDs stay as they are. Name your own copy.",
+            qfalse);
     fx = x + 28.0f;
     fy = y + 98.0f;
     fw = w - 56.0f;
@@ -3285,7 +3360,7 @@ static void HE_PaintGrid(void) {
 }
 
 static void HE_CanvasLabel(const float* r, const char* text, qboolean selected) {
-    float size = 12.0f, h = 22.0f, w = HE_TextW(text, size, qtrue) + 16.0f;
+    float size = 14.0f, h = 24.0f, w = HE_TextW(text, size, qtrue) + 16.0f;
     float x = r[0] / smScale, y = (r[1] - smTop) / smScale - h - 6.0f;
 
     if (y < he.cv[1] + 4.0f) {
@@ -3321,6 +3396,10 @@ static void HE_PaintCanvas(void) {
     if (he.selected >= 0 && !HV_ItemShown(he.items[he.selected].item)) {
         HV_PaintItem(he.items[he.selected].item);
     }
+    if (he.layerHover >= 0 && he.layerHover < he.numItems && he.layerHover != he.selected &&
+        !he.items[he.layerHover].removed && !HV_ItemShown(he.items[he.layerHover].item)) {
+        HV_PaintItem(he.items[he.layerHover].item);
+    }
     if (hvScene.showAll) {
         for (i = 0; i < he.numItems; i++) {
             if (!he.items[i].removed && !HV_ItemShown(he.items[i].item) &&
@@ -3333,12 +3412,14 @@ static void HE_PaintCanvas(void) {
     if (he.grid) {
         HE_PaintGrid();
     }
-    HE_Corners(x, y, w, h, 16.0f * smScale, heBg);
 
     HE_MousePx(&mx, &my);
-    if (!he.confirm && !he.hudMenu && he.colorKey < 0 && he.drag == HE_DRAG_NONE && HE_InCanvas(mx, my) &&
-        !smHasUnder) {
+    if (!he.confirm && !he.hudMenu && !he.mapMenu && he.colorKey < 0 && he.drag == HE_DRAG_NONE &&
+        HE_InCanvas(mx, my) && !smHasUnder) {
         hover = HE_PickAt(mx, my);
+    }
+    if (he.layerHover >= 0 && he.layerHover < he.numItems && !he.items[he.layerHover].removed) {
+        hover = he.layerHover;
     }
     if (hover >= 0 && hover != he.selected) {
         float r[4];
@@ -3399,14 +3480,15 @@ static void HE_PaintStatus(void) {
         {"Drag", "Move"}, {"Corners", "Resize"}, {"Arrows", "Nudge"}, {"Shift", "x10"}, {"Ctrl", "Resize"},
         {"Alt", "No snapping"}, {"G", "Grid"},
     };
-    float x0 = HE_ColX0(), x1 = HE_ColX1(), y = smBottom - HE_G - HE_STATUS_H, x = x0 + 18.0f, limit = x1 - 18.0f;
+    float x0 = HE_LEFT_W, x1 = smVW - HE_RIGHT_W, y = smBottom - HE_STATUS_H, x = x0 + 18.0f, limit = x1 - 18.0f;
     const char* msg = NULL;
     const float* msgColor = heHi;
     int icon = HE_FA_CHECK;
     const float* iconColor = heGold;
     int i;
 
-    HE_Round(x0, y, x1 - x0, HE_STATUS_H, 16.0f, hePanel);
+    SM_Fill(x0, y, x1 - x0, HE_STATUS_H, hePanel, NULL);
+    SM_Fill(x0, y, x1 - x0, 1.0f, heEdge, NULL);
     if (he.status[0] && uiInfo.uiDC.realTime - he.statusTime < 4000) {
         msg = he.status;
     } else if (he.numFiles <= 0) {
@@ -3446,7 +3528,6 @@ void UI_HudEditor_Open(void) {
     he.guideX = he.guideY = -1.0f;
     he.open = qtrue;
     he.round = trap_R_RegisterShaderNoMip("gfx/hudeditor/round");
-    he.hole = trap_R_RegisterShaderNoMip("gfx/hudeditor/hole");
     HE_ScanHuds();
     i = HE_FindHud(list);
     if (i >= 0) {
@@ -3527,6 +3608,7 @@ void UI_HudEditor_Paint(void) {
     HE_PaintStatus();
     HE_PaintPopup();
     HE_PaintHudMenu();
+    HE_PaintMapMenu();
     HE_PaintDragNew();
     HE_PaintTip();
     HE_PaintConfirm();
@@ -3607,6 +3689,15 @@ static qboolean HE_Click(void) {
         }
         return qtrue;
     }
+    if (he.mapMenu) {
+        if (hit && hit->type == HE_HIT_MAPITEM) {
+            he.map = hit->index;
+            he.mapMenu = qfalse;
+        } else if (!(hit && hit->type == HE_HIT_POPUP && hit->index == 0)) {
+            he.mapMenu = qfalse;
+        }
+        return qtrue;
+    }
     if (he.colorKey >= 0) {
         if (hit && hit->type == HE_HIT_PALETTE) {
             float* c = HE_Field(he.items[he.selected].item, he.colorKey);
@@ -3645,7 +3736,11 @@ static qboolean HE_Click(void) {
                 hvScene.team = hvScene.team == TEAM_BLUE ? TEAM_RED : TEAM_BLUE;
                 return qtrue;
             case HE_HIT_MAP:
-                he.map = (he.map + 1) % (int)ARRAY_LEN(heMaps);
+                he.colorKey = -1;
+                he.mapMenu = qtrue;
+                return qtrue;
+            case HE_HIT_HIDDEN:
+                he.hiddenOpen = !he.hiddenOpen;
                 return qtrue;
             case HE_HIT_HUD:
                 HE_ScanHuds();
@@ -3830,6 +3925,8 @@ qboolean UI_HudEditor_HandleKey(int key) {
                 he.pending[0] = 0;
             } else if (he.hudMenu) {
                 he.hudMenu = qfalse;
+            } else if (he.mapMenu) {
+                he.mapMenu = qfalse;
             } else if (he.colorKey >= 0) {
                 he.colorKey = -1;
             } else if (he.selected >= 0) {

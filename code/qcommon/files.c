@@ -373,6 +373,9 @@ int FS_FileTime(const char* qpath) {
 	searchpath_t* search;
 	struct stat st;
 
+	if (strstr(qpath, "..") || strstr(qpath, "::")) {
+		return 0;
+	}
 	for (search = fs_searchpaths; search; search = search->next) {
 		if (search->dir && !stat(FS_BuildOSPath(search->dir->path, search->dir->gamedir, qpath), &st)) {
 			return (int)st.st_mtime;

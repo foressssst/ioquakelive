@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 void Item_Paint(itemDef_t* item);
 
+qboolean Item_EnableShowViaCvar(itemDef_t* item, int flag);
+
 hvScene_t hvScene = {GT_CA, TEAM_RED, qfalse, qtrue};
 
 static menuDef_t hvMenu[HV_MAX_MENUS];
@@ -124,24 +126,6 @@ static void HV_TrackBegin(int ownerDraw, float y, float w, float h) {
             }
         }
     }
-}
-
-qhandle_t HV_ItemThumb(const itemDef_t* item, const char** text) {
-    int k;
-
-    *text = NULL;
-    if (item->window.background && !item->window.ownerDraw) {
-        return item->window.background;
-    }
-    for (k = 0; k < hvNumBounds; k++) {
-        if (hvBounds[k].item == item) {
-            if (hvBounds[k].text[0]) {
-                *text = hvBounds[k].text;
-            }
-            return hvBounds[k].shader ? hvBounds[k].shader : item->window.background;
-        }
-    }
-    return item->window.background;
 }
 
 static qboolean HV_PaintedRect(const itemDef_t* item, float* out) {
@@ -1175,6 +1159,14 @@ static void HV_StartBackgroundTrack(const char* intro, const char* loop) {
 static void HV_StopBackgroundTrack(void) {
 }
 
+static void HV_GetCVarString(const char* cvar, char* buffer, int bufsize) {
+    if (!Q_stricmp(cvar, "cg_gametype") || !Q_stricmp(cvar, "g_gametype")) {
+        Com_sprintf(buffer, bufsize, "%i", hvScene.gametype);
+        return;
+    }
+    trap_Cvar_VariableStringBuffer(cvar, buffer, bufsize);
+}
+
 static void HV_Begin(void) {
     hvSaved = Display_GetContext();
     hvDC = *hvSaved;
@@ -1189,6 +1181,7 @@ static void HV_Begin(void) {
     hvDC.drawTopBottom = HV_DrawTopBottom;
     hvDC.ownerDrawItem = HV_OwnerDraw;
     hvDC.getValue = HV_GetValue;
+    hvDC.getCVarString = HV_GetCVarString;
     hvDC.ownerDrawVisible = HV_OwnerDrawVisible;
     hvDC.runScript = HV_RunScript;
     hvDC.getTeamColor = HV_GetTeamColor;
@@ -1781,19 +1774,28 @@ void HV_Paint(void) {
 }
 
 void HV_PaintItem(itemDef_t* item) {
-    int flags;
+    int flags, odFlags, odFlags2, cvarFlags;
 
     if (!hvLoaded || !item) {
         return;
     }
     HV_Begin();
     flags = item->window.flags;
+    odFlags = item->window.ownerDrawFlags;
+    odFlags2 = item->window.ownerDrawFlags2;
+    cvarFlags = item->cvarFlags;
     item->window.flags |= WINDOW_VISIBLE;
+    item->window.ownerDrawFlags = 0;
+    item->window.ownerDrawFlags2 = 0;
+    item->cvarFlags &= ~(CVAR_SHOW | CVAR_HIDE);
     if (item->parent) {
         hvAnchor = ((menuDef_t*)item->parent)->widescreen;
     }
     Item_Paint(item);
     item->window.flags = flags;
+    item->window.ownerDrawFlags = odFlags;
+    item->window.ownerDrawFlags2 = odFlags2;
+    item->cvarFlags = cvarFlags;
     HV_End();
 }
 
@@ -1874,6 +1876,21 @@ void HV_ItemHitRect(itemDef_t* item, float* out) {
     out[3] = y1 - out[1];
 }
 
+static qboolean HV_CvarShown(itemDef_t* item) {
+    qboolean shown;
+
+    if (!(item->cvarFlags & (CVAR_SHOW | CVAR_HIDE))) {
+        return qtrue;
+    }
+    if (Display_GetContext() == &hvDC) {
+        return Item_EnableShowViaCvar(item, CVAR_SHOW);
+    }
+    HV_Begin();
+    shown = Item_EnableShowViaCvar(item, CVAR_SHOW);
+    HV_End();
+    return shown;
+}
+
 qboolean HV_ItemShown(const itemDef_t* item) {
     const menuDef_t* menu = (const menuDef_t*)item->parent;
 
@@ -1891,7 +1908,7 @@ qboolean HV_ItemShown(const itemDef_t* item) {
         !HV_OwnerDrawVisible(item->window.ownerDrawFlags, item->window.ownerDrawFlags2)) {
         return qfalse;
     }
-    return qtrue;
+    return HV_CvarShown((itemDef_t*)item);
 }
 
 typedef struct {
@@ -1909,9 +1926,9 @@ static const hvName_t hvNames[] = {
     {CG_PLAYER_AMMO_ICON2D, "Ammo icon"},
     {CG_PLAYER_ITEM, "Holdable item"},
     {CG_PLAYER_HEAD, "Player head"},
-    {CG_PLAYER_SCORE, "Score"},
-    {CG_1STPLACE, "First place"},
-    {CG_2NDPLACE, "Second place"},
+    {CG_PLAYER_SCORE, "Your score"},
+    {CG_1STPLACE, "First place score"},
+    {CG_2NDPLACE, "Second place score"},
     {CG_1ST_PLACE_SCORE, "First place score"},
     {CG_2ND_PLACE_SCORE, "Second place score"},
     {CG_RED_SCORE, "Red score"},
@@ -1988,51 +2005,6 @@ const char* HV_OwnerDrawName(int ownerDraw) {
     return NULL;
 }
 
-static qboolean HV_Lower(char c) {
-    return c >= 'a' && c <= 'z';
-}
-
-static qboolean HV_Upper(char c) {
-    return c >= 'A' && c <= 'Z';
-}
-
-static qboolean HV_Digit(char c) {
-    return c >= '0' && c <= '9';
-}
-
-static const char* HV_Humanize(const char* s) {
-    static char out[2][80];
-    static int which;
-    char* o = out[which ^= 1];
-    int n = 0;
-
-    for (; *s && n < (int)sizeof(out[0]) - 3; s++) {
-        char c = *s;
-
-        if (c == '_' || c == '-') {
-            c = ' ';
-        }
-        if (n > 0 && c != ' ' && o[n - 1] != ' ') {
-            char p = s[-1];
-            qboolean ordinal = HV_Digit(p) && (!Q_stricmpn(s, "st", 2) || !Q_stricmpn(s, "nd", 2) ||
-                                               !Q_stricmpn(s, "rd", 2) || !Q_stricmpn(s, "th", 2));
-
-            if ((HV_Lower(p) && HV_Upper(c)) || (HV_Upper(p) && HV_Upper(c) && HV_Lower(s[1])) ||
-                (!HV_Digit(p) && HV_Digit(c)) || (HV_Digit(p) && !HV_Digit(c) && !ordinal)) {
-                o[n++] = ' ';
-            }
-        }
-        if (n == 0 && HV_Lower(c)) {
-            c = (char)(c - 'a' + 'A');
-        } else if (n > 0 && HV_Upper(c) && HV_Lower(s[1])) {
-            c = (char)(c - 'A' + 'a');
-        }
-        o[n++] = c;
-    }
-    o[n] = 0;
-    return o;
-}
-
 const char* HV_ItemKind(const itemDef_t* item) {
     const char* od;
 
@@ -2043,27 +2015,216 @@ const char* HV_ItemKind(const itemDef_t* item) {
         return "Text";
     }
     if (item->window.background) {
-        return "Image";
+        return "Picture";
     }
     if (item->window.ownerDraw) {
         return "Game element";
     }
+    if (item->window.border && item->window.style != WINDOW_STYLE_FILLED &&
+        item->window.style != WINDOW_STYLE_GRADIENT) {
+        return "Frame";
+    }
     return "Box";
 }
 
-const char* HV_MenuLabel(const menuDef_t* menu) {
-    if (menu->window.name && menu->window.name[0]) {
-        return HV_Humanize(menu->window.name);
+int HV_ItemCategory(const itemDef_t* item) {
+    switch (item->window.ownerDraw) {
+        case 0:
+            return HV_CAT_SHAPES;
+        case CG_PLAYER_HEALTH:
+        case CG_PLAYER_ARMOR_VALUE:
+        case CG_PLAYER_AMMO_VALUE:
+        case CG_PLAYER_ARMOR_ICON:
+        case CG_PLAYER_ARMOR_ICON2D:
+        case CG_PLAYER_AMMO_ICON:
+        case CG_PLAYER_AMMO_ICON2D:
+        case CG_PLAYER_ITEM:
+        case CG_PLAYER_HEAD:
+        case CG_ARMORTIERED_COLORIZED:
+        case CG_HEALTH_COLORIZED:
+        case CG_PLAYER_HEALTH_BAR_100:
+        case CG_PLAYER_HEALTH_BAR_200:
+        case CG_PLAYER_ARMOR_BAR_100:
+        case CG_PLAYER_ARMOR_BAR_200:
+        case CG_AREA_POWERUP:
+        case CG_CTF_POWERUP:
+        case CG_PLAYER_HASFLAG:
+        case CG_PLAYER_HASFLAG2D:
+        case CG_PLAYER_HASKEY:
+            return HV_CAT_PLAYER;
+        case CG_RED_SCORE:
+        case CG_BLUE_SCORE:
+        case CG_RED_NAME:
+        case CG_BLUE_NAME:
+        case CG_RED_PLAYER_COUNT:
+        case CG_BLUE_PLAYER_COUNT:
+        case CG_RED_AVG_PING:
+        case CG_BLUE_AVG_PING:
+        case CG_RED_CLAN_PLYRS:
+        case CG_BLUE_CLAN_PLYRS:
+        case CG_TEAM_PLYR_COUNT:
+        case CG_ENEMY_PLYR_COUNT:
+        case CG_RED_TIMEOUT_COUNT:
+        case CG_BLUE_TIMEOUT_COUNT:
+        case CG_TEAM_COLORIZED:
+        case CG_TEAM_COLOR:
+        case CG_SELECTED_PLYR_TEAM_COLOR:
+        case CG_RED_FLAGSTATUS:
+        case CG_BLUE_FLAGSTATUS:
+        case CG_RED_BASESTATUS:
+        case CG_BLUE_BASESTATUS:
+        case CG_ONEFLAG_STATUS:
+        case CG_RED_OWNED_FLAGS:
+        case CG_BLUE_OWNED_FLAGS:
+        case CG_HARVESTER_SKULLS:
+            return HV_CAT_TEAM;
+        case CG_PLAYER_OBIT:
+        case CG_AREA_NEW_CHAT:
+        case CG_SPECTATORS:
+        case CG_KILLER:
+        case CG_FOLLOW_PLAYER_NAME:
+        case CG_FOLLOW_PLAYER_NAME_EX:
+        case CG_ACCURACY:
+        case CG_IMPRESSIVE:
+        case CG_EXCELLENT:
+        case CG_GAUNTLET:
+        case CG_SPEC_MESSAGES:
+        case UI_ADVERT:
+            return HV_CAT_MESSAGES;
+        default:
+            return HV_CAT_MATCH;
     }
-    return "Group";
+}
+
+const char* HV_CategoryName(int category) {
+    static const char* names[HV_CAT_COUNT] = {"Player", "Match", "Team", "Messages", "Shapes and text"};
+
+    return names[category];
+}
+
+qboolean HV_ItemInvisible(const itemDef_t* item) {
+    qboolean back = item->window.style == WINDOW_STYLE_FILLED || item->window.style == WINDOW_STYLE_GRADIENT;
+
+    if (item->window.ownerDraw || (item->text && item->text[0]) || item->window.background) {
+        return qfalse;
+    }
+    if (back && item->window.backColor[3] > 0.001f) {
+        return qfalse;
+    }
+    if (item->window.border && item->window.borderSize > 0.0f && item->window.borderColor[3] > 0.001f) {
+        return qfalse;
+    }
+    return qtrue;
+}
+
+static const struct {
+    int flag;
+    const char* text;
+} hvWhen[] = {
+    {CG_SHOW_CTF, "CTF"},
+    {CG_SHOW_DUEL, "Duel"},
+    {CG_SHOW_CLAN_ARENA, "CA"},
+    {CG_SHOW_ONEFLAG, "1-Flag"},
+    {CG_SHOW_HARVESTER, "Harvester"},
+    {CG_SHOW_DOMINATION, "Domination"},
+    {CG_SHOW_ANYNONTEAMGAME, "FFA and Duel"},
+    {CG_SHOW_ANYTEAMGAME, "Team games"},
+    {CG_SHOW_PLAYERS_REMAINING, "Round games"},
+    {CG_SHOW_YOURTEAMHASENEMYFLAG, "You have their flag"},
+    {CG_SHOW_OTHERTEAMHASFLAG, "They have your flag"},
+    {CG_SHOW_IF_PLAYER_HAS_FLAG, "Carrying the flag"},
+    {CG_SHOW_IF_PLYR_IS_FIRST_PLACE, "When you lead"},
+    {CG_SHOW_IF_PLYR_IS_NOT_FIRST_PLACE, "When you trail"},
+    {CG_SHOW_IF_RED_IS_FIRST_PLACE, "Red leads"},
+    {CG_SHOW_IF_BLUE_IS_FIRST_PLACE, "Blue leads"},
+    {CG_SHOW_IF_CHAT_VISIBLE, "Chat open"},
+    {CG_SHOW_HEALTHCRITICAL, "Low health"},
+    {CG_SHOW_IF_WARMUP, "Warmup"},
+    {CG_SHOW_IF_PLYR_IS_ON_RED, "On red"},
+    {CG_SHOW_IF_PLYR_IS_ON_BLUE, "On blue"},
+    {CG_SHOW_IF_MSG_PRESENT, "With a message"},
+    {CG_SHOW_IF_NOTICE_PRESENT, "With a message"},
+};
+
+static void HV_WhenAdd(char* out, int size, const char* text) {
+    if (out[0]) {
+        Q_strcat(out, size, ", ");
+    }
+    Q_strcat(out, size, text);
+}
+
+const char* HV_ItemWhen(const itemDef_t* item) {
+    static const char* modes[] = {"FFA", "Duel", "Race", "TDM", "CA", "CTF", "1-Flag", "Overload",
+                                  "Harvester", "FT", "Domination", "A&D", "RR"};
+    static char out[96];
+    const menuDef_t* menu = (const menuDef_t*)item->parent;
+    int flags = item->window.ownerDrawFlags | (menu ? menu->window.ownerDrawFlags : 0);
+    int i, shown = 0;
+
+    out[0] = 0;
+    for (i = 0; i < (int)ARRAY_LEN(hvWhen) && shown < 3; i++) {
+        if (flags & hvWhen[i].flag) {
+            HV_WhenAdd(out, sizeof(out), hvWhen[i].text);
+            shown++;
+        }
+    }
+    if ((item->cvarFlags & (CVAR_SHOW | CVAR_HIDE)) && item->cvarTest && item->enableCvar &&
+        !Q_stricmp(item->cvarTest, "cg_gametype")) {
+        char script[256], names[64];
+        char* p = script;
+        const char* val;
+
+        Q_strncpyz(script, item->enableCvar, sizeof(script));
+        names[0] = 0;
+        while (String_Parse(&p, &val)) {
+            int n = atoi(val);
+
+            if (val[0] >= '0' && val[0] <= '9' && n < (int)ARRAY_LEN(modes)) {
+                HV_WhenAdd(names, sizeof(names), modes[n]);
+            }
+        }
+        if (names[0]) {
+            HV_WhenAdd(out, sizeof(out), item->cvarFlags & CVAR_SHOW ? names : va("Not in %s", names));
+        }
+    }
+    return out;
+}
+
+const char* HV_ItemWhenShort(const itemDef_t* item) {
+    static char out[64];
+    const menuDef_t* menu = (const menuDef_t*)item->parent;
+    int flags = item->window.ownerDrawFlags | (menu ? menu->window.ownerDrawFlags : 0);
+    const char* comma;
+    int i;
+
+    for (i = (int)ARRAY_LEN(hvWhen) - 1; i >= 0; i--) {
+        if (flags & hvWhen[i].flag) {
+            return hvWhen[i].text;
+        }
+    }
+    Q_strncpyz(out, HV_ItemWhen(item), sizeof(out));
+    comma = strchr(out, ',');
+    if (comma && Q_stricmpn(out, "Not in", 6)) {
+        out[comma - out] = 0;
+    }
+    return out;
 }
 
 const char* HV_ItemLabel(const itemDef_t* item) {
-    if (item->window.name && strlen(item->window.name) > 2) {
-        return HV_Humanize(item->window.name);
+    static char out[2][64];
+    static int which;
+    char* o = out[which ^= 1];
+
+    if (item->text && item->text[0] && !item->window.ownerDraw) {
+        Q_strncpyz(o, item->text, sizeof(out[0]));
+        Q_CleanStr(o);
+        if (o[0]) {
+            return o;
+        }
     }
-    if (item->text && item->text[0]) {
-        return item->text;
+    Q_strncpyz(o, HV_ItemKind(item), sizeof(out[0]));
+    if (item->window.name && Q_stristr(item->window.name, "shadow")) {
+        Q_strcat(o, sizeof(out[0]), " shadow");
     }
-    return HV_ItemKind(item);
+    return o;
 }
