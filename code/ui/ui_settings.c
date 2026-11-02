@@ -22,6 +22,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "ui_web.h"
 
 #define ST_MAX_INPUT 200
+#define ST_INPUT_LINES 24
+#define ST_DOUBLE_CLICK 500
 
 #define ST_TEAM_GAP 12.0f
 #define ST_TEAM_MODEL_W 360.0f
@@ -99,6 +101,9 @@ static struct {
     float selectScroll;
     int drag;
     int edit, editCursor, editStart, editTime;
+    int editAnchor, editClicks, editClickTime, editClickPos;
+    qboolean editDrag;
+    float editX, editY;
     int binding;
     int rgb;
     int rgbDrag;
@@ -145,6 +150,7 @@ static const vec4_t strPlaceholder = SM_RGB(170, 170, 170);
 static const vec4_t strOption = SM_RGB(187, 187, 187);
 static const vec4_t strOptionFocus = SM_RGB(34, 34, 34);
 static const vec4_t strInput = SM_RGB(15, 15, 15);
+static const vec4_t strInputMark = SM_RGB(40, 90, 190);
 static const vec4_t strBorder = SM_RGB(51, 51, 51);
 static const vec4_t strRange = SM_RGB(34, 34, 34);
 static const vec4_t strHover = SM_RGB(68, 68, 68);
@@ -403,6 +409,52 @@ static float ST_InputHeight(void) {
     return 2 * SM_Len(8.0f) + 2 * SM_LenBorder(1.0f) + SM_NormalLine(FONT_SANS, 15);
 }
 
+static float ST_ControlW(int i);
+
+static qboolean ST_InputWraps(int i) {
+    return stCvars[i].widget == ST_INPUT && stCvars[i].tab == ST_TAB_WEAPONS;
+}
+
+static float ST_InputTextW(int i) {
+    return ST_ControlW(i) - 2 * SM_LenBorder(1.0f) - SM_Len(8.0f) - 2.0f / smScale;
+}
+
+static int ST_InputLines(int i, int* starts, int* lens) {
+    const char* value = st.values[i];
+    int len = (int)strlen(value);
+    float width = ST_InputTextW(i);
+    int s = 0, count = 0;
+
+    if (ST_InputWraps(i)) {
+        while (count < ST_INPUT_LINES - 1) {
+            int n = s, brk = -1;
+
+            while (n < len && SM_AdvanceRaw(FONT_SANS, 15, value + s, n + 1 - s, qfalse) <= width) {
+                if (value[n] == ';' || value[n] == ' ') {
+                    brk = n + 1;
+                }
+                n++;
+            }
+            if (n >= len) {
+                break;
+            }
+            if (brk > s) {
+                n = brk;
+            }
+            if (n == s) {
+                n = s + 1;
+            }
+            starts[count] = s;
+            lens[count] = n - s;
+            count++;
+            s = n;
+        }
+    }
+    starts[count] = s;
+    lens[count] = len - s;
+    return count + 1;
+}
+
 static float ST_SelectHeight(void) {
     return 2 * SM_Len(6.0f) + STR_TEXT_LINE;
 }
@@ -501,6 +553,11 @@ static float ST_RowHeight(int i) {
 
         ST_BindKeys(i, keys, sizeof(keys));
         h += (ST_WordSpaced(0, 0, keys, ST_BindWidth(i), NULL, qfalse) - 1) * STR_TEXT_LINE;
+    }
+    if (ST_InputWraps(i)) {
+        int starts[ST_INPUT_LINES], lens[ST_INPUT_LINES];
+
+        h += (ST_InputLines(i, starts, lens) - 1) * SM_NormalLine(FONT_SANS, 15);
     }
     return h > minH ? h : minH;
 }
@@ -739,12 +796,17 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
     float border = SM_LenBorder(1.0f), pad = SM_Len(8.0f);
     float inner = 1.0f / smScale;
     float tx = x + border + pad + inner, ty = y + border + pad;
-    float width = w - 2 * border - pad - 2 * inner;
-    float base = ty + SM_Ascent(FONT_SANS, 15);
+    float width = ST_InputTextW(i);
+    float lineH = SM_NormalLine(FONT_SANS, 15);
     int len = (int)strlen(value);
     int start = 0;
+    int starts[ST_INPUT_LINES], lens[ST_INPUT_LINES];
+    int lines = ST_InputLines(i, starts, lens);
+    int markA = 0, markB = 0;
+    int l;
     qboolean editing = st.edit == i;
 
+    h += (lines - 1) * lineH;
     SM_Fill(x, y, w, h, strInput, clip);
     SM_Border(x, y, w, h, 1, strBorder, clip);
     if (editing) {
@@ -758,14 +820,41 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
                SM_Advance(FONT_SANS, 15, value + st.editStart, st.editCursor - st.editStart) > width) {
             st.editStart++;
         }
-        start = st.editStart;
+        if (st.editAnchor > len) {
+            st.editAnchor = len;
+        }
+        markA = MIN(st.editAnchor, st.editCursor);
+        markB = MAX(st.editAnchor, st.editCursor);
+        st.editX = tx;
+        st.editY = ty;
+        if (!ST_InputWraps(i)) {
+            start = st.editStart;
+            starts[0] = start;
+            lens[0] = SM_Fit(FONT_SANS, 15, value + start, width);
+        }
     }
-    if (SM_TextInside(base, 15, clip)) {
-        SM_TextRaw(tx, base, FONT_SANS, 15, smText, value + start, SM_Fit(FONT_SANS, 15, value + start, width),
-                   qfalse);
-        if (editing && ((uiInfo.uiDC.realTime - st.editTime) / 500) % 2 == 0) {
-            SM_Fill(tx + SM_AdvanceRaw(FONT_SANS, 15, value + start, st.editCursor - start, qfalse), ty,
-                    1.0f / smScale, SM_NormalLine(FONT_SANS, 15), smText, clip);
+    for (l = 0; l < lines; l++) {
+        float ly = ty + l * lineH;
+        float base = ly + SM_Ascent(FONT_SANS, 15);
+        int from = starts[l], count = lens[l];
+        int last = l == lines - 1;
+        const char* run = value + from;
+
+        if (!SM_TextInside(base, 15, clip)) {
+            continue;
+        }
+        if (editing && markB > markA && markA < from + count && markB > from) {
+            int a = MAX(markA, from), b = MIN(markB, from + count);
+            float ax = SM_AdvanceRaw(FONT_SANS, 15, run, a - from, qfalse);
+            float bx = SM_AdvanceRaw(FONT_SANS, 15, run, b - from, qfalse);
+
+            SM_Fill(tx + ax, ly, bx - ax, lineH, strInputMark, clip);
+        }
+        SM_TextRaw(tx, base, FONT_SANS, 15, smText, run, count, qfalse);
+        if (editing && markA == markB && ((uiInfo.uiDC.realTime - st.editTime) / 500) % 2 == 0 &&
+            st.editCursor >= from && (st.editCursor < from + count || last)) {
+            SM_Fill(tx + SM_AdvanceRaw(FONT_SANS, 15, run, st.editCursor - from, qfalse), ly, 1.0f / smScale, lineH,
+                    smText, clip);
         }
     }
     SM_Hit(x, y, w, h, ST_HIT_INPUT, i, clip);
@@ -1742,20 +1831,98 @@ static void ST_Step(int i, int delta) {
     uiInfo.currentCrosshair = shape;
 }
 
-static int ST_CaretAt(int i, float textX, int start) {
-    const char* value = st.values[i];
-    int len = (int)strlen(value);
+static int ST_CaretInRun(const char* value, int from, int to, float mx) {
     float prev = 0, adv;
     int n;
 
-    for (n = start; n < len; n++) {
-        adv = SM_AdvanceRaw(FONT_SANS, 15, value + start, n + 1 - start, qfalse);
-        if (smMX < textX + (prev + adv) * 0.5f) {
+    for (n = from; n < to; n++) {
+        adv = SM_AdvanceRaw(FONT_SANS, 15, value + from, n + 1 - from, qfalse);
+        if (mx < (prev + adv) * 0.5f) {
             return n;
         }
         prev = adv;
     }
-    return len;
+    return to;
+}
+
+static int ST_CaretAt(int i, float textX, float textY) {
+    const char* value = st.values[i];
+    int starts[ST_INPUT_LINES], lens[ST_INPUT_LINES];
+    int lines = ST_InputLines(i, starts, lens);
+    int l = (int)floor((smMY - textY) / SM_NormalLine(FONT_SANS, 15));
+
+    if (!ST_InputWraps(i)) {
+        return ST_CaretInRun(value, st.edit == i ? st.editStart : 0, (int)strlen(value), smMX - textX);
+    }
+    if (l < 0) {
+        l = 0;
+    }
+    if (l >= lines) {
+        l = lines - 1;
+    }
+    return ST_CaretInRun(value, starts[l], starts[l] + lens[l], smMX - textX);
+}
+
+static qboolean ST_WordChar(char c) {
+    return c != ' ' && c != ';' && c != '\0';
+}
+
+static int ST_WordStart(const char* value, int pos) {
+    while (pos > 0 && !ST_WordChar(value[pos - 1])) {
+        pos--;
+    }
+    while (pos > 0 && ST_WordChar(value[pos - 1])) {
+        pos--;
+    }
+    return pos;
+}
+
+static int ST_WordEnd(const char* value, int pos) {
+    while (value[pos] && !ST_WordChar(value[pos])) {
+        pos++;
+    }
+    while (ST_WordChar(value[pos])) {
+        pos++;
+    }
+    return pos;
+}
+
+static void ST_EditPress(int i, float textX, float textY) {
+    const char* value = st.values[i];
+    int pos = ST_CaretAt(i, textX, textY);
+    int now = uiInfo.uiDC.realTime;
+
+    if (now - st.editClickTime < ST_DOUBLE_CLICK && pos == st.editClickPos) {
+        st.editClicks++;
+    } else {
+        st.editClicks = 1;
+    }
+    st.editClickTime = now;
+    st.editClickPos = pos;
+    st.editTime = now;
+    if (st.editClicks == 2) {
+        int a = pos;
+
+        while (a > 0 && ST_WordChar(value[a - 1])) {
+            a--;
+        }
+        st.editAnchor = a;
+        st.editCursor = pos;
+        while (ST_WordChar(value[st.editCursor])) {
+            st.editCursor++;
+        }
+        return;
+    }
+    if (st.editClicks >= 3) {
+        st.editAnchor = 0;
+        st.editCursor = (int)strlen(value);
+        return;
+    }
+    st.editCursor = pos;
+    if (!trap_Key_IsDown(K_SHIFT)) {
+        st.editAnchor = pos;
+    }
+    st.editDrag = qtrue;
 }
 
 static void ST_ClosePopups(void) {
@@ -1873,9 +2040,12 @@ static void ST_Click(void) {
             if (st.edit != index) {
                 st.edit = index;
                 st.editStart = 0;
+                st.editClicks = 0;
+                st.editClickTime = 0;
+                st.editAnchor = 0;
             }
-            st.editCursor = ST_CaretAt(index, hit->r.x + SM_LenBorder(1.0f) + SM_Len(8.0f) + 1.0f / smScale, st.editStart);
-            st.editTime = uiInfo.uiDC.realTime;
+            ST_EditPress(index, hit->r.x + SM_LenBorder(1.0f) + SM_Len(8.0f) + 1.0f / smScale,
+                         hit->r.y + SM_LenBorder(1.0f) + SM_Len(8.0f));
             break;
         case ST_HIT_RESET:
             if (stCvars[index].cvar) {
@@ -1948,13 +2118,72 @@ static void ST_Bind(int i, int key) {
     ST_Read(i);
 }
 
+static qboolean ST_EditMarked(void) {
+    return st.editAnchor != st.editCursor;
+}
+
+static void ST_EditDeleteMarked(void) {
+    char* buffer = st.values[st.edit];
+    int a = MIN(st.editAnchor, st.editCursor), b = MAX(st.editAnchor, st.editCursor);
+
+    memmove(buffer + a, buffer + b, strlen(buffer + b) + 1);
+    st.editCursor = a;
+    st.editAnchor = a;
+}
+
+static void ST_EditCopy(void) {
+    char text[ST_MAX_INPUT + 1];
+    int a = MIN(st.editAnchor, st.editCursor), b = MAX(st.editAnchor, st.editCursor);
+    int n = MIN(b - a, ST_MAX_INPUT);
+
+    if (n <= 0) {
+        return;
+    }
+    memcpy(text, st.values[st.edit] + a, n);
+    text[n] = '\0';
+    trap_SetClipboardData(text);
+}
+
+static void ST_EditMove(int pos) {
+    st.editCursor = pos;
+    if (!trap_Key_IsDown(K_SHIFT)) {
+        st.editAnchor = pos;
+    }
+}
+
+static void ST_EditMoveLine(int dir) {
+    const char* value = st.values[st.edit];
+    int starts[ST_INPUT_LINES], lens[ST_INPUT_LINES];
+    int lines = ST_InputLines(st.edit, starts, lens);
+    int l = lines - 1;
+    float mx;
+    int k;
+
+    for (k = 0; k < lines - 1; k++) {
+        if (st.editCursor < starts[k + 1]) {
+            l = k;
+            break;
+        }
+    }
+    if (l + dir < 0 || l + dir >= lines) {
+        return;
+    }
+    mx = SM_AdvanceRaw(FONT_SANS, 15, value + starts[l], st.editCursor - starts[l], qfalse);
+    l += dir;
+    ST_EditMove(ST_CaretInRun(value, starts[l], starts[l] + lens[l], mx));
+}
+
 static void ST_Paste(void) {
     char clip[1024];
     char* buffer = st.values[st.edit];
-    int len = (int)strlen(buffer);
-    int room = MIN(ST_MAX_INPUT, (int)sizeof(st.values[0]) - 1) - len;
+    int len, room;
     int i, n = 0;
 
+    if (ST_EditMarked()) {
+        ST_EditDeleteMarked();
+    }
+    len = (int)strlen(buffer);
+    room = MIN(ST_MAX_INPUT, (int)sizeof(st.values[0]) - 1) - len;
     trap_GetClipboardData(clip, sizeof(clip));
     for (i = 0; clip[i] && n < room; i++) {
         if ((unsigned char)clip[i] >= ' ') {
@@ -1967,6 +2196,7 @@ static void ST_Paste(void) {
     memmove(buffer + st.editCursor + n, buffer + st.editCursor, len - st.editCursor + 1);
     memcpy(buffer + st.editCursor, clip, n);
     st.editCursor += n;
+    st.editAnchor = st.editCursor;
 }
 
 static void ST_EditNext(int dir) {
@@ -1976,6 +2206,7 @@ static void ST_EditNext(int dir) {
     for (i = st.edit + dir; i >= 0 && i < ST_NUM_CVARS; i += dir) {
         if (stCvars[i].tab == st.tab && stCvars[i].widget == ST_INPUT) {
             st.edit = i;
+            st.editAnchor = 0;
             st.editCursor = (int)strlen(st.values[i]);
             st.editStart = 0;
             return;
@@ -1996,47 +2227,91 @@ static qboolean ST_EditKey(int key) {
             ST_Paste();
             return qtrue;
         }
+        if (c == 'a' - 'a' + 1) {
+            st.editAnchor = 0;
+            st.editCursor = len;
+            return qtrue;
+        }
+        if (c == 'c' - 'a' + 1) {
+            ST_EditCopy();
+            return qtrue;
+        }
+        if (c == 'x' - 'a' + 1) {
+            ST_EditCopy();
+            ST_EditDeleteMarked();
+            return qtrue;
+        }
         if (c == 'h' - 'a' + 1) {
-            if (st.editCursor > 0) {
+            if (ST_EditMarked()) {
+                ST_EditDeleteMarked();
+            } else if (st.editCursor > 0) {
                 memmove(buffer + st.editCursor - 1, buffer + st.editCursor, len - st.editCursor + 1);
                 st.editCursor--;
+                st.editAnchor = st.editCursor;
             }
             return qtrue;
         }
-        if (c < 32 || len >= ST_MAX_INPUT || len >= (int)sizeof(st.values[0]) - 1) {
+        if (c < 32) {
+            return qtrue;
+        }
+        if (ST_EditMarked()) {
+            ST_EditDeleteMarked();
+            len = (int)strlen(buffer);
+        }
+        if (len >= ST_MAX_INPUT || len >= (int)sizeof(st.values[0]) - 1) {
             return qtrue;
         }
         memmove(buffer + st.editCursor + 1, buffer + st.editCursor, len - st.editCursor + 1);
         buffer[st.editCursor++] = (char)c;
+        st.editAnchor = st.editCursor;
         return qtrue;
     }
     switch (key) {
         case K_BACKSPACE:
-            if (st.editCursor > 0) {
+            if (ST_EditMarked()) {
+                ST_EditDeleteMarked();
+            } else if (st.editCursor > 0) {
                 memmove(buffer + st.editCursor - 1, buffer + st.editCursor, len - st.editCursor + 1);
                 st.editCursor--;
+                st.editAnchor = st.editCursor;
             }
             return qtrue;
         case K_DEL:
-            if (st.editCursor < len) {
+            if (ST_EditMarked()) {
+                ST_EditDeleteMarked();
+            } else if (st.editCursor < len) {
                 memmove(buffer + st.editCursor, buffer + st.editCursor + 1, len - st.editCursor);
             }
             return qtrue;
         case K_LEFTARROW:
-            if (st.editCursor > 0) {
-                st.editCursor--;
+            if (trap_Key_IsDown(K_CTRL)) {
+                ST_EditMove(ST_WordStart(buffer, st.editCursor));
+            } else if (ST_EditMarked() && !trap_Key_IsDown(K_SHIFT)) {
+                ST_EditMove(MIN(st.editAnchor, st.editCursor));
+            } else if (st.editCursor > 0) {
+                ST_EditMove(st.editCursor - 1);
             }
             return qtrue;
         case K_RIGHTARROW:
-            if (st.editCursor < len) {
-                st.editCursor++;
+            if (trap_Key_IsDown(K_CTRL)) {
+                ST_EditMove(ST_WordEnd(buffer, st.editCursor));
+            } else if (ST_EditMarked() && !trap_Key_IsDown(K_SHIFT)) {
+                ST_EditMove(MAX(st.editAnchor, st.editCursor));
+            } else if (st.editCursor < len) {
+                ST_EditMove(st.editCursor + 1);
             }
             return qtrue;
+        case K_UPARROW:
+            ST_EditMoveLine(-1);
+            return qtrue;
+        case K_DOWNARROW:
+            ST_EditMoveLine(1);
+            return qtrue;
         case K_HOME:
-            st.editCursor = 0;
+            ST_EditMove(0);
             return qtrue;
         case K_END:
-            st.editCursor = len;
+            ST_EditMove(len);
             return qtrue;
         case K_INS:
             if (trap_Key_IsDown(K_SHIFT)) {
@@ -2096,6 +2371,14 @@ void UI_Settings_Paint(void) {
     }
 
     held = trap_Key_IsDown(K_MOUSE1);
+    if (st.editDrag) {
+        if (held && st.edit >= 0) {
+            st.editCursor = ST_CaretAt(st.edit, st.editX, st.editY);
+            st.editTime = uiInfo.uiDC.realTime;
+        } else {
+            st.editDrag = qfalse;
+        }
+    }
     if (st.drag >= 0) {
         if (held) {
             ST_DragRange(st.drag);

@@ -217,6 +217,10 @@ void trap_FS_PakOnly(qboolean on) {
     syscall(UI_FS_PAKONLY, on);
 }
 
+void trap_SetClipboardData(const char* text) {
+    syscall(UI_SET_CLIPBOARD, text);
+}
+
 int trap_ClubNews(char* buf, int size) {
     return syscall(UI_CLUB_NEWS, buf, size);
 }

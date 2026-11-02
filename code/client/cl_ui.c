@@ -791,6 +791,10 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             FS_PakOnly((qboolean)args[1]);
             return 0;
 
+        case UI_SET_CLIPBOARD:
+            Sys_SetClipboardData(VMA(1));
+            return 0;
+
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
 
