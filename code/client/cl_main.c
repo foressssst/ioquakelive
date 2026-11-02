@@ -3332,7 +3332,7 @@ static void CL_Web_HideBrowser_f(void) {
 }
 
 static void CL_OpenHudFolder_f(void) {
-    char* path = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), "hud/");
+    char* path = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), "ui/");
 #ifdef _WIN32
     FS_CreatePath(path);
     Com_Printf("opening %s\n", path);

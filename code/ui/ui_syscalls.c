@@ -209,6 +209,10 @@ int trap_UpdateNotes(char* buf, int size) {
     return syscall(UI_UPDATE_NOTES, buf, size);
 }
 
+int trap_FS_FileTime(const char* qpath) {
+    return syscall(UI_FS_FILETIME, qpath);
+}
+
 int trap_ClubNews(char* buf, int size) {
     return syscall(UI_CLUB_NEWS, buf, size);
 }

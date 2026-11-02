@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 void Item_Paint(itemDef_t* item);
 
-hvScene_t hvScene = {GT_CA, TEAM_RED, qfalse, qfalse};
+hvScene_t hvScene = {GT_CA, TEAM_RED, qfalse, qtrue};
 
 static menuDef_t hvMenu[HV_MAX_MENUS];
 static int hvCount;
@@ -587,7 +587,8 @@ static void HV_Obits(const rectDef_t* r, float scale) {
 }
 
 static void HV_Chat(const rectDef_t* r, float scale) {
-    static const char* lines[3] = {"^7Anarki^7: rematch?", "^1Sarge^7: nice shot", "^7Visor^7: gg"};
+    static const char* lines[3] = {"^7Anarki^7: gg wp, otra?", "^1Sarge^7: que rail mas sucio jaja",
+                                   "^7Visor^7: ^1x^3D^2D^5D^4D^6D^1D^3D^2D^5D^4D^6D^1D^3D"};
     float bottom = r->y + r->h;
     int saved = hvAnchor;
     int n;
@@ -742,10 +743,10 @@ static void HV_OwnerDrawBody(rectDef_t* rp, int ownerDraw, int ownerDrawFlags, i
             HV_Line(&r, va("%i", HV_PlayerScore()), scale, color, textStyle, align, font);
             break;
         case CG_1STPLACE:
-            HV_Line(&r, va("1. Visor %i", HV_Score(0)), scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            HV_Line(&r, va("%i", HV_Score(0)), scale, color, textStyle, align, font);
             break;
         case CG_2NDPLACE:
-            HV_Line(&r, va("2. Sarge %i", HV_Score(1)), scale, color, textStyle, ITEM_ALIGN_LEFT, 0);
+            HV_Line(&r, va("%i", HV_Score(1)), scale, color, textStyle, align, font);
             break;
         case CG_1ST_PLACE_SCORE:
             HV_PlaceScore(&r, 0, scale, color, textStyle);
@@ -1376,6 +1377,7 @@ qboolean HV_Load(char (*files)[MAX_QPATH], int numFiles, int* menusPerFile) {
     hvAssets.shadowColor[3] = 0.25f;
     hvAssets.shadowX = 2;
     hvAssets.shadowY = 2;
+    hvAssets.gradientBar = trap_R_RegisterShaderNoMip(ASSET_GRADIENTBAR);
     HV_Begin();
     for (i = 0; i < numFiles; i++) {
         int n = HV_ParseFile(files[i]);

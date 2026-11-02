@@ -277,9 +277,12 @@ static struct {
     qboolean hudMenu;
     float hudMenuX;
     qboolean saveAs;
+    qboolean afterSave;
     char saveName[33];
     char huds[HE_MAX_HUDS][MAX_QPATH];
+    char hudNote[HE_MAX_HUDS][MAX_QPATH];
     int numHuds;
+    int numPresets;
     int rightTab;
     float optScroll;
     float optScrollMax;
@@ -505,9 +508,7 @@ static qboolean HE_Load(const char* listFile) {
     return qtrue;
 }
 
-static const char* HE_HudName(const char* list) {
-    static char name[MAX_QPATH];
-    const char* s;
+static const char* HE_RetailLabel(const char* list) {
     int i;
 
     for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
@@ -515,51 +516,218 @@ static const char* HE_HudName(const char* list) {
             return heRetailHuds[i].label;
         }
     }
+    return NULL;
+}
+
+static const char* HE_HudName(const char* list) {
+    static char name[MAX_QPATH];
+    const char* s = HE_RetailLabel(list);
+
+    if (s) {
+        return s;
+    }
     s = strrchr(list, '/');
     Q_strncpyz(name, s ? s + 1 : list, sizeof(name));
     COM_StripExtension(name, name, sizeof(name));
     return name;
 }
 
+static qboolean HE_Loose(const char* path) {
+    return trap_FS_FileTime(path) > 0 ? qtrue : qfalse;
+}
+
+static qboolean HE_Exists(const char* path) {
+    fileHandle_t f;
+
+    trap_FS_FOpenFile(path, &f, FS_READ);
+    if (!f) {
+        return qfalse;
+    }
+    trap_FS_FCloseFile(f);
+    return qtrue;
+}
+
+static qboolean HE_IsHudMenu(const char* path) {
+    static char buf[16384];
+    fileHandle_t f;
+    char* s;
+    int len;
+
+    len = trap_FS_FOpenFile(path, &f, FS_READ);
+    if (!f) {
+        return qfalse;
+    }
+    if (len > (int)sizeof(buf) - 1) {
+        len = (int)sizeof(buf) - 1;
+    }
+    trap_FS_Read(buf, len, f);
+    trap_FS_FCloseFile(f);
+    buf[len] = 0;
+    Q_strlwr(buf);
+    for (s = strstr(buf, "fullscreen"); s; s = strstr(s + 10, "fullscreen")) {
+        const char* v = s + 10;
+
+        while (*v == ' ' || *v == '\t') {
+            v++;
+        }
+        if (*v == '1' || !Q_strncmp(v, "menu_true", 9)) {
+            return qfalse;
+        }
+    }
+    return strstr(buf, "ownerdraw") ? qtrue : qfalse;
+}
+
+static qboolean HE_AnyLoose(char (*files)[MAX_QPATH], int n) {
+    int i;
+
+    for (i = 0; i < n; i++) {
+        if (HE_Loose(files[i])) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+static int HE_ListKey(const char* list, char (*files)[MAX_QPATH]) {
+    if (!Q_stricmp(COM_GetExtension(list), "menu")) {
+        Q_strncpyz(files[0], list, MAX_QPATH);
+        return 1;
+    }
+    return HV_ReadList(list, files, HV_MAX_FILES);
+}
+
+static qboolean HE_SameHud(const char* a, const char* b) {
+    char fa[HV_MAX_FILES][MAX_QPATH], fb[HV_MAX_FILES][MAX_QPATH];
+    int na, nb, i;
+
+    if (!Q_stricmp(a, b)) {
+        return qtrue;
+    }
+    na = HE_ListKey(a, fa);
+    nb = HE_ListKey(b, fb);
+    if (na <= 0 || na != nb) {
+        return qfalse;
+    }
+    for (i = 0; i < na; i++) {
+        if (Q_stricmp(fa[i], fb[i])) {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
+static int HE_FindHud(const char* list) {
+    int i;
+
+    for (i = 0; i < he.numHuds; i++) {
+        if (HE_SameHud(he.huds[i], list)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void HE_AddHud(const char* path, const char* note) {
+    if (he.numHuds >= HE_MAX_HUDS) {
+        return;
+    }
+    Q_strncpyz(he.huds[he.numHuds], path, MAX_QPATH);
+    Q_strncpyz(he.hudNote[he.numHuds], note, MAX_QPATH);
+    he.numHuds++;
+}
+
+static void HE_ReplacedNote(char (*files)[MAX_QPATH], int n, const char* path, char* note, int size) {
+    char rf[HV_MAX_FILES][MAX_QPATH];
+    int i, j, k, m;
+
+    Q_strncpyz(note, path, size);
+    for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
+        m = HV_ReadList(heRetailHuds[i].list, rf, HV_MAX_FILES);
+        for (j = 0; j < m; j++) {
+            if (!HE_Loose(rf[j])) {
+                continue;
+            }
+            for (k = 0; k < n && Q_stricmp(files[k], rf[j]); k++) {
+            }
+            if (k < n) {
+                Q_strncpyz(note, va("%s - replaces %s", path, heRetailHuds[i].label), size);
+                return;
+            }
+        }
+    }
+}
+
 static void HE_ScanHuds(void) {
-    static char buf[8192];
+    static char buf[16384];
+    static const char* exts[2] = {".cfg", ".txt"};
     static char used[HE_MAX_HUDS * 4][MAX_QPATH];
     char files[HV_MAX_FILES][MAX_QPATH];
+    char path[MAX_QPATH], note[MAX_QPATH];
     const char* p;
-    int i, k, n, numUsed = 0, lists;
+    int i, k, e, n, m, numUsed = 0;
 
     he.numHuds = 0;
     for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
-        Q_strncpyz(he.huds[he.numHuds++], heRetailHuds[i].list, MAX_QPATH);
-    }
-    n = trap_FS_GetFileList("hud", ".txt", buf, sizeof(buf));
-    for (p = buf, i = 0; i < n && he.numHuds < HE_MAX_HUDS; i++, p += strlen(p) + 1) {
-        if (p[0]) {
-            Com_sprintf(he.huds[he.numHuds++], MAX_QPATH, "hud/%s", p);
+        m = HV_ReadList(heRetailHuds[i].list, files, HV_MAX_FILES);
+        if (m > 0 && !HE_AnyLoose(files, m)) {
+            HE_AddHud(heRetailHuds[i].list, "");
         }
     }
-    lists = he.numHuds;
-    for (i = (int)ARRAY_LEN(heRetailHuds); i < lists; i++) {
-        int m = HV_ReadList(he.huds[i], files, HV_MAX_FILES);
-
+    he.numPresets = he.numHuds;
+    for (e = 0; e < 2; e++) {
+        n = trap_FS_GetFileList("ui", exts[e], buf, sizeof(buf));
+        for (p = buf, i = 0; i < n; i++, p += strlen(p) + 1) {
+            Com_sprintf(path, sizeof(path), "ui/%s", p);
+            if (!p[0] || !HE_Loose(path) || HE_FindHud(path) >= 0) {
+                continue;
+            }
+            m = HV_ReadList(path, files, HV_MAX_FILES);
+            if (m <= 0 || !HE_IsHudMenu(files[0])) {
+                continue;
+            }
+            HE_ReplacedNote(files, m, path, note, sizeof(note));
+            HE_AddHud(path, note);
+            for (k = 0; k < m && numUsed < (int)ARRAY_LEN(used); k++) {
+                Q_strncpyz(used[numUsed++], files[k], MAX_QPATH);
+            }
+        }
+    }
+    for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
+        m = HV_ReadList(heRetailHuds[i].list, files, HV_MAX_FILES);
+        if (m <= 0 || !HE_AnyLoose(files, m) || HE_FindHud(heRetailHuds[i].list) >= 0) {
+            continue;
+        }
+        HE_AddHud(heRetailHuds[i].list, va("%s - your version", files[0]));
         for (k = 0; k < m && numUsed < (int)ARRAY_LEN(used); k++) {
             Q_strncpyz(used[numUsed++], files[k], MAX_QPATH);
         }
     }
-    n = trap_FS_GetFileList("hud", ".menu", buf, sizeof(buf));
-    for (p = buf, i = 0; i < n && he.numHuds < HE_MAX_HUDS; i++, p += strlen(p) + 1) {
-        char path[MAX_QPATH];
-
-        if (!p[0]) {
+    n = trap_FS_GetFileList("ui", ".menu", buf, sizeof(buf));
+    for (p = buf, i = 0; i < n; i++, p += strlen(p) + 1) {
+        Com_sprintf(path, sizeof(path), "ui/%s", p);
+        if (!p[0] || !HE_Loose(path)) {
             continue;
         }
-        Com_sprintf(path, sizeof(path), "hud/%s", p);
         for (k = 0; k < numUsed && Q_stricmp(used[k], path); k++) {
         }
-        if (k == numUsed) {
-            Q_strncpyz(he.huds[he.numHuds++], path, MAX_QPATH);
+        if (k == numUsed && HE_IsHudMenu(path)) {
+            HE_AddHud(path, path);
         }
     }
+}
+
+static qboolean HE_IsMine(void) {
+    int k;
+
+    if (he.numDocs <= 0) {
+        return qfalse;
+    }
+    for (k = 0; k < he.numDocs; k++) {
+        if (!HE_Loose(he.files[he.docFile[k]])) {
+            return qfalse;
+        }
+    }
+    return qtrue;
 }
 
 static void HE_SwitchHud(const char* list) {
@@ -792,18 +960,28 @@ static qboolean HE_ValidName(const char* s) {
     return n > 0 && n <= 32;
 }
 
-static void HE_DefaultName(char* out, int size) {
-    const char* s = he.list[0] ? he.list : "hud";
-    const char* slash = strrchr(s, '/');
-    char* dot;
+static qboolean HE_NameFree(const char* name) {
+    return !HE_Exists(va("ui/%s.menu", name)) && !HE_Exists(va("ui/%s.cfg", name)) ? qtrue : qfalse;
+}
 
-    Q_strncpyz(out, slash ? slash + 1 : s, size);
-    dot = strrchr(out, '.');
+static void HE_DefaultName(char* out, int size) {
+    const char* s = he.list[0] && !HE_RetailLabel(he.list) ? he.list : "my_hud";
+    const char* slash = strrchr(s, '/');
+    char base[33];
+    char* dot;
+    int i;
+
+    Q_strncpyz(base, slash ? slash + 1 : s, sizeof(base) - 2);
+    dot = strrchr(base, '.');
     if (dot) {
         *dot = 0;
     }
-    if (!HE_ValidName(out)) {
-        Q_strncpyz(out, "hud", size);
+    if (!HE_ValidName(base)) {
+        Q_strncpyz(base, "my_hud", sizeof(base));
+    }
+    Q_strncpyz(out, base, size);
+    for (i = 2; i < 100 && !HE_NameFree(out); i++) {
+        Com_sprintf(out, size, "%s%d", base, i);
     }
 }
 
@@ -924,16 +1102,34 @@ static int HE_SaveNew(void) {
     return HD_Insert(&heDocs[0], heDocs[0].endFrom, wrap) ? 0 : -2;
 }
 
+static void HE_OpenSaveAs(void);
+
+static qboolean HE_UseList(const char* menuPath, char* listPath, int size) {
+    char files[HV_MAX_FILES][MAX_QPATH];
+    char list[MAX_QPATH * 2];
+
+    Q_strncpyz(listPath, menuPath, size);
+    COM_StripExtension(listPath, listPath, size);
+    Q_strcat(listPath, size, ".cfg");
+    if (!HE_Exists(listPath)) {
+        Com_sprintf(list, sizeof(list), "{\n\tloadMenu {\n\t\t\"%s\"\n\t}\n}\n", menuPath);
+        return HE_WriteFile(listPath, list, (int)strlen(list));
+    }
+    return HV_ReadList(listPath, files, HV_MAX_FILES) == 1 && !Q_stricmp(files[0], menuPath) ? qtrue : qfalse;
+}
+
 static qboolean HE_SaveNamed(const char* as) {
     char name[64], path[MAX_QPATH], listPath[MAX_QPATH], list[MAX_MENUDEFFILE];
     char paths[HV_MAX_FILES][MAX_QPATH];
     qboolean changed[HE_MAX_DOCS];
     int i, k, len, written = 0, keepSel = he.selected;
 
+    if (!as && !HE_IsMine()) {
+        HE_OpenSaveAs();
+        return qfalse;
+    }
     if (as) {
         Q_strncpyz(name, as, sizeof(name));
-    } else {
-        HE_DefaultName(name, sizeof(name));
     }
     for (k = 0; k < he.numDocs; k++) {
         HD_ClearEdits(&heDocs[k]);
@@ -982,10 +1178,12 @@ static qboolean HE_SaveNamed(const char* as) {
         if (!changed[k]) {
             continue;
         }
-        if (written == 0) {
-            Com_sprintf(path, sizeof(path), "hud/%s.menu", name);
+        if (!as) {
+            Q_strncpyz(path, he.files[he.docFile[k]], sizeof(path));
+        } else if (written == 0) {
+            Com_sprintf(path, sizeof(path), "ui/%s.menu", name);
         } else {
-            Com_sprintf(path, sizeof(path), "hud/%s_%d.menu", name, written + 1);
+            Com_sprintf(path, sizeof(path), "ui/%s_%d.menu", name, written + 1);
         }
         len = HD_Write(&heDocs[k], heOut, sizeof(heOut));
         if (len < 0 || !HE_WriteFile(path, heOut, len)) {
@@ -1000,12 +1198,30 @@ static qboolean HE_SaveNamed(const char* as) {
         HE_Status("Nothing to save");
         return qtrue;
     }
+    if (!as) {
+        if (Q_stricmp(COM_GetExtension(he.list), "menu")) {
+            Q_strncpyz(listPath, he.list, sizeof(listPath));
+        } else if (!HE_UseList(he.list, listPath, sizeof(listPath))) {
+            listPath[0] = 0;
+        }
+        if (listPath[0]) {
+            trap_Cvar_Set("cg_hudFiles", listPath);
+            HE_Load(listPath);
+        } else {
+            HE_Load(he.list);
+        }
+        if (keepSel < he.numItems) {
+            he.selected = keepSel;
+        }
+        HE_Status("Saved");
+        return qtrue;
+    }
     Q_strncpyz(list, "{\n\tloadMenu {\n", sizeof(list));
     for (i = 0; i < he.numFiles; i++) {
         Q_strcat(list, sizeof(list), va("\t\t\"%s\"\n", paths[i]));
     }
     Q_strcat(list, sizeof(list), "\t}\n}\n");
-    Com_sprintf(listPath, sizeof(listPath), "hud/%s.txt", name);
+    Com_sprintf(listPath, sizeof(listPath), "ui/%s.cfg", name);
     if (!HE_WriteFile(listPath, list, (int)strlen(list))) {
         HE_Status("Could not save");
         return qfalse;
@@ -1023,8 +1239,12 @@ static qboolean HE_Save(void) {
     return HE_SaveNamed(NULL);
 }
 
+static void HE_AfterConfirm(void);
+
 static void HE_OpenSaveAs(void) {
     HE_DefaultName(he.saveName, sizeof(he.saveName));
+    he.afterSave = he.confirm;
+    he.confirm = qfalse;
     he.hudMenu = qfalse;
     he.colorKey = -1;
     he.saveAs = qtrue;
@@ -1035,8 +1255,15 @@ static void HE_DoSaveAs(void) {
         HE_Status("Use letters, numbers, - and _ in the name.");
         return;
     }
+    if (!HE_NameFree(he.saveName)) {
+        HE_Status("That name is taken. Pick another one.");
+        return;
+    }
     he.saveAs = qfalse;
-    HE_SaveNamed(he.saveName);
+    if (HE_SaveNamed(he.saveName) && he.afterSave) {
+        he.afterSave = qfalse;
+        HE_AfterConfirm();
+    }
 }
 
 static qboolean HE_SaveAsKey(int key) {
@@ -2926,14 +3153,14 @@ static void HE_PaintPopup(void) {
 }
 
 static void HE_PaintHudMenu(void) {
-    float w = 300.0f, row = 36.0f, head = 30.0f, pad = 8.0f, x = he.hudMenuX, y = HE_BAR + 2.0f, h, ry;
-    int retail = (int)ARRAY_LEN(heRetailHuds), i;
+    float w = 360.0f, row = 36.0f, head = 30.0f, pad = 8.0f, x = he.hudMenuX, y = HE_BAR + 2.0f, h, ry;
+    int retail = he.numPresets, i;
 
     if (!he.hudMenu) {
         return;
     }
-    h = pad * 2.0f + head * 2.0f + row * (float)retail + row * (float)(he.numHuds > retail ? he.numHuds - retail : 1) +
-        13.0f + row * 2.0f;
+    h = pad * 2.0f + head * 2.0f + row * (float)retail +
+        (row + 14.0f) * (float)(he.numHuds > retail ? he.numHuds - retail : 1) + 13.0f + row * 2.0f;
     if (y + h > smBottom - 8.0f) {
         h = smBottom - 8.0f - y;
     }
@@ -2944,30 +3171,35 @@ static void HE_PaintHudMenu(void) {
     for (i = 0; i < he.numHuds; i++) {
         qboolean current = !Q_stricmp(he.huds[i], he.list);
 
+        float rh = i < retail ? row : row + 14.0f;
+
         if (i == 0 || i == retail) {
-            HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, i == 0 ? "Quake Live" : "Your HUDs");
+            HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, i < retail ? "Quake Live" : "Your HUDs");
             ry += head;
         }
-        if (ry + row > y + h - pad - 13.0f - row * 2.0f) {
+        if (ry + rh > y + h - pad - 13.0f - row * 2.0f) {
             break;
         }
         if (SM_Over(HE_HIT_HUDITEM, i)) {
-            HE_Round(x + 6.0f, ry, w - 12.0f, row, 9.0f, heRowHover);
+            HE_Round(x + 6.0f, ry, w - 12.0f, rh, 9.0f, heRowHover);
         }
         HE_Icon(x + 18.0f, ry, row, 13.0f, current ? heGold : heLo, i < retail ? HE_FA_FILE : HE_FA_FOLDER);
         HE_Text(x + 44.0f, ry, row, 14.0f, current ? heHi : heMd, HE_HudName(he.huds[i]), current);
+        if (i >= retail) {
+            HE_Text(x + 44.0f, ry + 22.0f, 20.0f, 12.0f, heLo, he.hudNote[i], qfalse);
+        }
         if (current) {
             HE_Icon(x + w - 34.0f, ry, row, 12.0f, heGold, HE_FA_CHECK);
         }
-        SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_HUDITEM, i, NULL);
-        ry += row;
+        SM_Hit(x + 6.0f, ry, w - 12.0f, rh, HE_HIT_HUDITEM, i, NULL);
+        ry += rh;
     }
     if (he.numHuds <= retail) {
         if (retail == he.numHuds) {
             HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, "Your HUDs");
             ry += head;
         }
-        HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs you save appear here.", qfalse);
+        HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs in your ui folder appear here.", qfalse);
     }
     ry = y + h - pad - row * 2.0f;
     SM_Fill(x + 16.0f, ry - 7.0f, w - 32.0f, 1.0f, heEdge, NULL);
@@ -3204,6 +3436,7 @@ void UI_HudEditor_Open(void) {
     menuDef_t* menu;
     itemDef_t* item;
     char list[MAX_QPATH];
+    int i;
 
     trap_Cvar_VariableStringBuffer("cg_hudFiles", list, sizeof(list));
     if (!list[0]) {
@@ -3214,6 +3447,11 @@ void UI_HudEditor_Open(void) {
     he.open = qtrue;
     he.round = trap_R_RegisterShaderNoMip("gfx/hudeditor/round");
     he.hole = trap_R_RegisterShaderNoMip("gfx/hudeditor/hole");
+    HE_ScanHuds();
+    i = HE_FindHud(list);
+    if (i >= 0) {
+        Q_strncpyz(list, he.huds[i], sizeof(list));
+    }
     HE_Load(list);
     menu = Menus_FindByName("hudeditor");
     item = menu ? Menu_FindItemByName(menu, "hudeditor") : NULL;
