@@ -2725,7 +2725,7 @@ static void HE_PaintTop(void) {
          10.0f;
     if (he.hasExtras) {
         HE_Pill(x, y, HE_CTRL_H, "Extras", HE_FA_LAYERS, NULL, he.extras ? HE_PILL_PRIMARY : HE_PILL_SECONDARY,
-                HE_HIT_EXTRAS, 0, "Elements this HUD shows with a key, like a custom zoom");
+                HE_HIT_EXTRAS, 0, NULL);
     }
 
     right = smVW - HE_M;
