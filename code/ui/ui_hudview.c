@@ -1818,6 +1818,9 @@ qboolean HV_PaintLoose(itemDef_t* item, float* out) {
 }
 
 int HV_ItemAnchor(const itemDef_t* item) {
+    if (item->type == ITEM_TYPE_OWNERDRAW && item->window.ownerDraw == CG_AREA_NEW_CHAT) {
+        return WIDESCREEN_LEFT;
+    }
     if (item->widescreenFlag) {
         return item->widescreen;
     }

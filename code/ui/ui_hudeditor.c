@@ -710,6 +710,7 @@ static void HE_Undo(void) {
         return;
     }
     HE_Swap(he.undo, &he.numUndo, he.redo, &he.numRedo);
+    he.status[0] = 0;
 }
 
 static void HE_Redo(void) {
@@ -718,6 +719,7 @@ static void HE_Redo(void) {
         return;
     }
     HE_Swap(he.redo, &he.numRedo, he.undo, &he.numUndo);
+    he.status[0] = 0;
 }
 
 static qboolean HE_Editable(int i) {
@@ -2769,6 +2771,10 @@ static void HE_PaintOptions(float px, float py, float ph) {
     }
 }
 
+static qboolean HE_PaintsBack(const itemDef_t* it) {
+    return it->window.style == WINDOW_STYLE_FILLED || it->window.style == WINDOW_STYLE_GRADIENT;
+}
+
 static void HE_PaintProps(void) {
     static const char* anchors[5] = {"Menu", "Stretch", "Left", "Center", "Right"};
     static const char* tabs[2] = {"Properties", "Options"};
@@ -2828,11 +2834,13 @@ static void HE_PaintProps(void) {
     HE_NumberField(x + half + 8.0f, y, half, "H", HF_H, editable);
     y += 58.0f;
 
-    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Screen anchor");
-    y += 26.0f;
-    anchor = it->widescreenFlag ? it->widescreen + 1 : 0;
-    HE_Segment(x, y, w, 40.0f, anchors, 5, anchor, HE_HIT_ANCHOR, editable, qtrue);
-    y += 58.0f;
+    if (!(it->type == ITEM_TYPE_OWNERDRAW && it->window.ownerDraw == CG_AREA_NEW_CHAT)) {
+        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Screen anchor");
+        y += 26.0f;
+        anchor = it->widescreenFlag ? it->widescreen + 1 : 0;
+        HE_Segment(x, y, w, 40.0f, anchors, 5, anchor, HE_HIT_ANCHOR, editable, qtrue);
+        y += 58.0f;
+    }
 
     if (HE_HasText(it)) {
         HE_Caps(x, y, 18.0f, 12.0f, heLo, "Text");
@@ -2845,8 +2853,10 @@ static void HE_PaintProps(void) {
     y += 26.0f;
     HE_Swatch(x, y, w, "Color", HEK_FORECOLOR, it->window.foreColor, editable);
     y += 44.0f;
-    HE_Swatch(x, y, w, "Background", HEK_BACKCOLOR, it->window.backColor, editable);
-    y += 44.0f;
+    if (HE_PaintsBack(it)) {
+        HE_Swatch(x, y, w, "Background", HEK_BACKCOLOR, it->window.backColor, editable);
+        y += 44.0f;
+    }
     HE_Swatch(x, y, w, "Border", HEK_BORDERCOLOR, it->window.borderColor, editable);
     y += 46.0f;
     HE_NumberField(x, y, w, "Border size", HF_BORDER, editable);
