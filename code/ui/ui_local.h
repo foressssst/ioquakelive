@@ -881,6 +881,7 @@ int trap_MatchFile(const char* name, char* buf, int size);
 int trap_UpdateNotes(char* buf, int size);
 int trap_ClubNews(char* buf, int size);
 int trap_FS_FileTime(const char* qpath);
+void trap_FS_PakOnly(qboolean on);
 int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size);
 qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* total);
 

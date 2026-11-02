@@ -369,6 +369,12 @@ qboolean FS_FileExists(const char* file) {
 	return FS_FileInPathExists(FS_BuildOSPath(fs_homepath->string, fs_gamedir, file));
 }
 
+static qboolean fs_pakOnly;
+
+void FS_PakOnly(qboolean on) {
+	fs_pakOnly = on;
+}
+
 int FS_FileTime(const char* qpath) {
 	searchpath_t* search;
 	struct stat st;
@@ -933,6 +939,10 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 		}
 	} else if (search->dir) {
 
+		if (fs_pakOnly) {
+			*file = 0;
+			return -1;
+		}
 		len = strlen(filename);
 		if (!unpure && fs_numServerPaks) {
 			if (!FS_IsExt(filename, ".cfg", len) &&

@@ -571,11 +571,9 @@ static void HV_Obits(const rectDef_t* r, float scale) {
 }
 
 static void HV_Chat(const rectDef_t* r, float scale) {
-    static const char* lines[3] = {"^7Anarki^7: gg wp, otra?", "^1Sarge^7: que rail mas sucio jaja",
-                                   "^7Visor^7: ^1x^3D^2D^5D^4D^6D^1D^3D^2D^5D^4D^6D^1D^3D"};
+    static const char* line = "^7foresssst^7: ^1x^3D^2D^5D^4D^6D^1D^3D^2D^5D^4D^6D^1D^3D^2D^5D";
     float bottom = r->y + r->h;
     int saved = hvAnchor;
-    int n;
 
     if (scale < 0.1f) {
         scale = 0.1f;
@@ -583,9 +581,7 @@ static void HV_Chat(const rectDef_t* r, float scale) {
         scale = 0.22f;
     }
     hvAnchor = WIDESCREEN_LEFT;
-    for (n = 0; n < 3; n++) {
-        HV_PaintText(r->x, bottom - 13.0f * (2 - n), 0, scale, colorWhite, lines[n], 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-    }
+    HV_PaintText(r->x, bottom, 0, scale, colorWhite, line, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
     hvAnchor = saved;
 }
 
@@ -2027,81 +2023,6 @@ const char* HV_ItemKind(const itemDef_t* item) {
     return "Box";
 }
 
-int HV_ItemCategory(const itemDef_t* item) {
-    switch (item->window.ownerDraw) {
-        case 0:
-            return HV_CAT_SHAPES;
-        case CG_PLAYER_HEALTH:
-        case CG_PLAYER_ARMOR_VALUE:
-        case CG_PLAYER_AMMO_VALUE:
-        case CG_PLAYER_ARMOR_ICON:
-        case CG_PLAYER_ARMOR_ICON2D:
-        case CG_PLAYER_AMMO_ICON:
-        case CG_PLAYER_AMMO_ICON2D:
-        case CG_PLAYER_ITEM:
-        case CG_PLAYER_HEAD:
-        case CG_ARMORTIERED_COLORIZED:
-        case CG_HEALTH_COLORIZED:
-        case CG_PLAYER_HEALTH_BAR_100:
-        case CG_PLAYER_HEALTH_BAR_200:
-        case CG_PLAYER_ARMOR_BAR_100:
-        case CG_PLAYER_ARMOR_BAR_200:
-        case CG_AREA_POWERUP:
-        case CG_CTF_POWERUP:
-        case CG_PLAYER_HASFLAG:
-        case CG_PLAYER_HASFLAG2D:
-        case CG_PLAYER_HASKEY:
-            return HV_CAT_PLAYER;
-        case CG_RED_SCORE:
-        case CG_BLUE_SCORE:
-        case CG_RED_NAME:
-        case CG_BLUE_NAME:
-        case CG_RED_PLAYER_COUNT:
-        case CG_BLUE_PLAYER_COUNT:
-        case CG_RED_AVG_PING:
-        case CG_BLUE_AVG_PING:
-        case CG_RED_CLAN_PLYRS:
-        case CG_BLUE_CLAN_PLYRS:
-        case CG_TEAM_PLYR_COUNT:
-        case CG_ENEMY_PLYR_COUNT:
-        case CG_RED_TIMEOUT_COUNT:
-        case CG_BLUE_TIMEOUT_COUNT:
-        case CG_TEAM_COLORIZED:
-        case CG_TEAM_COLOR:
-        case CG_SELECTED_PLYR_TEAM_COLOR:
-        case CG_RED_FLAGSTATUS:
-        case CG_BLUE_FLAGSTATUS:
-        case CG_RED_BASESTATUS:
-        case CG_BLUE_BASESTATUS:
-        case CG_ONEFLAG_STATUS:
-        case CG_RED_OWNED_FLAGS:
-        case CG_BLUE_OWNED_FLAGS:
-        case CG_HARVESTER_SKULLS:
-            return HV_CAT_TEAM;
-        case CG_PLAYER_OBIT:
-        case CG_AREA_NEW_CHAT:
-        case CG_SPECTATORS:
-        case CG_KILLER:
-        case CG_FOLLOW_PLAYER_NAME:
-        case CG_FOLLOW_PLAYER_NAME_EX:
-        case CG_ACCURACY:
-        case CG_IMPRESSIVE:
-        case CG_EXCELLENT:
-        case CG_GAUNTLET:
-        case CG_SPEC_MESSAGES:
-        case UI_ADVERT:
-            return HV_CAT_MESSAGES;
-        default:
-            return HV_CAT_MATCH;
-    }
-}
-
-const char* HV_CategoryName(int category) {
-    static const char* names[HV_CAT_COUNT] = {"Player", "Match", "Team", "Messages", "Shapes and text"};
-
-    return names[category];
-}
-
 qboolean HV_ItemInvisible(const itemDef_t* item) {
     qboolean back = item->window.style == WINDOW_STYLE_FILLED || item->window.style == WINDOW_STYLE_GRADIENT;
 
@@ -2130,8 +2051,8 @@ static const struct {
     {CG_SHOW_ANYNONTEAMGAME, "FFA and Duel"},
     {CG_SHOW_ANYTEAMGAME, "Team games"},
     {CG_SHOW_PLAYERS_REMAINING, "Round games"},
-    {CG_SHOW_YOURTEAMHASENEMYFLAG, "You have their flag"},
-    {CG_SHOW_OTHERTEAMHASFLAG, "They have your flag"},
+    {CG_SHOW_YOURTEAMHASENEMYFLAG, "When your team has the enemy flag"},
+    {CG_SHOW_OTHERTEAMHASFLAG, "When the enemy has your flag"},
     {CG_SHOW_IF_PLAYER_HAS_FLAG, "Carrying the flag"},
     {CG_SHOW_IF_PLYR_IS_FIRST_PLACE, "When you lead"},
     {CG_SHOW_IF_PLYR_IS_NOT_FIRST_PLACE, "When you trail"},
@@ -2190,31 +2111,24 @@ const char* HV_ItemWhen(const itemDef_t* item) {
     return out;
 }
 
-const char* HV_ItemWhenShort(const itemDef_t* item) {
-    static char out[64];
-    const menuDef_t* menu = (const menuDef_t*)item->parent;
-    int flags = item->window.ownerDrawFlags | (menu ? menu->window.ownerDrawFlags : 0);
-    const char* comma;
-    int i;
-
-    for (i = (int)ARRAY_LEN(hvWhen) - 1; i >= 0; i--) {
-        if (flags & hvWhen[i].flag) {
-            return hvWhen[i].text;
-        }
-    }
-    Q_strncpyz(out, HV_ItemWhen(item), sizeof(out));
-    comma = strchr(out, ',');
-    if (comma && Q_stricmpn(out, "Not in", 6)) {
-        out[comma - out] = 0;
-    }
-    return out;
-}
-
 const char* HV_ItemLabel(const itemDef_t* item) {
     static char out[2][64];
     static int which;
     char* o = out[which ^= 1];
 
+    if (!item->window.ownerDraw && (item->window.ownerDrawFlags & CG_SHOW_YOURTEAMHASENEMYFLAG)) {
+        Q_strncpyz(o, "You have the flag", sizeof(out[0]));
+    } else if (!item->window.ownerDraw && (item->window.ownerDrawFlags & CG_SHOW_OTHERTEAMHASFLAG)) {
+        Q_strncpyz(o, "They have your flag", sizeof(out[0]));
+    } else {
+        o[0] = 0;
+    }
+    if (o[0]) {
+        if (item->window.name && Q_stristr(item->window.name, "shadow")) {
+            Q_strcat(o, sizeof(out[0]), " shadow");
+        }
+        return o;
+    }
     if (item->text && item->text[0] && !item->window.ownerDraw) {
         Q_strncpyz(o, item->text, sizeof(out[0]));
         Q_CleanStr(o);

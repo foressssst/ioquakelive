@@ -418,6 +418,7 @@ void FS_FreeFileList(char** list);
 
 qboolean FS_FileExists(const char* file);
 int FS_FileTime(const char* qpath);
+void FS_PakOnly(qboolean on);
 const char* FS_FindSystemFile(const char* file);
 
 qboolean FS_CreatePath(char* OSPath);

@@ -213,6 +213,10 @@ int trap_FS_FileTime(const char* qpath) {
     return syscall(UI_FS_FILETIME, qpath);
 }
 
+void trap_FS_PakOnly(qboolean on) {
+    syscall(UI_FS_PAKONLY, on);
+}
+
 int trap_ClubNews(char* buf, int size) {
     return syscall(UI_CLUB_NEWS, buf, size);
 }

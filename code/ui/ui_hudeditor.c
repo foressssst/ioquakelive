@@ -32,14 +32,15 @@ void Item_UpdatePosition(itemDef_t* item);
 #define HE_GRID 10.0f
 #define HE_FONT FONT_SANS
 #define HE_G 0.0f
-#define HE_M 12.0f
+#define HE_M 8.0f
 #define HE_BAR 60.0f
-#define HE_LEFT_W 330.0f
-#define HE_RIGHT_W 360.0f
+#define HE_LEFT_W 268.0f
+#define HE_RIGHT_W 340.0f
 #define HE_STATUS_H 44.0f
 #define HE_HEAD_H 56.0f
-#define HE_ROW_H 36.0f
-#define HE_GROUP_H 34.0f
+#define HE_TILE_COLS 5
+#define HE_TILE_GAP 4.0f
+#define HE_GROUP_H 24.0f
 #define HE_R_PANEL 0.0f
 #define HE_R 4.0f
 #define HE_R_MAX 4.0f
@@ -77,6 +78,9 @@ void Item_UpdatePosition(itemDef_t* item);
 #define HE_FA_FILE 0xf15b
 
 #define HE_MAX_HUDS 48
+#define HE_PAK "pak:"
+#define HE_NEWHUD "new:"
+#define HE_PAK_LEN 4
 
 typedef enum {
     HEK_RECT,
@@ -117,7 +121,6 @@ typedef struct {
 
 typedef struct {
     const char* label;
-    const char* group;
     const char* name;
     int ownerDraw;
     float w, h;
@@ -128,48 +131,152 @@ typedef struct {
     const char* background;
     float color[4];
     float special;
+    const char* text;
+    int flags;
 } hePal_t;
 
+#define HE_NUM(label, name, od, w, h, s, align) {label, name, od, w, h, s, ITEM_TEXTSTYLE_SHADOWED, align, 0, NULL, {1, 1, 1, 1}, 0}
+#define HE_PIC(label, name, od, s) {label, name, od, s, s, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0}
+
 static const hePal_t hePal[] = {
-    {"Health", "Player", "health", CG_PLAYER_HEALTH, 63, 22, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Armor", "Player", "armor", CG_PLAYER_ARMOR_VALUE, 63, 22, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Ammo", "Player", "ammo", CG_PLAYER_AMMO_VALUE, 64, 32, 0.62f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Ammo icon", "Player", "ammoicon", CG_PLAYER_AMMO_ICON2D, 22, 22, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Armor icon", "Player", "armoricon", CG_PLAYER_ARMOR_ICON2D, 22, 22, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Health bar", "Player", "healthbar", CG_PLAYER_HEALTH_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/h100.tga", {1, 1, 1, 1}, 0},
-    {"Armor bar", "Player", "armorbar", CG_PLAYER_ARMOR_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/a100.tga", {1, 1, 1, 1}, 0},
-    {"Holdable", "Player", "holdable", CG_PLAYER_ITEM, 25, 25, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Powerups", "Player", "powerups", CG_AREA_POWERUP, 35, 35, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 4},
-    {"Timer", "Match", "timer", CG_LEVELTIMER, 50, 12, 0.28f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Round timer", "Match", "roundtimer", CG_ROUNDTIMER, 50, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {0.73f, 0.73f, 0.73f, 0.7f}, 0},
-    {"Your score", "Match", "score", CG_PLAYER_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Red score", "Match", "redscore", CG_RED_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Blue score", "Match", "bluescore", CG_BLUE_SCORE, 48, 20, 0.4f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_CENTER, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Clock", "Match", "clock", CG_LOCALTIME, 60, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Kill feed", "Messages", "killfeed", CG_PLAYER_OBIT, 65, 12, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Chat", "Messages", "chat", CG_AREA_NEW_CHAT, 300, 60, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
-    {"Box", "Shapes", "box", 0, 64, 32, 0, 0, 0, WINDOW_STYLE_FILLED, NULL, {0, 0, 0, 0.5f}, 0},
+    HE_NUM("Health", "health", CG_PLAYER_HEALTH, 63, 22, 0.62f, ITEM_ALIGN_CENTER),
+    HE_NUM("Armor", "armor", CG_PLAYER_ARMOR_VALUE, 63, 22, 0.62f, ITEM_ALIGN_CENTER),
+    HE_NUM("Ammo", "ammo", CG_PLAYER_AMMO_VALUE, 64, 32, 0.62f, ITEM_ALIGN_CENTER),
+    HE_PIC("Ammo icon", "ammoicon", CG_PLAYER_AMMO_ICON2D, 22),
+    HE_PIC("Armor icon", "armoricon", CG_PLAYER_ARMOR_ICON2D, 22),
+    HE_PIC("Player head", "head", CG_PLAYER_HEAD, 40),
+    {"Health bar", "healthbar", CG_PLAYER_HEALTH_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/h100.tga", {1, 1, 1, 1}, 0},
+    {"Armor bar", "armorbar", CG_PLAYER_ARMOR_BAR_100, 128, 16, 0, 0, 0, WINDOW_STYLE_FILLED, "ui/assets/hud/a100.tga", {1, 1, 1, 1}, 0},
+    HE_PIC("Holdable item", "holdable", CG_PLAYER_ITEM, 25),
+    {"Powerups", "powerups", CG_AREA_POWERUP, 35, 35, 0, 0, 0, 0, NULL, {1, 1, 1, 1}, 4},
+    HE_PIC("Rune", "rune", CG_CTF_POWERUP, 32),
+    HE_PIC("Carried flag", "carriedflag", CG_PLAYER_HASFLAG2D, 32),
+    HE_PIC("Keys", "keys", CG_PLAYER_HASKEY, 32),
+    HE_NUM("Accuracy", "accuracy", CG_ACCURACY, 48, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Match timer", "timer", CG_LEVELTIMER, 50, 12, 0.28f, ITEM_ALIGN_LEFT),
+    {"Round timer", "roundtimer", CG_ROUNDTIMER, 50, 12, 0.22f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {0.73f, 0.73f, 0.73f, 0.7f}, 0},
+    HE_NUM("Round", "round", CG_ROUND, 60, 14, 0.25f, ITEM_ALIGN_LEFT),
+    HE_NUM("Your score", "score", CG_PLAYER_SCORE, 48, 20, 0.4f, ITEM_ALIGN_CENTER),
+    HE_NUM("First place score", "firstplace", CG_1STPLACE, 48, 20, 0.4f, ITEM_ALIGN_CENTER),
+    HE_NUM("Second place score", "secondplace", CG_2NDPLACE, 48, 20, 0.4f, ITEM_ALIGN_CENTER),
+    HE_NUM("Score limit", "scorelimit", CG_CAPFRAGLIMIT, 48, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Local time", "clock", CG_LOCALTIME, 60, 12, 0.22f, ITEM_ALIGN_LEFT),
+    HE_NUM("Red score", "redscore", CG_RED_SCORE, 48, 20, 0.4f, ITEM_ALIGN_CENTER),
+    HE_NUM("Blue score", "bluescore", CG_BLUE_SCORE, 48, 20, 0.4f, ITEM_ALIGN_CENTER),
+    HE_NUM("Red alive", "redalive", CG_RED_CLAN_PLYRS, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_NUM("Blue alive", "bluealive", CG_BLUE_CLAN_PLYRS, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_NUM("Team alive", "teamalive", CG_TEAM_PLYR_COUNT, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_NUM("Enemies alive", "enemyalive", CG_ENEMY_PLYR_COUNT, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_NUM("Red players", "redplayers", CG_RED_PLAYER_COUNT, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_NUM("Blue players", "blueplayers", CG_BLUE_PLAYER_COUNT, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    HE_PIC("Red flag", "redflag", CG_RED_FLAGSTATUS, 32),
+    HE_PIC("Blue flag", "blueflag", CG_BLUE_FLAGSTATUS, 32),
+    HE_PIC("One-flag status", "oneflag", CG_ONEFLAG_STATUS, 32),
+    HE_NUM("Red team name", "redname", CG_RED_NAME, 100, 14, 0.25f, ITEM_ALIGN_LEFT),
+    HE_NUM("Blue team name", "bluename", CG_BLUE_NAME, 100, 14, 0.25f, ITEM_ALIGN_LEFT),
+    HE_NUM("Red ping", "redping", CG_RED_AVG_PING, 32, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Blue ping", "blueping", CG_BLUE_AVG_PING, 32, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Red timeouts", "redtimeouts", CG_RED_TIMEOUT_COUNT, 32, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Blue timeouts", "bluetimeouts", CG_BLUE_TIMEOUT_COUNT, 32, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Skulls", "skulls", CG_HARVESTER_SKULLS, 32, 18, 0.3f, ITEM_ALIGN_CENTER),
+    {"You have the flag", "haveflag", 0, 150, 16, 0.3f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {0, 1, 0, 1}, 0, "You have the flag", CG_SHOW_YOURTEAMHASENEMYFLAG},
+    {"They have your flag", "lostflag", 0, 150, 16, 0.3f, ITEM_TEXTSTYLE_SHADOWED, ITEM_ALIGN_LEFT, 0, NULL, {1, 0, 0, 1}, 0, "They have your flag", CG_SHOW_OTHERTEAMHASFLAG},
+    {"Kill feed", "killfeed", CG_PLAYER_OBIT, 65, 12, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    {"Chat", "chat", CG_AREA_NEW_CHAT, 300, 60, 0.22f, 0, 0, 0, NULL, {1, 1, 1, 1}, 0},
+    HE_NUM("Fragged by", "fraggedby", CG_KILLER, 200, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Followed player", "followed", CG_FOLLOW_PLAYER_NAME, 200, 14, 0.25f, ITEM_ALIGN_CENTER),
+    HE_NUM("Spectators", "spectators", CG_SPECTATORS, 300, 14, 0.22f, ITEM_ALIGN_LEFT),
+    HE_PIC("Impressive", "impressive", CG_IMPRESSIVE, 32),
+    HE_PIC("Excellent", "excellent", CG_EXCELLENT, 32),
+    HE_PIC("Humiliation", "humiliation", CG_GAUNTLET, 32),
+    {"Box", "box", 0, 64, 32, 0, 0, 0, WINDOW_STYLE_FILLED, NULL, {0, 0, 0, 0.5f}, 0},
 };
 
-static const char* hePalDesc[ARRAY_LEN(hePal)] = {
-    "Your health number",
-    "Your armor number",
-    "Ammo left in your weapon",
-    "Icon of your current ammo",
-    "Icon of your armor",
-    "Your health as a bar",
-    "Your armor as a bar",
-    "The medkit or teleporter you carry",
-    "Quad, regen and others, with their time",
-    "The match clock",
-    "Time left in the round",
-    "Your points in the match",
-    "Points of the red team",
-    "Points of the blue team",
-    "The time on your computer",
-    "Who fragged who",
-    "What players write",
-    "A rectangle to put behind other things",
+enum { HE_CAT_PLAYER, HE_CAT_MATCH, HE_CAT_TEAM, HE_CAT_MESSAGES, HE_CAT_SHAPES, HE_CAT_COUNT };
+
+static const char* heCatNames[HE_CAT_COUNT] = {"Player", "Match", "Team", "Messages", "Shapes and text"};
+
+enum { HE_TK_OWNERDRAW, HE_TK_HAVEFLAG, HE_TK_LOSTFLAG, HE_TK_PICTURE, HE_TK_TEXT, HE_TK_BOX, HE_TK_OTHER };
+enum { HE_TINT_WHITE, HE_TINT_RED, HE_TINT_BLUE, HE_TINT_WARN, HE_TINT_GREEN };
+
+typedef struct {
+    const char* label;
+    const char* desc;
+    int cat;
+    const char* pic;
+    int glyph;
+    const char* number;
+    int tint;
+    const char* pal;
+    int kind;
+    int od[5];
+} heTile_t;
+
+#define HE_T_PIC(label, desc, cat, pic, pal, ...) {label, desc, cat, pic, 0, NULL, HE_TINT_WHITE, pal, HE_TK_OWNERDRAW, {__VA_ARGS__}}
+#define HE_T_ICON(label, desc, cat, glyph, tint, pal, ...) {label, desc, cat, NULL, glyph, NULL, tint, pal, HE_TK_OWNERDRAW, {__VA_ARGS__}}
+#define HE_T_NUM(label, desc, cat, number, tint, pal, ...) {label, desc, cat, NULL, 0, number, tint, pal, HE_TK_OWNERDRAW, {__VA_ARGS__}}
+
+static const heTile_t heTiles[] = {
+    HE_T_PIC("Health", "Your health, as a number", HE_CAT_PLAYER, "icons/iconh_yellow", "health", CG_PLAYER_HEALTH),
+    HE_T_PIC("Armor", "Your armor, as a number", HE_CAT_PLAYER, "icons/iconr_yellow", "armor", CG_PLAYER_ARMOR_VALUE),
+    HE_T_PIC("Ammo", "Ammo left in your weapon, as a number", HE_CAT_PLAYER, "icons/icona_rocket", "ammo", CG_PLAYER_AMMO_VALUE),
+    HE_T_PIC("Ammo icon", "A picture of your current weapon's ammo", HE_CAT_PLAYER, "icons/iconw_rocket", "ammoicon", CG_PLAYER_AMMO_ICON, CG_PLAYER_AMMO_ICON2D),
+    HE_T_PIC("Armor icon", "A picture of the armor you wear", HE_CAT_PLAYER, "icons/iconr_red", "armoricon", CG_PLAYER_ARMOR_ICON, CG_PLAYER_ARMOR_ICON2D),
+    HE_T_ICON("Player head", "The face of your character", HE_CAT_PLAYER, 0xf007, HE_TINT_WHITE, "head", CG_PLAYER_HEAD),
+    HE_T_PIC("Health bar", "Your health, as a bar", HE_CAT_PLAYER, "ui/assets/hud/h100", "healthbar", CG_PLAYER_HEALTH_BAR_100, CG_PLAYER_HEALTH_BAR_200),
+    HE_T_PIC("Armor bar", "Your armor, as a bar", HE_CAT_PLAYER, "ui/assets/hud/a100", "armorbar", CG_PLAYER_ARMOR_BAR_100, CG_PLAYER_ARMOR_BAR_200),
+    HE_T_PIC("Holdable item", "The medkit or teleporter you carry", HE_CAT_PLAYER, "icons/medkit", "holdable", CG_PLAYER_ITEM),
+    HE_T_PIC("Powerups", "Quad, regen and others, with their time left", HE_CAT_PLAYER, "icons/quad", "powerups", CG_AREA_POWERUP),
+    HE_T_PIC("Rune", "The rune you carry in CTF", HE_CAT_PLAYER, "icons/scout", "rune", CG_CTF_POWERUP),
+    HE_T_ICON("Carried flag", "The flag you carry", HE_CAT_PLAYER, 0xf024, HE_TINT_WHITE, "carriedflag", CG_PLAYER_HASFLAG, CG_PLAYER_HASFLAG2D),
+    HE_T_PIC("Keys", "The keys you carry", HE_CAT_PLAYER, "icons/key_gold", "keys", CG_PLAYER_HASKEY),
+    HE_T_PIC("Accuracy", "How many of your shots hit", HE_CAT_PLAYER, "menu/medals/medal_accuracy", "accuracy", CG_ACCURACY),
+    HE_T_ICON("Colored picture", "A picture that takes your team, health or armor color", HE_CAT_PLAYER, 0xf042, HE_TINT_WHITE, NULL, CG_TEAM_COLORIZED, CG_ARMORTIERED_COLORIZED, CG_HEALTH_COLORIZED, CG_TEAM_COLOR, CG_SELECTED_PLYR_TEAM_COLOR),
+    HE_T_PIC("Match timer", "The match clock", HE_CAT_MATCH, "icons/icon_time", "timer", CG_LEVELTIMER),
+    HE_T_NUM("Round timer", "Time left in the round", HE_CAT_MATCH, "0:25", HE_TINT_WHITE, "roundtimer", CG_ROUNDTIMER),
+    HE_T_NUM("Round", "The number of the current round", HE_CAT_MATCH, "R3", HE_TINT_WHITE, "round", CG_ROUND),
+    HE_T_PIC("Your score", "Your points in the match", HE_CAT_MATCH, "icons/icon_frag", "score", CG_PLAYER_SCORE),
+    HE_T_NUM("First place score", "The points of whoever is first", HE_CAT_MATCH, "1st", HE_TINT_WHITE, "firstplace", CG_1STPLACE, CG_1ST_PLACE_SCORE),
+    HE_T_NUM("Second place score", "The points of whoever is second", HE_CAT_MATCH, "2nd", HE_TINT_WHITE, "secondplace", CG_2NDPLACE, CG_2ND_PLACE_SCORE),
+    HE_T_ICON("Score limit", "The score that ends the match", HE_CAT_MATCH, 0xf11e, HE_TINT_WHITE, "scorelimit", CG_CAPFRAGLIMIT),
+    HE_T_ICON("Local time", "The time on your computer", HE_CAT_MATCH, 0xf017, HE_TINT_WHITE, "clock", CG_LOCALTIME),
+    HE_T_ICON("Map name", "The name of the map", HE_CAT_MATCH, 0xf041, HE_TINT_WHITE, NULL, CG_MAP_NAME),
+    HE_T_PIC("Game type", "The game mode, as text or a picture", HE_CAT_MATCH, "ui/assets/hud/ctf", NULL, CG_GAME_TYPE, CG_GAME_TYPE_ICON),
+    HE_T_ICON("Player count", "How many players are in the match", HE_CAT_MATCH, 0xf0c0, HE_TINT_WHITE, NULL, CG_PLAYER_COUNTS),
+    HE_T_NUM("Red score", "The points of the red team", HE_CAT_TEAM, "8", HE_TINT_RED, "redscore", CG_RED_SCORE),
+    HE_T_NUM("Blue score", "The points of the blue team", HE_CAT_TEAM, "5", HE_TINT_BLUE, "bluescore", CG_BLUE_SCORE),
+    HE_T_ICON("Red alive", "How many red players are alive", HE_CAT_TEAM, 0xf007, HE_TINT_RED, "redalive", CG_RED_CLAN_PLYRS),
+    HE_T_ICON("Blue alive", "How many blue players are alive", HE_CAT_TEAM, 0xf007, HE_TINT_BLUE, "bluealive", CG_BLUE_CLAN_PLYRS),
+    HE_T_ICON("Team alive", "How many of your team are alive", HE_CAT_TEAM, 0xf0c0, HE_TINT_WHITE, "teamalive", CG_TEAM_PLYR_COUNT),
+    HE_T_ICON("Enemies alive", "How many enemies are alive", HE_CAT_TEAM, 0xf0c0, HE_TINT_WARN, "enemyalive", CG_ENEMY_PLYR_COUNT),
+    HE_T_ICON("Red players", "How many players the red team has", HE_CAT_TEAM, 0xf0c0, HE_TINT_RED, "redplayers", CG_RED_PLAYER_COUNT),
+    HE_T_ICON("Blue players", "How many players the blue team has", HE_CAT_TEAM, 0xf0c0, HE_TINT_BLUE, "blueplayers", CG_BLUE_PLAYER_COUNT),
+    HE_T_ICON("Red flag", "Where the red flag is right now", HE_CAT_TEAM, 0xf024, HE_TINT_RED, "redflag", CG_RED_FLAGSTATUS, CG_RED_BASESTATUS),
+    HE_T_ICON("Blue flag", "Where the blue flag is right now", HE_CAT_TEAM, 0xf024, HE_TINT_BLUE, "blueflag", CG_BLUE_FLAGSTATUS, CG_BLUE_BASESTATUS),
+    HE_T_ICON("One-flag status", "Where the flag is in One Flag CTF", HE_CAT_TEAM, 0xf11d, HE_TINT_WHITE, "oneflag", CG_ONEFLAG_STATUS),
+    HE_T_ICON("Red team name", "The name of the red team", HE_CAT_TEAM, 0xf02b, HE_TINT_RED, "redname", CG_RED_NAME),
+    HE_T_ICON("Blue team name", "The name of the blue team", HE_CAT_TEAM, 0xf02b, HE_TINT_BLUE, "bluename", CG_BLUE_NAME),
+    HE_T_ICON("Red ping", "The average ping of the red team", HE_CAT_TEAM, 0xf012, HE_TINT_RED, "redping", CG_RED_AVG_PING),
+    HE_T_ICON("Blue ping", "The average ping of the blue team", HE_CAT_TEAM, 0xf012, HE_TINT_BLUE, "blueping", CG_BLUE_AVG_PING),
+    HE_T_ICON("Red timeouts", "Timeouts the red team has left", HE_CAT_TEAM, 0xf04c, HE_TINT_RED, "redtimeouts", CG_RED_TIMEOUT_COUNT),
+    HE_T_ICON("Blue timeouts", "Timeouts the blue team has left", HE_CAT_TEAM, 0xf04c, HE_TINT_BLUE, "bluetimeouts", CG_BLUE_TIMEOUT_COUNT),
+    HE_T_PIC("Skulls", "The skulls you carry in Harvester", HE_CAT_TEAM, "icons/skull_red", "skulls", CG_HARVESTER_SKULLS),
+    HE_T_ICON("Red points", "The points the red team holds in Domination", HE_CAT_TEAM, 0xf041, HE_TINT_RED, NULL, CG_RED_OWNED_FLAGS),
+    HE_T_ICON("Blue points", "The points the blue team holds in Domination", HE_CAT_TEAM, 0xf041, HE_TINT_BLUE, NULL, CG_BLUE_OWNED_FLAGS),
+    {"You have the flag", "A message that shows when your team has the enemy flag", HE_CAT_MESSAGES, NULL, 0xf024, NULL, HE_TINT_GREEN, "haveflag", HE_TK_HAVEFLAG, {0}},
+    {"They have your flag", "A message that shows when the enemy has your flag", HE_CAT_MESSAGES, NULL, 0xf071, NULL, HE_TINT_RED, "lostflag", HE_TK_LOSTFLAG, {0}},
+    HE_T_ICON("Kill feed", "Who fragged who", HE_CAT_MESSAGES, 0xf05b, HE_TINT_WHITE, "killfeed", CG_PLAYER_OBIT),
+    HE_T_ICON("Chat", "What players write", HE_CAT_MESSAGES, 0xf075, HE_TINT_WHITE, "chat", CG_AREA_NEW_CHAT),
+    HE_T_ICON("Fragged by", "The name of whoever fragged you", HE_CAT_MESSAGES, 0xf235, HE_TINT_WHITE, "fraggedby", CG_KILLER),
+    HE_T_ICON("Followed player", "The player you watch as a spectator", HE_CAT_MESSAGES, 0xf06e, HE_TINT_WHITE, "followed", CG_FOLLOW_PLAYER_NAME, CG_FOLLOW_PLAYER_NAME_EX),
+    HE_T_ICON("Spectators", "The list of people watching", HE_CAT_MESSAGES, 0xf03d, HE_TINT_WHITE, "spectators", CG_SPECTATORS),
+    HE_T_PIC("Impressive", "The medal for two rail hits in a row", HE_CAT_MESSAGES, "menu/medals/medal_impressive", "impressive", CG_IMPRESSIVE),
+    HE_T_PIC("Excellent", "The medal for two quick frags", HE_CAT_MESSAGES, "menu/medals/medal_excellent", "excellent", CG_EXCELLENT),
+    HE_T_PIC("Humiliation", "The medal for a gauntlet frag", HE_CAT_MESSAGES, "menu/medals/medal_gauntlet", "humiliation", CG_GAUNTLET),
+    {"Box", "A rectangle to put behind other things", HE_CAT_SHAPES, NULL, 0xf0c8, NULL, HE_TINT_WHITE, "box", HE_TK_BOX, {0}},
+    {"Picture", "A picture in your HUD", HE_CAT_SHAPES, NULL, 0xf03e, NULL, HE_TINT_WHITE, NULL, HE_TK_PICTURE, {0}},
+    {"Text", "A fixed text in your HUD", HE_CAT_SHAPES, NULL, 0xf031, NULL, HE_TINT_WHITE, NULL, HE_TK_TEXT, {0}},
+    {"Other", "Other things the game draws", HE_CAT_SHAPES, NULL, 0xf12e, NULL, HE_TINT_WHITE, NULL, HE_TK_OTHER, {0}},
 };
 
 typedef struct {
@@ -205,8 +312,6 @@ typedef enum {
     HE_HIT_MAP,
     HE_HIT_SAVE,
     HE_HIT_CLOSE,
-    HE_HIT_LAYER,
-    HE_HIT_HIDDEN,
     HE_HIT_MAPITEM,
     HE_HIT_FIELD,
     HE_HIT_STEP,
@@ -223,8 +328,7 @@ typedef enum {
     HE_HIT_OPT,
     HE_HIT_OPTSTEP,
     HE_HIT_OPTROW,
-    HE_HIT_LTAB,
-    HE_HIT_ADD,
+    HE_HIT_TILE,
     HE_HIT_DELETE,
     HE_HIT_HUDACT,
     HE_HIT_SAVEAS
@@ -301,9 +405,12 @@ static struct {
     float hudMenuX;
     qboolean mapMenu;
     float mapMenuX;
-    qboolean hiddenOpen;
-    int layerHover;
+    int tileHover;
+    int scrollTile;
+    int dragTile;
+    qboolean pak;
     qboolean saveAs;
+    qboolean saveNew;
     qboolean afterSave;
     char saveName[33];
     char huds[HE_MAX_HUDS][MAX_QPATH];
@@ -313,34 +420,32 @@ static struct {
     int rightTab;
     float optScroll;
     float optScrollMax;
-    int leftTab;
-    float addScroll;
-    float addScrollMax;
-    float addStops[48];
-    int addNumStops;
     int dragPal;
     float pressX, pressY;
     char status[160];
     int statusTime;
     float cv[4];
     const char* tip;
+    const char* tipTitle;
     float tipX, tipY;
     qhandle_t round;
 } he;
 
+static int heItemTile[HE_MAX_ITEMS];
+static int heTileCount[ARRAY_LEN(heTiles)];
 static hdDoc_t heDocs[HE_MAX_DOCS];
 static char heText[HD_MAX_TEXT];
 static char heOut[HD_MAX_TEXT + 65536];
 
-static const vec4_t heBg = {0.086f, 0.09f, 0.098f, 1.0f};
-static const vec4_t hePanel = {0.133f, 0.137f, 0.149f, 1.0f};
-static const vec4_t heCard = {0.188f, 0.196f, 0.212f, 1.0f};
-static const vec4_t heRow = {0.204f, 0.212f, 0.231f, 1.0f};
-static const vec4_t heRowHover = {0.275f, 0.286f, 0.31f, 1.0f};
-static const vec4_t heEdge = {0.243f, 0.251f, 0.271f, 1.0f};
-static const vec4_t heGold = {0.949f, 0.647f, 0.149f, 1.0f};
-static const vec4_t heGoldHover = {1.0f, 0.725f, 0.275f, 1.0f};
-static const vec4_t heGoldText = {0.086f, 0.09f, 0.098f, 1.0f};
+static const vec4_t heBg = {0.035f, 0.035f, 0.039f, 1.0f};
+static const vec4_t hePanel = {0.071f, 0.071f, 0.078f, 1.0f};
+static const vec4_t heCard = {0.122f, 0.122f, 0.133f, 1.0f};
+static const vec4_t heRow = {0.161f, 0.161f, 0.173f, 1.0f};
+static const vec4_t heRowHover = {0.224f, 0.224f, 0.239f, 1.0f};
+static const vec4_t heEdge = {0.169f, 0.169f, 0.18f, 1.0f};
+static const vec4_t heAccent = {0.93f, 0.93f, 0.94f, 1.0f};
+static const vec4_t heAccentHover = {1.0f, 1.0f, 1.0f, 1.0f};
+static const vec4_t heAccentText = {0.051f, 0.051f, 0.055f, 1.0f};
 static const vec4_t heHi = {1.0f, 1.0f, 1.0f, 1.0f};
 static const vec4_t heMd = {0.851f, 0.863f, 0.882f, 1.0f};
 static const vec4_t heLo = {0.651f, 0.667f, 0.694f, 1.0f};
@@ -487,10 +592,9 @@ static void HE_BuildItems(void) {
     }
 }
 
-static qboolean HE_Load(const char* listFile) {
+static qboolean HE_LoadFiles(const char* listFile) {
     int f, base = 0;
 
-    Q_strncpyz(he.list, listFile, sizeof(he.list));
     if (!Q_stricmp(COM_GetExtension(listFile), "menu")) {
         Q_strncpyz(he.files[0], listFile, MAX_QPATH);
         he.numFiles = 1;
@@ -499,6 +603,7 @@ static qboolean HE_Load(const char* listFile) {
     }
     if (he.numFiles <= 0 && Q_stricmp(listFile, "ui/hud.txt")) {
         Q_strncpyz(he.list, "ui/hud.txt", sizeof(he.list));
+        he.pak = qfalse;
         he.numFiles = HV_ReadList(he.list, he.files, HV_MAX_FILES);
     }
     he.numDocs = 0;
@@ -533,11 +638,27 @@ static qboolean HE_Load(const char* listFile) {
     return qtrue;
 }
 
+static qboolean HE_Load(const char* listFile) {
+    qboolean ok;
+
+    Q_strncpyz(he.list, listFile, sizeof(he.list));
+    he.pak = !Q_stricmpn(listFile, HE_PAK, HE_PAK_LEN) ? qtrue : qfalse;
+    if (he.pak) {
+        trap_FS_PakOnly(qtrue);
+    }
+    ok = HE_LoadFiles(he.pak ? listFile + HE_PAK_LEN : listFile);
+    trap_FS_PakOnly(qfalse);
+    return ok;
+}
+
 static const char* HE_RetailLabel(const char* list) {
     int i;
 
+    if (Q_stricmpn(list, HE_PAK, HE_PAK_LEN)) {
+        return NULL;
+    }
     for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
-        if (!Q_stricmp(list, heRetailHuds[i].list)) {
+        if (!Q_stricmp(list + HE_PAK_LEN, heRetailHuds[i].list)) {
             return heRetailHuds[i].label;
         }
     }
@@ -599,7 +720,7 @@ static qboolean HE_IsHudMenu(const char* path) {
             return qfalse;
         }
     }
-    return strstr(buf, "ownerdraw") ? qtrue : qfalse;
+    return strstr(buf, "ownerdraw") || strstr(buf, "\"" HE_CUSTOM "\"") ? qtrue : qfalse;
 }
 
 static qboolean HE_AnyLoose(char (*files)[MAX_QPATH], int n) {
@@ -692,12 +813,13 @@ static void HE_ScanHuds(void) {
     int i, k, e, n, m, numUsed = 0;
 
     he.numHuds = 0;
+    trap_FS_PakOnly(qtrue);
     for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
-        m = HV_ReadList(heRetailHuds[i].list, files, HV_MAX_FILES);
-        if (m > 0 && !HE_AnyLoose(files, m)) {
-            HE_AddHud(heRetailHuds[i].list, "");
+        if (HV_ReadList(heRetailHuds[i].list, files, HV_MAX_FILES) > 0) {
+            HE_AddHud(va("%s%s", HE_PAK, heRetailHuds[i].list), "");
         }
     }
+    trap_FS_PakOnly(qfalse);
     he.numPresets = he.numHuds;
     for (e = 0; e < 2; e++) {
         n = trap_FS_GetFileList("ui", exts[e], buf, sizeof(buf));
@@ -751,7 +873,7 @@ static qboolean HE_SafeMenuPath(const char* p) {
 static qboolean HE_IsMine(void) {
     int k;
 
-    if (he.numDocs <= 0) {
+    if (he.numDocs <= 0 || he.pak) {
         return qfalse;
     }
     for (k = 0; k < he.numDocs; k++) {
@@ -1059,6 +1181,12 @@ static void HE_ItemText(const heNew_t* n, char* out, int size) {
     if (it->window.ownerDraw) {
         Q_strcat(out, size, va("\t\t\townerdraw %d\n", it->window.ownerDraw));
     }
+    if (p->text) {
+        Q_strcat(out, size, va("\t\t\ttext \"%s\"\n", p->text));
+    }
+    if (p->flags) {
+        Q_strcat(out, size, va("\t\t\townerdrawflag %d\n", p->flags));
+    }
     if (p->scale > 0.0f) {
         HE_Num(v, sizeof(v), it->textscale);
         Q_strcat(out, size, va("\t\t\ttextscale %s\n\t\t\ttextstyle %d\n\t\t\talign %d\n", v, it->textStyle,
@@ -1280,6 +1408,39 @@ static void HE_OpenSaveAs(void) {
     he.hudMenu = qfalse;
     he.colorKey = -1;
     he.saveAs = qtrue;
+    he.saveNew = qfalse;
+}
+
+static void HE_OpenNew(void) {
+    int i;
+
+    he.pending[0] = 0;
+    he.confirm = qfalse;
+    he.afterSave = qfalse;
+    he.hudMenu = qfalse;
+    he.colorKey = -1;
+    he.saveAs = qtrue;
+    he.saveNew = qtrue;
+    Q_strncpyz(he.saveName, "my_hud", sizeof(he.saveName));
+    for (i = 2; i < 100 && !HE_NameFree(he.saveName); i++) {
+        Com_sprintf(he.saveName, sizeof(he.saveName), "my_hud%d", i);
+    }
+}
+
+static qboolean HE_CreateEmpty(const char* name) {
+    static const char* empty = "{\n\tmenuDef {\n\t\tname \"" HE_CUSTOM
+                               "\"\n\t\tfullScreen 0\n\t\tvisible 1\n\t\trect 0 0 640 480\n\t}\n}\n";
+    char menuPath[MAX_QPATH], listPath[MAX_QPATH];
+
+    Com_sprintf(menuPath, sizeof(menuPath), "ui/%s.menu", name);
+    if (!HE_WriteFile(menuPath, empty, (int)strlen(empty)) || !HE_UseList(menuPath, listPath, sizeof(listPath))) {
+        HE_Status("Could not save");
+        return qfalse;
+    }
+    HE_ScanHuds();
+    HE_Load(listPath);
+    HE_Status(va("%s is ready. Drag elements onto it.", name));
+    return qtrue;
 }
 
 static void HE_DoSaveAs(void) {
@@ -1292,6 +1453,11 @@ static void HE_DoSaveAs(void) {
         return;
     }
     he.saveAs = qfalse;
+    if (he.saveNew) {
+        he.saveNew = qfalse;
+        HE_CreateEmpty(he.saveName);
+        return;
+    }
     if (HE_SaveNamed(he.saveName) && he.afterSave) {
         he.afterSave = qfalse;
         HE_AfterConfirm();
@@ -1327,6 +1493,7 @@ static qboolean HE_SaveAsKey(int key) {
     }
     if (key == K_ESCAPE) {
         he.saveAs = qfalse;
+        he.saveNew = qfalse;
         return qtrue;
     }
     return qtrue;
@@ -1390,6 +1557,8 @@ static void HE_NewInit(itemDef_t* it, editFieldDef_t* field, const hePal_t* p, m
     it->alignment = p->align;
     it->special = p->special;
     it->window.style = p->winStyle;
+    it->window.ownerDrawFlags = p->flags;
+    it->text = p->text;
     if (p->background) {
         it->window.background = trap_R_RegisterShaderNoMip(p->background);
     }
@@ -1404,7 +1573,12 @@ static void HE_NewInit(itemDef_t* it, editFieldDef_t* field, const hePal_t* p, m
         memset(field, 0, sizeof(*field));
         it->type = ITEM_TYPE_TEXT;
         it->typeData = field;
-        Vector4Copy(p->color, it->window.backColor);
+        if (p->text) {
+            it->textaligny = p->h - 2.0f;
+            Vector4Copy(p->color, it->window.foreColor);
+        } else {
+            Vector4Copy(p->color, it->window.backColor);
+        }
     }
     Item_UpdatePosition(it);
 }
@@ -1439,6 +1613,7 @@ static void HE_PlaceNew(itemDef_t* it, float px, float py, int anchor, const flo
 
 static void HE_PalBox(int pal, float* box);
 static void HE_RestoreCanvas(void);
+static void HE_CountTiles(void);
 
 static int HE_AddItem(int pal, float px, float py) {
     static const float alive = 1.0f;
@@ -2041,6 +2216,21 @@ static void HE_PaintTip(void) {
     if (!he.tip || he.confirm || he.drag != HE_DRAG_NONE) {
         return;
     }
+    if (he.tipTitle) {
+        float tw = HE_TextW(he.tipTitle, 17.0f, qtrue), dw = HE_TextW(he.tip, 15.0f, qfalse);
+
+        w = (tw > dw ? tw : dw) + 28.0f;
+        h = 64.0f;
+        x = he.tipX;
+        y = he.tipY;
+        if (y + h > smBottom - 8.0f) {
+            y = smBottom - 8.0f - h;
+        }
+        HE_Floating(x, y, w, h, 4.0f, heRowHover);
+        HE_Text(x + 14.0f, y + 9.0f, 24.0f, 17.0f, heHi, he.tipTitle, qtrue);
+        HE_Text(x + 14.0f, y + 33.0f, 22.0f, 15.0f, heMd, he.tip, qfalse);
+        return;
+    }
     w = HE_TextW(he.tip, 14.0f, qfalse) + 24.0f;
     x = he.tipX - w * 0.5f;
     y = he.tipY;
@@ -2057,7 +2247,7 @@ static void HE_PaintTip(void) {
 static void HE_IconButton(float x, float y, float s, int icon, int hit, int index, qboolean on, qboolean disabled,
                           const char* tip) {
     qboolean over = SM_Over(hit, index);
-    const float* fg = disabled ? heGhost : on ? heGold : over ? heHi : heMd;
+    const float* fg = disabled ? heGhost : on ? heAccent : over ? heHi : heMd;
 
     if (on) {
         HE_Round(x, y, s, s, HE_R, heRowHover);
@@ -2086,8 +2276,8 @@ static float HE_Pill(float x, float y, float h, const char* text, int icon, cons
     float tx = x + 18.0f;
 
     if (style == HE_PILL_PRIMARY) {
-        bg = over ? heGoldHover : heGold;
-        fg = heGoldText;
+        bg = over ? heAccentHover : heAccent;
+        fg = heAccentText;
     } else if (style == HE_PILL_SECONDARY) {
         bg = over ? heRowHover : heCard;
     } else {
@@ -2138,15 +2328,12 @@ static void HE_Segment(float x, float y, float w, float h, const char** labels, 
         qboolean over = enabled && SM_Over(hit, i);
 
         if (on) {
-            HE_Round(sx, y + 4.0f, sw, h - 8.0f, 3.0f, heRowHover);
-            if (enabled) {
-                SM_Fill(sx, y + h - 6.0f, sw, 2.0f, heGold, NULL);
-            }
+            HE_Round(sx, y + 4.0f, sw, h - 8.0f, 3.0f, enabled ? heAccent : heRowHover);
         } else if (over) {
             HE_Round(sx, y + 4.0f, sw, h - 8.0f, 3.0f, heRow);
         }
-        HE_CapsCenter(sx, y + 4.0f, sw, h - 8.0f, 12.0f, on ? heHi : over ? heHi : enabled ? heMd : heGhost,
-                      labels[i]);
+        HE_CapsCenter(sx, y + 4.0f, sw, h - 8.0f, 12.0f,
+                      on && enabled ? heAccentText : on || over ? heHi : enabled ? heMd : heGhost, labels[i]);
         if (enabled) {
             SM_Hit(sx, y + 4.0f, sw, h - 8.0f, hit, i, NULL);
         }
@@ -2183,7 +2370,7 @@ static void HE_PaintTop(void) {
         x += pw + 8.0f;
     }
     if (he.dirty) {
-        HE_Round(x, HE_BAR * 0.5f - 4.0f, 8.0f, 8.0f, 4.0f, heGold);
+        HE_Round(x, HE_BAR * 0.5f - 4.0f, 8.0f, 8.0f, 4.0f, heAccent);
     }
 
     x = HE_ColX0();
@@ -2257,125 +2444,6 @@ static void HE_PalBox(int pal, float* box) {
     }
 }
 
-static void HE_PalPreview(int pal, float x, float y, float w, float h) {
-    float box[4], s, cx = HE_PxX(x + w * 0.5f), cy = HE_PxY(y + h * 0.5f);
-
-    HE_PalBox(pal, box);
-    s = (w * 0.8f / box[2] < h * 0.7f / box[3] ? w * 0.8f / box[2] : h * 0.7f / box[3]) * smScale;
-    if (s > 3.0f * smScale) {
-        s = 3.0f * smScale;
-    }
-    HV_SetCanvas(cx - (box[0] + box[2] * 0.5f) * s, cy - (box[1] + box[3] * 0.5f) * s, 640.0f * s, 480.0f * s);
-    if (HV_PaintLoose(&heScratch, box) && !hePal[pal].ownerDraw) {
-        HE_PxFill(box[0], box[1], box[2], 1.0f, heLo);
-        HE_PxFill(box[0], box[1] + box[3] - 1.0f, box[2], 1.0f, heLo);
-        HE_PxFill(box[0], box[1], 1.0f, box[3], heLo);
-        HE_PxFill(box[0] + box[2] - 1.0f, box[1], 1.0f, box[3], heLo);
-    }
-}
-
-static void HE_AddStop(float at) {
-    if (he.addNumStops < (int)ARRAY_LEN(he.addStops)) {
-        he.addStops[he.addNumStops++] = at;
-    }
-}
-
-static void HE_ScrollAdd(int dir) {
-    int k;
-
-    if (dir > 0) {
-        for (k = 0; k < he.addNumStops; k++) {
-            if (he.addStops[k] > he.addScroll + 0.5f) {
-                he.addScroll = he.addStops[k];
-                break;
-            }
-        }
-    } else {
-        float to = 0.0f;
-
-        for (k = 0; k < he.addNumStops; k++) {
-            if (he.addStops[k] < he.addScroll - 0.5f) {
-                to = he.addStops[k];
-            }
-        }
-        he.addScroll = to;
-    }
-    if (he.addScroll > he.addScrollMax) {
-        he.addScroll = he.addScrollMax;
-    }
-    if (he.addScroll < 0.0f) {
-        he.addScroll = 0.0f;
-    }
-}
-
-static void HE_PaintAdd(float px, float pw, float top, float bottom) {
-    float gap = 10.0f, x0 = px + 12.0f, tw = (pw - 24.0f - gap) * 0.5f, th = 104.0f, gh = 34.0f, y;
-    const char* last = NULL;
-    int i, col = 0;
-
-    y = top - he.addScroll;
-    he.addNumStops = 0;
-    if (y >= top) {
-        HE_Text(x0 + 4.0f, y, 26.0f, 15.0f, heMd, "Drag one onto your HUD.", qfalse);
-    }
-    y += 26.0f;
-    for (i = 0; i < (int)ARRAY_LEN(hePal); i++) {
-        float tx, prev = 70.0f;
-
-        if (!last || Q_stricmp(last, hePal[i].group)) {
-            if (col) {
-                y += th + gap;
-                col = 0;
-            }
-            last = hePal[i].group;
-            HE_AddStop(y + he.addScroll - top);
-            if (y >= top && y + gh <= bottom) {
-                HE_Caps(x0 + 4.0f, y + 6.0f, gh - 6.0f, 12.0f, heLo, last);
-            }
-            y += gh;
-        }
-        tx = x0 + col * (tw + gap);
-        if (!col && i && !Q_stricmp(hePal[i - 1].group, hePal[i].group)) {
-            HE_AddStop(y + he.addScroll - top);
-        }
-        if (y >= top && y + th <= bottom) {
-            qboolean over = SM_Over(HE_HIT_ADD, i) || (he.drag == HE_DRAG_NEW && he.dragPal == i);
-
-            HE_Round(tx, y, tw, th, 12.0f, over ? heRowHover : heCard);
-            HE_Round(tx + 6.0f, y + 6.0f, tw - 12.0f, prev, 8.0f, heBg);
-            HE_PalPreview(i, tx + 6.0f, y + 6.0f, tw - 12.0f, prev);
-            HE_TextCenter(tx, y + prev + 6.0f, tw, th - prev - 6.0f, 15.0f, over ? heHi : heMd, hePal[i].label,
-                          qfalse);
-            SM_Hit(tx, y, tw, th, HE_HIT_ADD, i, NULL);
-            if (SM_Over(HE_HIT_ADD, i) && he.drag == HE_DRAG_NONE) {
-                HE_Tip(tx, y, tw, th, hePalDesc[i]);
-            }
-        }
-        if (++col == 2) {
-            col = 0;
-            y += th + gap;
-        }
-    }
-    if (col) {
-        y += th + gap;
-    }
-    HE_RestoreCanvas();
-    he.addScrollMax = y + he.addScroll - top - (bottom - top) + 8.0f;
-    if (he.addScrollMax < 0.0f) {
-        he.addScrollMax = 0.0f;
-    } else {
-        for (i = 0; i < he.addNumStops; i++) {
-            if (he.addStops[i] >= he.addScrollMax - 0.5f) {
-                he.addScrollMax = he.addStops[i];
-                break;
-            }
-        }
-    }
-    if (he.addScroll > he.addScrollMax) {
-        he.addScroll = he.addScrollMax;
-    }
-}
-
 static void HE_PaintDragNew(void) {
     float mx, my;
 
@@ -2383,6 +2451,9 @@ static void HE_PaintDragNew(void) {
         return;
     }
     HE_MousePx(&mx, &my);
+    if (fabs(mx - he.pressX) <= 6.0f * smScale && fabs(my - he.pressY) <= 6.0f * smScale) {
+        return;
+    }
     if (HE_InCanvas(mx, my)) {
         float box[4], r[4];
 
@@ -2396,20 +2467,98 @@ static void HE_PaintDragNew(void) {
         r[1] -= 2.0f;
         r[2] += 4.0f;
         r[3] += 4.0f;
-        HE_PxFill(r[0], r[1], r[2], 1.0f, heGold);
-        HE_PxFill(r[0], r[1] + r[3] - 1.0f, r[2], 1.0f, heGold);
-        HE_PxFill(r[0], r[1], 1.0f, r[3], heGold);
-        HE_PxFill(r[0] + r[2] - 1.0f, r[1], 1.0f, r[3], heGold);
+        HE_PxFill(r[0], r[1], r[2], 1.0f, heAccent);
+        HE_PxFill(r[0], r[1] + r[3] - 1.0f, r[2], 1.0f, heAccent);
+        HE_PxFill(r[0], r[1], 1.0f, r[3], heAccent);
+        HE_PxFill(r[0] + r[2] - 1.0f, r[1], 1.0f, r[3], heAccent);
     } else {
         const char* label = hePal[he.dragPal].label;
         float w = HE_TextW(label, 14.0f, qtrue) + 28.0f;
 
-        HE_Round(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 17.0f, heGold);
-        HE_TextCenter(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 14.0f, heGoldText, label, qtrue);
+        HE_Round(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 17.0f, heAccent);
+        HE_TextCenter(smMX + 14.0f, smMY + 10.0f, w, 34.0f, 14.0f, heAccentText, label, qtrue);
     }
 }
 
 static void HE_Select(int i);
+
+static int HE_TileOf(const itemDef_t* it) {
+    const char* kind;
+    int t, k, want;
+
+    if (HV_ItemInvisible(it)) {
+        return -1;
+    }
+    if (it->window.ownerDraw) {
+        for (t = 0; t < (int)ARRAY_LEN(heTiles); t++) {
+            for (k = 0; k < (int)ARRAY_LEN(heTiles[t].od) && heTiles[t].od[k]; k++) {
+                if (heTiles[t].od[k] == it->window.ownerDraw) {
+                    return t;
+                }
+            }
+        }
+        want = HE_TK_OTHER;
+    } else if (it->window.ownerDrawFlags & CG_SHOW_YOURTEAMHASENEMYFLAG) {
+        want = HE_TK_HAVEFLAG;
+    } else if (it->window.ownerDrawFlags & CG_SHOW_OTHERTEAMHASFLAG) {
+        want = HE_TK_LOSTFLAG;
+    } else {
+        kind = HV_ItemKind(it);
+        want = !Q_stricmp(kind, "Text") ? HE_TK_TEXT : !Q_stricmp(kind, "Picture") ? HE_TK_PICTURE : HE_TK_BOX;
+    }
+    for (t = 0; t < (int)ARRAY_LEN(heTiles); t++) {
+        if (heTiles[t].kind == want) {
+            return t;
+        }
+    }
+    return -1;
+}
+
+static void HE_CountTiles(void) {
+    int i;
+
+    memset(heTileCount, 0, sizeof(heTileCount));
+    for (i = 0; i < he.numItems; i++) {
+        heItemTile[i] = he.items[i].removed ? -1 : HE_TileOf(he.items[i].item);
+        if (heItemTile[i] >= 0) {
+            heTileCount[heItemTile[i]]++;
+        }
+    }
+}
+
+static int HE_TilePal(int t) {
+    int i;
+
+    if (heTiles[t].pal) {
+        for (i = 0; i < (int)ARRAY_LEN(hePal); i++) {
+            if (!Q_stricmp(hePal[i].name, heTiles[t].pal)) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+static void HE_CycleTile(int t) {
+    int i, n, order = 0, start = he.selected;
+
+    if (heTileCount[t] <= 0) {
+        return;
+    }
+    for (n = 1; n <= he.numItems; n++) {
+        i = (start + n + he.numItems) % he.numItems;
+        if (heItemTile[i] == t) {
+            HE_Select(i);
+            break;
+        }
+    }
+    for (i = 0; i <= he.selected; i++) {
+        order += heItemTile[i] == t;
+    }
+    if (heTileCount[t] > 1) {
+        HE_Status(va("%s: %d of %d", heTiles[t].label, order, heTileCount[t]));
+    }
+}
 
 static void HE_DropNew(void) {
     float mx, my;
@@ -2418,6 +2567,10 @@ static void HE_DropNew(void) {
     HE_MousePx(&mx, &my);
     if (!HE_InCanvas(mx, my)) {
         if (fabs(mx - he.pressX) > 6.0f * smScale || fabs(my - he.pressY) > 6.0f * smScale) {
+            return;
+        }
+        if (heTileCount[he.dragTile] > 0) {
+            HE_CycleTile(he.dragTile);
             return;
         }
         mx = HE_PxX(he.cv[0] + he.cv[2] * 0.5f);
@@ -2430,146 +2583,130 @@ static void HE_DropNew(void) {
     }
 }
 
-enum { HE_LINE_HEAD, HE_LINE_ROW, HE_LINE_HIDDEN };
-
-typedef struct {
-    int kind;
-    int value;
-} heLine_t;
-
-static heLine_t heLines[HE_MAX_ITEMS + HV_CAT_COUNT * 2 + 1];
-static int heNumLines;
-
-static void HE_AddLine(int kind, int value) {
-    heLines[heNumLines].kind = kind;
-    heLines[heNumLines].value = value;
-    heNumLines++;
+static void HE_Rgba(vec4_t v, float r, float g, float b, float a) {
+    v[0] = r;
+    v[1] = g;
+    v[2] = b;
+    v[3] = a;
 }
 
-static float HE_LineH(int kind) {
-    return kind == HE_LINE_ROW ? HE_ROW_H : kind == HE_LINE_HIDDEN ? 42.0f : HE_GROUP_H;
-}
+static void HE_PaintTile(int t, float x, float y, float s) {
+    const heTile_t* tile = &heTiles[t];
+    qboolean present = heTileCount[t] > 0;
+    qboolean over = SM_Over(HE_HIT_TILE, t) || (he.drag == HE_DRAG_NEW && he.dragTile == t);
+    qboolean selected = he.selected >= 0 && heItemTile[he.selected] == t;
+    float alpha = present || over ? 1.0f : 0.42f;
+    vec4_t color, tint;
 
-static void HE_BuildLines(void) {
-    static qboolean shown[HE_MAX_ITEMS];
-    int i, pass, cat, hidden = 0;
-
-    heNumLines = 0;
-    for (i = 0; i < he.numItems; i++) {
-        shown[i] = HV_ItemShown(he.items[i].item) ? qtrue : qfalse;
-        if (!he.items[i].removed && !shown[i]) {
-            hidden++;
-        }
+    switch (tile->tint) {
+        case HE_TINT_RED:
+            Vector4Copy(heTeamRed, tint);
+            break;
+        case HE_TINT_BLUE:
+            Vector4Copy(heTeamBlue, tint);
+            break;
+        case HE_TINT_WARN:
+            Vector4Copy(heWarn, tint);
+            break;
+        case HE_TINT_GREEN:
+            HE_Rgba(tint, 0.3f, 0.85f, 0.4f, 1.0f);
+            break;
+        default:
+            Vector4Copy(heHi, tint);
+            break;
     }
-    for (pass = 0; pass < 2; pass++) {
-        if (pass == 1) {
-            if (!hidden) {
-                return;
-            }
-            HE_AddLine(HE_LINE_HIDDEN, hidden);
-            if (!he.hiddenOpen) {
-                return;
-            }
-        }
-        for (cat = 0; cat < HV_CAT_COUNT; cat++) {
-            qboolean head = qfalse;
-
-            for (i = 0; i < he.numItems; i++) {
-                if (he.items[i].removed || shown[i] != (pass == 0 ? qtrue : qfalse) ||
-                    HV_ItemCategory(he.items[i].item) != cat) {
-                    continue;
-                }
-                if (!head) {
-                    HE_AddLine(HE_LINE_HEAD, cat);
-                    head = qtrue;
-                }
-                HE_AddLine(HE_LINE_ROW, i);
-            }
-        }
-    }
-}
-
-static void HE_PaintRow(int i, float rx, float rw, float y, const smRect_t* clip, float top, float bottom) {
-    heItem_t* e = &he.items[i];
-    qboolean selected = i == he.selected, shown = HV_ItemShown(e->item);
-    float base = HE_Base(16.0f, y, HE_ROW_H), right = rx + rw - 10.0f;
-    const char* when = HV_ItemInvisible(e->item) ? "Invisible" : HV_ItemWhenShort(e->item);
-    const char* name = HV_ItemLabel(e->item);
-    int fit;
-
-    if (SM_Over(HE_HIT_LAYER, i)) {
-        he.layerHover = i;
-    }
+    tint[3] = alpha;
     if (selected) {
-        HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, clip, heRowHover);
-    } else if (SM_Over(HE_HIT_LAYER, i)) {
-        HE_RoundIn(rx, y, rw, HE_ROW_H, HE_R, clip, heRow);
+        HE_Round(x - 2.0f, y - 2.0f, s + 4.0f, s + 4.0f, 5.0f, heAccent);
     }
-    if (y >= top && y + HE_ROW_H <= bottom) {
-        if (e->locked) {
-            right -= HE_IconW(13.0f, HE_FA_LOCK);
-            HE_Icon(right, y, HE_ROW_H, 13.0f, heLo, HE_FA_LOCK);
-            right -= 8.0f;
-        }
-        if (when[0]) {
-            float limit = rw * 0.55f, tw;
+    HE_Round(x, y, s, s, 4.0f, over ? heRowHover : present ? heCard : hePanel);
+    if (tile->pic) {
+        qboolean bar = tile->od[0] == CG_PLAYER_HEALTH_BAR_100 || tile->od[0] == CG_PLAYER_ARMOR_BAR_100;
+        float iw = bar ? s - 10.0f : s - 16.0f, ih = bar ? 12.0f : s - 16.0f;
 
-            fit = SM_Fit(HE_FONT, 13.0f, when, limit);
-            tw = SM_AdvanceBold(HE_FONT, 13.0f, when, fit, qfalse);
-            right -= tw;
-            SM_Text(right, HE_Base(13.0f, y, HE_ROW_H), HE_FONT, 13.0f, heLo, when, fit, qfalse);
-            right -= 10.0f;
-        }
-        fit = SM_Fit(HE_FONT, 16.0f, name, right - (rx + 10.0f));
-        SM_Text(rx + 10.0f, base, HE_FONT, 16.0f, selected ? heHi : shown ? heMd : heLo, name, fit, selected);
+        color[0] = color[1] = color[2] = 1.0f;
+        color[3] = alpha;
+        trap_R_SetColor(color);
+        trap_R_DrawStretchPic(HE_PxX(x + (s - iw) * 0.5f), HE_PxY(y + (s - ih) * 0.5f), iw * smScale, ih * smScale, 0, 0, 1,
+                              1, trap_R_RegisterShaderNoMip(tile->pic));
+        trap_R_SetColor(NULL);
+    } else if (tile->glyph) {
+        HE_IconCenter(x, y, s, s, 21.0f, tint, tile->glyph);
+    } else if (tile->tint == HE_TINT_WHITE) {
+        HE_TextCenter(x, y, s, s, 16.0f, tint, tile->number, qtrue);
+    } else {
+        HE_Round(x + 8.0f, y + 8.0f, s - 16.0f, s - 16.0f, 3.0f, tint);
+        color[0] = color[1] = color[2] = 1.0f;
+        color[3] = alpha;
+        HE_TextCenter(x, y, s, s, 17.0f, color, tile->number, qtrue);
     }
-    SM_Hit(rx, y, rw, HE_ROW_H, HE_HIT_LAYER, i, clip);
+    if (heTileCount[t] > 1) {
+        const char* n = va("%d", heTileCount[t]);
+        float nw = HE_TextW(n, 11.0f, qtrue);
+
+        HE_Text(x + s - nw - 4.0f, y + s - 15.0f, 13.0f, 11.0f, heMd, n, qtrue);
+    }
 }
 
-static void HE_PaintLayers(void) {
+static void HE_PaintElements(void) {
     float px = HE_G, py = HE_BAR, pw = HE_LEFT_W, ph = HE_PanelH();
-    float top = HE_ListTop(), bottom = top + HE_ListH(), y;
-    smRect_t clip = SM_R(px + 8.0f, top, pw - 16.0f, bottom - top);
-    const char* tabs[2] = {"Elements", "Add"};
-    int k;
+    float top = HE_ListTop(), bottom = top + HE_ListH();
+    float s = (pw - 20.0f - HE_TILE_GAP * (HE_TILE_COLS - 1)) / HE_TILE_COLS;
+    float y = top - he.scroll;
+    int cat, t;
 
-    he.layerHover = -1;
+    he.tileHover = -1;
     HE_Round(px, py, pw, ph, HE_R_PANEL, hePanel);
     SM_Fill(px + pw - 1.0f, py, 1.0f, ph, heEdge, NULL);
     SM_Hit(px, py, pw, ph, HE_HIT_PANEL, 0, NULL);
-    HE_Segment(px + 12.0f, py + 10.0f, pw - 24.0f, 36.0f, tabs, 2, he.leftTab, HE_HIT_LTAB, qtrue, qtrue);
-    if (he.leftTab == 1) {
-        HE_PaintAdd(px, pw, top, bottom);
-        return;
-    }
+    HE_Text(px + 12.0f, py + 8.0f, 22.0f, 15.0f, heHi, "Drag an icon onto your HUD.", qfalse);
+    HE_Text(px + 12.0f, py + 29.0f, 22.0f, 15.0f, heMd, "Click it to find it.", qfalse);
+    for (cat = 0; cat < HE_CAT_COUNT; cat++) {
+        int col = 0;
+        qboolean head = qfalse;
 
-    HE_BuildLines();
-    y = top - he.scroll;
-    for (k = 0; k < heNumLines; k++) {
-        const heLine_t* l = &heLines[k];
-        float lh = HE_LineH(l->kind);
+        for (t = 0; t < (int)ARRAY_LEN(heTiles); t++) {
+            float tx, ty;
 
-        if (y + lh > top && y < bottom) {
-            if (l->kind == HE_LINE_ROW) {
-                HE_PaintRow(l->value, px + 8.0f, pw - 16.0f, y, &clip, top, bottom);
-            } else if (y >= top && y + lh <= bottom) {
-                if (l->kind == HE_LINE_HEAD) {
-                    HE_Text(px + 18.0f, y + 8.0f, lh - 8.0f, 14.0f, heLo, HV_CategoryName(l->value), qtrue);
-                } else {
-                    const char* text = va("Not in this view (%d)", l->value);
-
-                    if (SM_Over(HE_HIT_HIDDEN, 0)) {
-                        HE_Round(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_R, heRow);
-                    } else {
-                        HE_Round(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_R, heCard);
-                    }
-                    HE_Text(px + 18.0f, y, lh, 15.0f, heMd, text, qfalse);
-                    HE_Icon(px + pw - 34.0f, y, lh, 11.0f, heMd, he.hiddenOpen ? HE_FA_MINUS : HE_FA_PLUS);
-                    SM_Hit(px + 8.0f, y + 4.0f, pw - 16.0f, lh - 8.0f, HE_HIT_HIDDEN, 0, NULL);
+            if (heTiles[t].cat != cat || (!heTiles[t].pal && heTileCount[t] <= 0)) {
+                continue;
+            }
+            if (!head) {
+                if (y >= top && y + HE_GROUP_H <= bottom) {
+                    HE_Text(px + 12.0f, y + 6.0f, HE_GROUP_H - 6.0f, 15.0f, heLo, heCatNames[cat], qtrue);
                 }
+                y += HE_GROUP_H;
+                head = qtrue;
+            }
+            tx = px + 10.0f + col * (s + HE_TILE_GAP);
+            ty = y;
+            if (ty >= top && ty + s <= bottom) {
+                if (SM_Over(HE_HIT_TILE, t)) {
+                    he.tileHover = t;
+                    he.tipTitle = heTiles[t].label;
+                    he.tip = heTiles[t].desc;
+                    he.tipX = tx + s + 10.0f;
+                    he.tipY = ty;
+                }
+                HE_PaintTile(t, tx, ty, s);
+                SM_Hit(tx, ty, s, s, HE_HIT_TILE, t, NULL);
+            }
+            if (he.scrollTile == t) {
+                if (ty < top) {
+                    he.scroll -= top - ty + HE_GROUP_H;
+                } else if (ty + s > bottom) {
+                    he.scroll += ty + s - bottom + 4.0f;
+                }
+                he.scrollTile = -1;
+            }
+            if (++col == HE_TILE_COLS) {
+                col = 0;
+                y += s + HE_TILE_GAP;
             }
         }
-        y += lh;
+        if (col) {
+            y += s + HE_TILE_GAP;
+        }
     }
     he.scrollMax = y + he.scroll - top - (bottom - top) + 8.0f;
     if (he.scrollMax < 0) {
@@ -2577,27 +2714,6 @@ static void HE_PaintLayers(void) {
     }
     if (he.scroll > he.scrollMax) {
         he.scroll = he.scrollMax;
-    }
-}
-
-static void HE_ScrollTo(int i) {
-    float y = 0.0f, view = HE_ListH();
-    int k;
-
-    if (!HV_ItemShown(he.items[i].item)) {
-        he.hiddenOpen = qtrue;
-    }
-    HE_BuildLines();
-    for (k = 0; k < heNumLines; k++) {
-        if (heLines[k].kind == HE_LINE_ROW && heLines[k].value == i) {
-            break;
-        }
-        y += HE_LineH(heLines[k].kind);
-    }
-    if (y - HE_GROUP_H < he.scroll) {
-        he.scroll = y - HE_GROUP_H;
-    } else if (y + HE_ROW_H > he.scroll + view) {
-        he.scroll = y + HE_ROW_H * 2.0f - view;
     }
     if (he.scroll < 0) {
         he.scroll = 0;
@@ -2718,7 +2834,7 @@ static void HE_NumberField(float x, float y, float w, const char* label, int fie
     qboolean over = editable && SM_Over(HE_HIT_FIELD, field);
 
     if (focused) {
-        HE_Round(x, y, w, h, HE_R, heGold);
+        HE_Round(x, y, w, h, HE_R, heAccent);
         HE_Round(x + 1.5f, y + 1.5f, w - 3.0f, h - 3.0f, HE_R - 1.5f, heRowHover);
     } else {
         HE_Round(x, y, w, h, HE_R, over ? heRowHover : heRow);
@@ -2754,7 +2870,7 @@ static void HE_Swatch(float x, float y, float w, const char* label, int key, con
                          (int)(Com_Clamp(0, 1, color[3]) * 100.0f + 0.5f));
 
     if (open) {
-        HE_Round(x, y, w, h, HE_R, heGold);
+        HE_Round(x, y, w, h, HE_R, heAccent);
         HE_Round(x + 1.5f, y + 1.5f, w - 3.0f, h - 3.0f, HE_R - 1.5f, heRowHover);
     } else {
         HE_Round(x, y, w, h, HE_R, over ? heRowHover : heRow);
@@ -2780,8 +2896,8 @@ static qboolean HE_HasText(const itemDef_t* it) {
 static void HE_PaintEmpty(float x, float y, float w) {
     HE_IconCenter(x, y + 40.0f, w, 50.0f, 34.0f, heGhost, HE_FA_MOVE);
     HE_TextCenter(x, y + 104.0f, w, 26.0f, 17.0f, heHi, "Select an element", qtrue);
-    HE_TextCenter(x, y + 134.0f, w, 22.0f, 14.0f, heMd, "Click it on the HUD or pick it", qfalse);
-    HE_TextCenter(x, y + 156.0f, w, 22.0f, 14.0f, heMd, "from the list.", qfalse);
+    HE_TextCenter(x, y + 134.0f, w, 22.0f, 15.0f, heMd, "Click it on your HUD or on", qfalse);
+    HE_TextCenter(x, y + 156.0f, w, 22.0f, 15.0f, heMd, "its icon on the left.", qfalse);
 }
 
 enum { HE_OG_WEAPON, HE_OG_HUD, HE_OG_CROSSHAIR, HE_OG_MESSAGES, HE_OG_COUNT };
@@ -2936,7 +3052,7 @@ static void HE_OptStepper(float x, float y, int idx, const char* text, qhandle_t
         trap_R_DrawStretchPic(HE_PxX(x + bw + mid * 0.5f - 11.0f), HE_PxY(y + 4.0f), 22.0f * smScale, 22.0f * smScale,
                               0, 0, 1, 1, pic);
     } else {
-        HE_TextCenter(x + bw, y, mid, h, 13.0f, heHi, text, qtrue);
+        HE_TextCenter(x + bw, y, mid, h, 15.0f, heHi, text, qtrue);
     }
 }
 
@@ -2961,24 +3077,24 @@ static void HE_PaintOptRow(int idx, float x, float y, float w, float h) {
             float tw = 40.0f, th = 22.0f, ty = y + (h - th) * 0.5f;
 
             cw = tw;
-            HE_Round(right - tw, ty, tw, th, th * 0.5f, on ? heGold : heEdge);
+            HE_Round(right - tw, ty, tw, th, th * 0.5f, on ? heAccent : heEdge);
             HE_Round(on ? right - th + 3.0f : right - tw + 3.0f, ty + 3.0f, th - 6.0f, th - 6.0f, (th - 6.0f) * 0.5f,
-                     on ? heGoldText : heMd);
+                     on ? heAccentText : heMd);
             SM_Hit(right - tw, ty, tw, th, HE_HIT_OPT, idx, NULL);
             break;
         }
         case ST_SELECT: {
             int k = HE_OptIndex(cv, v);
             const char* label = k >= 0 ? cv->options[k].label : v;
-            float pw = HE_TextW(label, 13.0f, qtrue) + 50.0f;
+            float pw = HE_TextW(label, 15.0f, qtrue) + 50.0f;
 
             if (pw > w * 0.55f) {
                 pw = w * 0.55f;
             }
             cw = pw;
             HE_Round(right - pw, cy, pw, 30.0f, 15.0f, SM_Over(HE_HIT_OPT, idx) ? heRowHover : heCard);
-            fit = SM_Fit(HE_FONT, 13.0f, label, pw - 50.0f);
-            SM_Text(right - pw + 16.0f, HE_Base(13.0f, cy, 30.0f), HE_FONT, 13.0f, heHi, label, fit, qtrue);
+            fit = SM_Fit(HE_FONT, 15.0f, label, pw - 50.0f);
+            SM_Text(right - pw + 16.0f, HE_Base(15.0f, cy, 30.0f), HE_FONT, 15.0f, heHi, label, fit, qtrue);
             HE_Icon(right - 26.0f, cy, 30.0f, 9.0f, heMd, HE_FA_CHEVRON);
             SM_Hit(right - pw, cy, pw, 30.0f, HE_HIT_OPT, idx, NULL);
             break;
@@ -3005,8 +3121,8 @@ static void HE_PaintOptRow(int idx, float x, float y, float w, float h) {
         default:
             break;
     }
-    fit = SM_Fit(HE_FONT, 13.0f, cv->title, right - cw - 12.0f - (x + 12.0f));
-    SM_Text(x + 12.0f, HE_Base(13.0f, y, h), HE_FONT, 13.0f, heHi, cv->title, fit, qfalse);
+    fit = SM_Fit(HE_FONT, 16.0f, cv->title, right - cw - 12.0f - (x + 12.0f));
+    SM_Text(x + 12.0f, HE_Base(16.0f, y, h), HE_FONT, 16.0f, heHi, cv->title, fit, qfalse);
 }
 
 static void HE_PaintOptions(float px, float py, float ph) {
@@ -3022,7 +3138,7 @@ static void HE_PaintOptions(float px, float py, float ph) {
         if (heOptGroup[i] != last) {
             last = heOptGroup[i];
             if (y >= top && y + gh <= bottom) {
-                HE_Caps(x + 12.0f, y + 8.0f, gh - 8.0f, 12.0f, heLo, heOptGroups[last]);
+                HE_Caps(x + 12.0f, y + 8.0f, gh - 8.0f, 16.0f, heMd, heOptGroups[last]);
             }
             y += gh;
         }
@@ -3080,10 +3196,10 @@ static void HE_PaintProps(void) {
             tw -= 44.0f;
             HE_IconButton(x + w - 36.0f, y + 1.0f, 36.0f, HE_FA_TRASH, HE_HIT_DELETE, 0, qfalse, qfalse, "Delete");
         }
-        fit = SM_Fit(HE_FONT, 18.0f, HV_ItemLabel(it), tw);
-        fit2 = SM_Fit(HE_FONT, 14.0f, sub, tw);
-        SM_Text(tx, HE_Base(18.0f, y - 6.0f, 30.0f), HE_FONT, 18.0f, heHi, HV_ItemLabel(it), fit, qtrue);
-        SM_Text(tx, HE_Base(14.0f, y + 20.0f, 22.0f), HE_FONT, 14.0f, heLo, sub, fit2, qfalse);
+        fit = SM_Fit(HE_FONT, 21.0f, HV_ItemLabel(it), tw);
+        fit2 = SM_Fit(HE_FONT, 15.0f, sub, tw);
+        SM_Text(tx, HE_Base(21.0f, y - 6.0f, 30.0f), HE_FONT, 21.0f, heHi, HV_ItemLabel(it), fit, qtrue);
+        SM_Text(tx, HE_Base(15.0f, y + 21.0f, 22.0f), HE_FONT, 15.0f, heMd, sub, fit2, qfalse);
     }
     y += 58.0f;
     if (!editable) {
@@ -3094,7 +3210,7 @@ static void HE_PaintProps(void) {
         y += 72.0f;
     }
 
-    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Position and size");
+    HE_Caps(x, y, 20.0f, 15.0f, heMd, "Position and size");
     y += 26.0f;
     HE_NumberField(x, y, half, "X", HF_X, editable);
     HE_NumberField(x + half + 8.0f, y, half, "Y", HF_Y, editable);
@@ -3104,7 +3220,7 @@ static void HE_PaintProps(void) {
     y += 58.0f;
 
     if (!(it->type == ITEM_TYPE_OWNERDRAW && it->window.ownerDraw == CG_AREA_NEW_CHAT)) {
-        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Stick to screen side");
+        HE_Caps(x, y, 20.0f, 15.0f, heMd, "Stick to screen side");
         y += 26.0f;
         anchor = it->widescreenFlag ? it->widescreen + 1 : 0;
         HE_Segment(x, y, w, 40.0f, anchors, 5, anchor, HE_HIT_ANCHOR, editable, qtrue);
@@ -3112,13 +3228,13 @@ static void HE_PaintProps(void) {
     }
 
     if (HE_HasText(it)) {
-        HE_Caps(x, y, 18.0f, 12.0f, heLo, "Text");
+        HE_Caps(x, y, 20.0f, 15.0f, heMd, "Text");
         y += 26.0f;
         HE_NumberField(x, y, w, "Size", HF_SCALE, editable);
         y += 58.0f;
     }
 
-    HE_Caps(x, y, 18.0f, 12.0f, heLo, "Colors");
+    HE_Caps(x, y, 20.0f, 15.0f, heMd, "Colors");
     y += 26.0f;
     HE_Swatch(x, y, w, "Color", HEK_FORECOLOR, it->window.foreColor, editable);
     y += 44.0f;
@@ -3163,7 +3279,7 @@ static void HE_PaintPopup(void) {
         c[3] = 1.0f;
         same = fabs(c[0] - color[0]) < 0.003f && fabs(c[1] - color[1]) < 0.003f && fabs(c[2] - color[2]) < 0.003f;
         if (same || SM_Over(HE_HIT_PALETTE, i)) {
-            HE_Round(cx - 3.0f, cy - 3.0f, cell + 6.0f, cell + 6.0f, 10.0f, same ? heGold : heHi);
+            HE_Round(cx - 3.0f, cy - 3.0f, cell + 6.0f, cell + 6.0f, 10.0f, same ? heAccent : heHi);
             HE_Round(cx - 1.0f, cy - 1.0f, cell + 2.0f, cell + 2.0f, 8.0f, heCard);
         }
         HE_Round(cx, cy, cell, cell, 7.0f, c);
@@ -3202,7 +3318,7 @@ static void HE_PaintHudMenu(void) {
         return;
     }
     h = pad * 2.0f + head * 2.0f + row * (float)retail +
-        (row + 14.0f) * (float)(he.numHuds > retail ? he.numHuds - retail : 1) + 13.0f + row * 2.0f;
+        (row + 14.0f) * (float)(he.numHuds > retail ? he.numHuds - retail : 1) + 13.0f + row * 3.0f;
     if (y + h > smBottom - 8.0f) {
         h = smBottom - 8.0f - y;
     }
@@ -3219,19 +3335,19 @@ static void HE_PaintHudMenu(void) {
             HE_Caps(x + 16.0f, ry, head, 12.0f, heLo, i < retail ? "Quake Live" : "Your HUDs");
             ry += head;
         }
-        if (ry + rh > y + h - pad - 13.0f - row * 2.0f) {
+        if (ry + rh > y + h - pad - 13.0f - row * 3.0f) {
             break;
         }
         if (SM_Over(HE_HIT_HUDITEM, i)) {
             HE_Round(x + 6.0f, ry, w - 12.0f, rh, 9.0f, heRowHover);
         }
-        HE_Icon(x + 18.0f, ry, row, 13.0f, current ? heGold : heLo, i < retail ? HE_FA_FILE : HE_FA_FOLDER);
+        HE_Icon(x + 18.0f, ry, row, 13.0f, current ? heAccent : heLo, i < retail ? HE_FA_FILE : HE_FA_FOLDER);
         HE_Text(x + 44.0f, ry, row, 14.0f, current ? heHi : heMd, HE_HudName(he.huds[i]), current);
         if (i >= retail) {
             HE_Text(x + 44.0f, ry + 22.0f, 20.0f, 12.0f, heLo, he.hudNote[i], qfalse);
         }
         if (current) {
-            HE_Icon(x + w - 34.0f, ry, row, 12.0f, heGold, HE_FA_CHECK);
+            HE_Icon(x + w - 34.0f, ry, row, 12.0f, heAccent, HE_FA_CHECK);
         }
         SM_Hit(x + 6.0f, ry, w - 12.0f, rh, HE_HIT_HUDITEM, i, NULL);
         ry += rh;
@@ -3243,14 +3359,17 @@ static void HE_PaintHudMenu(void) {
         }
         HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs in your ui folder appear here.", qfalse);
     }
-    ry = y + h - pad - row * 2.0f;
+    ry = y + h - pad - row * 3.0f;
     SM_Fill(x + 16.0f, ry - 7.0f, w - 32.0f, 1.0f, heEdge, NULL);
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
+        static const char* acts[3] = {"New empty HUD", "Save as...", "Open HUD folder"};
+        static const int actIcons[3] = {HE_FA_FILE, HE_FA_COPY, HE_FA_FOLDER};
+
         if (SM_Over(HE_HIT_HUDACT, i)) {
             HE_Round(x + 6.0f, ry, w - 12.0f, row, 9.0f, heRowHover);
         }
-        HE_Icon(x + 18.0f, ry, row, 13.0f, heMd, i ? HE_FA_FOLDER : HE_FA_COPY);
-        HE_Text(x + 44.0f, ry, row, 14.0f, heMd, i ? "Open HUD folder" : "Save as...", qfalse);
+        HE_Icon(x + 18.0f, ry, row, 13.0f, heMd, actIcons[i]);
+        HE_Text(x + 44.0f, ry, row, 14.0f, heMd, acts[i], qfalse);
         SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_HUDACT, i, NULL);
         ry += row;
     }
@@ -3279,7 +3398,7 @@ static void HE_PaintMapMenu(void) {
                               trap_R_RegisterShaderNoMip(va("gfx/hudeditor/%s", heMaps[i])));
         HE_Text(x + 98.0f, ry, row, 15.0f, current ? heHi : heMd, heMapNames[i], current);
         if (current) {
-            HE_Icon(x + w - 30.0f, ry, row, 12.0f, heGold, HE_FA_CHECK);
+            HE_Icon(x + w - 30.0f, ry, row, 12.0f, heAccent, HE_FA_CHECK);
         }
         SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_MAPITEM, i, NULL);
         ry += row;
@@ -3296,25 +3415,26 @@ static void HE_PaintSaveAs(void) {
     SM_Hit(0, 0, smVW, smBottom, HE_HIT_POPUP, 0, NULL);
     HE_Floating(x, y, w, h, HE_R_PANEL, hePanel);
     SM_Hit(x, y, w, h, HE_HIT_POPUP, 0, NULL);
-    HE_Text(x + 28.0f, y + 24.0f, 30.0f, 20.0f, heHi, "Save as", qtrue);
+    HE_Text(x + 28.0f, y + 24.0f, 30.0f, 20.0f, heHi, he.saveNew ? "New HUD" : "Save as", qtrue);
     HE_Text(x + 28.0f, y + 62.0f, 22.0f, 15.0f, heMd,
-            HE_IsMine() ? "Name your copy. It goes to your ui folder."
-                        : "Quake Live HUDs stay as they are. Name your own copy.",
+            he.saveNew    ? "Name your new HUD. It starts empty and goes to your ui folder."
+            : HE_IsMine() ? "Name your copy. It goes to your ui folder."
+                          : "Quake Live HUDs stay as they are. Name your own copy.",
             qfalse);
     fx = x + 28.0f;
     fy = y + 98.0f;
     fw = w - 56.0f;
     fh = 46.0f;
-    HE_Round(fx, fy, fw, fh, 10.0f, heGold);
+    HE_Round(fx, fy, fw, fh, 10.0f, heAccent);
     HE_Round(fx + 2.0f, fy + 2.0f, fw - 4.0f, fh - 4.0f, 8.0f, heBg);
     HE_Text(fx + 16.0f, fy, fh, 17.0f, heHi, he.saveName, qfalse);
     tw = HE_TextW(he.saveName, 17.0f, qfalse);
     if ((uiInfo.uiDC.realTime / 500) & 1) {
-        SM_Fill(fx + 17.0f + tw, fy + 12.0f, 2.0f, fh - 24.0f, heGold, NULL);
+        SM_Fill(fx + 17.0f + tw, fy + 12.0f, 2.0f, fh - 24.0f, heAccent, NULL);
     }
     by = y + h - 28.0f - HE_CTRL_H;
-    bx = x + w - 28.0f - HE_PillW("Save", HE_FA_SAVE);
-    HE_Pill(bx, by, HE_CTRL_H, "Save", HE_FA_SAVE, NULL, HE_PILL_PRIMARY, HE_HIT_SAVEAS, 0, NULL);
+    bx = x + w - 28.0f - HE_PillW(he.saveNew ? "Create" : "Save", HE_FA_SAVE);
+    HE_Pill(bx, by, HE_CTRL_H, he.saveNew ? "Create" : "Save", HE_FA_SAVE, NULL, HE_PILL_PRIMARY, HE_HIT_SAVEAS, 0, NULL);
     bx -= 8.0f + HE_PillW("Cancel", 0);
     HE_Pill(bx, by, HE_CTRL_H, "Cancel", 0, NULL, HE_PILL_GHOST, HE_HIT_SAVEAS, 1, NULL);
 }
@@ -3372,8 +3492,17 @@ static void HE_CanvasLabel(const float* r, const char* text, qboolean selected) 
     if (x < he.cv[0] + 4.0f) {
         x = he.cv[0] + 4.0f;
     }
-    HE_Round(x, y, w, h, 6.0f, selected ? heGold : heCard);
-    HE_Text(x + 8.0f, y, h, size, selected ? heGoldText : heHi, text, qtrue);
+    HE_Round(x, y, w, h, 6.0f, selected ? heAccent : heCard);
+    HE_Text(x + 8.0f, y, h, size, selected ? heAccentText : heHi, text, qtrue);
+}
+
+static int HE_CountAlive(void) {
+    int i, n = 0;
+
+    for (i = 0; i < he.numItems; i++) {
+        n += !he.items[i].removed;
+    }
+    return n;
 }
 
 static void HE_PaintCanvas(void) {
@@ -3396,9 +3525,12 @@ static void HE_PaintCanvas(void) {
     if (he.selected >= 0 && !HV_ItemShown(he.items[he.selected].item)) {
         HV_PaintItem(he.items[he.selected].item);
     }
-    if (he.layerHover >= 0 && he.layerHover < he.numItems && he.layerHover != he.selected &&
-        !he.items[he.layerHover].removed && !HV_ItemShown(he.items[he.layerHover].item)) {
-        HV_PaintItem(he.items[he.layerHover].item);
+    if (he.tileHover >= 0) {
+        for (i = 0; i < he.numItems; i++) {
+            if (heItemTile[i] == he.tileHover && i != he.selected && !HV_ItemShown(he.items[i].item)) {
+                HV_PaintItem(he.items[i].item);
+            }
+        }
     }
     if (hvScene.showAll) {
         for (i = 0; i < he.numItems; i++) {
@@ -3418,8 +3550,17 @@ static void HE_PaintCanvas(void) {
         HE_InCanvas(mx, my) && !smHasUnder) {
         hover = HE_PickAt(mx, my);
     }
-    if (he.layerHover >= 0 && he.layerHover < he.numItems && !he.items[he.layerHover].removed) {
-        hover = he.layerHover;
+    if (he.tileHover >= 0) {
+        for (i = 0; i < he.numItems; i++) {
+            if (heItemTile[i] == he.tileHover && i != he.selected) {
+                float r[4];
+
+                HE_ItemBox(i, r);
+                HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, heHoverLine);
+            }
+        }
+    } else if (he.numItems == 0 || HE_CountAlive() == 0) {
+        HE_TextCenter(he.cv[0], he.cv[1], he.cv[2], he.cv[3], 18.0f, heMd, "Drag elements here from the left.", qfalse);
     }
     if (hover >= 0 && hover != he.selected) {
         float r[4];
@@ -3433,7 +3574,7 @@ static void HE_PaintCanvas(void) {
         qboolean editable = HE_Editable(he.selected);
 
         HE_ItemBox(he.selected, r);
-        HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, editable ? heGold : heHiddenLine);
+        HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, editable ? heAccent : heHiddenLine);
         if (editable) {
             int hnd;
 
@@ -3447,7 +3588,7 @@ static void HE_PaintCanvas(void) {
                     continue;
                 }
                 HE_HandlePos(r, hnd, &hx, &hy);
-                HE_PxFill(hx - s * 0.5f, hy - s * 0.5f, s, s, heGold);
+                HE_PxFill(hx - s * 0.5f, hy - s * 0.5f, s, s, heAccent);
                 HE_PxFill(hx - s * 0.5f + 1.0f, hy - s * 0.5f + 1.0f, s - 2.0f, s - 2.0f, heHi);
             }
         }
@@ -3484,7 +3625,7 @@ static void HE_PaintStatus(void) {
     const char* msg = NULL;
     const float* msgColor = heHi;
     int icon = HE_FA_CHECK;
-    const float* iconColor = heGold;
+    const float* iconColor = heAccent;
     int i;
 
     SM_Fill(x0, y, x1 - x0, HE_STATUS_H, hePanel, NULL);
@@ -3532,7 +3673,16 @@ void UI_HudEditor_Open(void) {
     i = HE_FindHud(list);
     if (i >= 0) {
         Q_strncpyz(list, he.huds[i], sizeof(list));
+    } else {
+        for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
+            if (!Q_stricmp(list, heRetailHuds[i].list)) {
+                Com_sprintf(list, sizeof(list), "%s%s", HE_PAK, heRetailHuds[i].list);
+                break;
+            }
+        }
     }
+    he.tileHover = -1;
+    he.scrollTile = -1;
     HE_Load(list);
     menu = Menus_FindByName("hudeditor");
     item = menu ? Menu_FindItemByName(menu, "hudeditor") : NULL;
@@ -3580,7 +3730,9 @@ void UI_HudEditor_Paint(void) {
         UI_HudEditor_Open();
     }
     he.tip = NULL;
+    he.tipTitle = NULL;
     HE_Layout();
+    HE_CountTiles();
     if (he.drag != HE_DRAG_NONE && !trap_Key_IsDown(K_MOUSE1)) {
         if (he.drag == HE_DRAG_NEW) {
             HE_DropNew();
@@ -3602,7 +3754,7 @@ void UI_HudEditor_Paint(void) {
     }
     SM_FillScreen(heBg);
     HE_PaintCanvas();
-    HE_PaintLayers();
+    HE_PaintElements();
     HE_PaintProps();
     HE_PaintTop();
     HE_PaintStatus();
@@ -3624,7 +3776,7 @@ static void HE_Select(int i) {
     he.selected = i;
     if (i >= 0) {
         he.rightTab = 0;
-        HE_ScrollTo(i);
+        he.scrollTile = HE_TileOf(he.items[i].item);
     }
 }
 
@@ -3635,6 +3787,10 @@ static void HE_AfterConfirm(void) {
 
         Q_strncpyz(list, he.pending, sizeof(list));
         he.pending[0] = 0;
+        if (!Q_stricmp(list, HE_NEWHUD)) {
+            HE_OpenNew();
+            return;
+        }
         HE_Load(list);
         return;
     }
@@ -3671,6 +3827,7 @@ static qboolean HE_Click(void) {
                 HE_DoSaveAs();
             } else {
                 he.saveAs = qfalse;
+                he.saveNew = qfalse;
             }
         }
         return qtrue;
@@ -3679,8 +3836,16 @@ static qboolean HE_Click(void) {
         if (hit && hit->type == HE_HIT_HUDITEM && hit->index < he.numHuds) {
             HE_SwitchHud(he.huds[hit->index]);
         } else if (hit && hit->type == HE_HIT_HUDACT && hit->index == 0) {
-            HE_OpenSaveAs();
+            he.hudMenu = qfalse;
+            if (he.dirty && he.numDocs > 0) {
+                Q_strncpyz(he.pending, HE_NEWHUD, sizeof(he.pending));
+                he.confirm = qtrue;
+            } else {
+                HE_OpenNew();
+            }
         } else if (hit && hit->type == HE_HIT_HUDACT && hit->index == 1) {
+            HE_OpenSaveAs();
+        } else if (hit && hit->type == HE_HIT_HUDACT && hit->index == 2) {
             he.hudMenu = qfalse;
             trap_Cmd_ExecuteText(EXEC_APPEND, "openhudfolder\n");
             HE_Status("Your HUD folder is open. Files you drop there show up in this list.");
@@ -3739,9 +3904,6 @@ static qboolean HE_Click(void) {
                 he.colorKey = -1;
                 he.mapMenu = qtrue;
                 return qtrue;
-            case HE_HIT_HIDDEN:
-                he.hiddenOpen = !he.hiddenOpen;
-                return qtrue;
             case HE_HIT_HUD:
                 HE_ScanHuds();
                 he.colorKey = -1;
@@ -3765,9 +3927,6 @@ static qboolean HE_Click(void) {
             case HE_HIT_CLOSE:
                 HE_RequestClose();
                 return qtrue;
-            case HE_HIT_LAYER:
-                HE_Select(hit->index);
-                return qtrue;
             case HE_HIT_FIELD:
                 if (he.field != hit->index) {
                     he.field = hit->index;
@@ -3788,14 +3947,19 @@ static qboolean HE_Click(void) {
             case HE_HIT_RTAB:
                 he.rightTab = hit->index;
                 return qtrue;
-            case HE_HIT_LTAB:
-                he.leftTab = hit->index;
-                return qtrue;
-            case HE_HIT_ADD:
-                he.drag = HE_DRAG_NEW;
-                he.dragPal = hit->index;
+            case HE_HIT_TILE: {
+                int pal = HE_TilePal(hit->index);
+
+                he.dragTile = hit->index;
                 HE_MousePx(&he.pressX, &he.pressY);
+                if (pal >= 0) {
+                    he.drag = HE_DRAG_NEW;
+                    he.dragPal = pal;
+                } else {
+                    HE_CycleTile(hit->index);
+                }
                 return qtrue;
+            }
             case HE_HIT_DELETE:
                 HE_Remove(he.selected);
                 return qtrue;
@@ -3895,10 +4059,11 @@ qboolean UI_HudEditor_HandleKey(int key) {
             return qtrue;
         case K_MWHEELUP:
         case K_MWHEELDOWN:
-            if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W && he.leftTab == 1) {
-                HE_ScrollAdd(key == K_MWHEELUP ? -1 : 1);
-            } else if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W) {
-                he.scroll += key == K_MWHEELUP ? -HE_ROW_H * 3 : HE_ROW_H * 3;
+            if (smMX >= HE_G && smMX < HE_G + HE_LEFT_W) {
+                he.scroll += key == K_MWHEELUP ? -50.0f : 50.0f;
+                if (he.scroll > he.scrollMax) {
+                    he.scroll = he.scrollMax;
+                }
                 if (he.scroll < 0) {
                     he.scroll = 0;
                 }
