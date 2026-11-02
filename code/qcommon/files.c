@@ -2136,7 +2136,7 @@ int FS_GetFileList(const char* path, const char* extension, char* listbuf, int b
 		return FS_GetModList(listbuf, bufsize);
 	}
 
-	pFiles = FS_ListFiles(path, extension, &nFiles);
+	pFiles = FS_ListFilteredFiles(path, extension, NULL, &nFiles, Q_stricmp(path, "demos") == 0);
 
 	for (i = 0; i < nFiles; i++) {
 		nLen = strlen(pFiles[i]) + 1;
