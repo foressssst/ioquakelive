@@ -605,7 +605,7 @@ void Cmd_ExecuteString(const char* text) {
         return;
     }
 
-    if (com_cl_running && com_cl_running->integer) {
+    {
         void *CL_FindAlias(const char *name);
         void CL_RunAlias(void);
 

@@ -3382,7 +3382,7 @@ void CL_OpenURL(const char* url) {
     Sys_OpenURL(url);
 }
 
-#define MAX_ALIASES         100
+#define MAX_ALIASES         256
 #define ALIAS_NAME_SIZE     32
 #define ALIAS_CMD_SIZE      256
 
@@ -3448,6 +3448,7 @@ static void CL_Alias_f(void) {
     a = (alias_t *)CL_FindAlias(Cmd_Argv(1));
     if (a) {
         Q_strncpyz(a->cmd, Cmd_Argv(2), ALIAS_CMD_SIZE);
+        cvar_modifiedFlags |= CVAR_ARCHIVE;
         return;
     }
 
@@ -3456,6 +3457,7 @@ static void CL_Alias_f(void) {
             Q_strncpyz(aliases[i].name, Cmd_Argv(1), ALIAS_NAME_SIZE);
             Q_strncpyz(aliases[i].cmd, Cmd_Argv(2), ALIAS_CMD_SIZE);
             aliases[i].active = 1;
+            cvar_modifiedFlags |= CVAR_ARCHIVE;
             return;
         }
     }
@@ -3476,6 +3478,7 @@ static void CL_Unalias_f(void) {
     if (a) {
         a->active = 0;
         Cmd_RemoveCommand(a->name);
+        cvar_modifiedFlags |= CVAR_ARCHIVE;
     }
 }
 
@@ -3484,6 +3487,7 @@ static void CL_UnaliasAll_f(void) {
     for (i = 0; i < MAX_ALIASES; i++) {
         aliases[i].active = 0;
     }
+    cvar_modifiedFlags |= CVAR_ARCHIVE;
 }
 
 void Cmd_WriteAliases(fileHandle_t f) {
@@ -3712,7 +3716,6 @@ void CL_Init(void) {
         Cmd_AddCommand("sayto", CL_Sayto_f);
         Cmd_SetCommandCompletionFunc("sayto", CL_CompletePlayerName);
     }
-    CL_InitAliases();
 
     CL_InitRef();
 

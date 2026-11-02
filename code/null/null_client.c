@@ -100,6 +100,9 @@ void CL_InitRef(void) {
 void CL_Snd_Shutdown(void) {
 }
 
+void CL_InitAliases(void) {
+}
+
 void *CL_FindAlias(const char *name) {
     return NULL;
 }

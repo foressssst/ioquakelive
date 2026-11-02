@@ -2043,6 +2043,7 @@ void Com_Init(char* commandLine) {
     com_developer = Cvar_Get("developer", "0", CVAR_TEMP);
 
     CL_InitKeyCommands();
+    CL_InitAliases();
 
     com_basegame = Cvar_Get("com_basegame", BASEGAME_DIR, CVAR_INIT);
     com_homepath = Cvar_Get("com_homepath", "", CVAR_INIT | CVAR_PROTECTED);
