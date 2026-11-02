@@ -2124,9 +2124,6 @@ const char* HV_ItemLabel(const itemDef_t* item) {
         o[0] = 0;
     }
     if (o[0]) {
-        if (item->window.name && Q_stristr(item->window.name, "shadow")) {
-            Q_strcat(o, sizeof(out[0]), " shadow");
-        }
         return o;
     }
     if (item->text && item->text[0] && !item->window.ownerDraw) {
@@ -2137,8 +2134,5 @@ const char* HV_ItemLabel(const itemDef_t* item) {
         }
     }
     Q_strncpyz(o, HV_ItemKind(item), sizeof(out[0]));
-    if (item->window.name && Q_stristr(item->window.name, "shadow")) {
-        Q_strcat(o, sizeof(out[0]), " shadow");
-    }
     return o;
 }

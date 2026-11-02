@@ -90,6 +90,7 @@ typedef enum {
     HEK_TEXTALIGNX,
     HEK_TEXTALIGNY,
     HEK_BORDERSIZE,
+    HEK_TEXTSTYLE,
     HEK_COUNT
 } heKey_t;
 
@@ -99,6 +100,7 @@ static const struct {
 } heKeys[HEK_COUNT] = {
     {"rect", 4},       {"widescreen", 1}, {"forecolor", 4},  {"backcolor", 4},  {"bordercolor", 4},
     {"textscale", 1},  {"textalignx", 1}, {"textaligny", 1}, {"bordersize", 1},
+    {"textstyle", 1},
 };
 
 typedef struct {
@@ -112,7 +114,14 @@ typedef struct {
     int fresh;
     int slot;
     qboolean fileVisible;
+    int shadowOf;
+    float shadowOfs[4];
+    qboolean shadowScale;
+    qboolean goneWithParent;
+    int layer;
 } heItem_t;
+
+enum { HE_LAYER_HUD, HE_LAYER_EXTRA, HE_LAYER_OFF };
 
 #define HEK_ALIVE HEK_COUNT
 #define HE_MAX_NEW 64
@@ -314,6 +323,8 @@ typedef enum {
     HE_HIT_FIELD,
     HE_HIT_STEP,
     HE_HIT_ANCHOR,
+    HE_HIT_SHADOW,
+    HE_HIT_EXTRAS,
     HE_HIT_SWATCH,
     HE_HIT_PALETTE,
     HE_HIT_ALPHA,
@@ -390,6 +401,8 @@ static struct {
     int numRedo;
     int group;
     qboolean dirty;
+    qboolean extras;
+    qboolean hasExtras;
     float scroll;
     float scrollMax;
     qboolean grid;
@@ -572,10 +585,27 @@ static qboolean HE_MapFile(int f, int base, int doc) {
     return qtrue;
 }
 
+static qboolean HE_CvarIsPlayers(const itemDef_t* it) {
+    static const char* const game[] = {"sv_", "g_", "cg_", "ui_", "r_", "cl_", "com_", "s_", "in_", "net_", "fs_", "vm_"};
+    int i;
+
+    if (!(it->cvarFlags & (CVAR_SHOW | CVAR_HIDE)) || !it->cvarTest || !it->cvarTest[0]) {
+        return qfalse;
+    }
+    for (i = 0; i < (int)ARRAY_LEN(game); i++) {
+        if (!Q_stricmpn(it->cvarTest, game[i], (int)strlen(game[i]))) {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
 static void HE_BuildItems(void) {
     int m, j;
 
     he.numItems = 0;
+    he.hasExtras = qfalse;
+    he.extras = qfalse;
     for (m = 0; m < HV_MenuCount(); m++) {
         menuDef_t* menu = HV_Menu(m);
 
@@ -592,6 +622,67 @@ static void HE_BuildItems(void) {
             e->fresh = -1;
             e->slot = j;
             e->fileVisible = (menu->items[j]->window.flags & WINDOW_VISIBLE) ? qtrue : qfalse;
+            e->layer = !(menu->window.flags & WINDOW_VISIBLE) ? HE_LAYER_OFF : HE_CvarIsPlayers(menu->items[j]) ? HE_LAYER_EXTRA : HE_LAYER_HUD;
+            if (e->layer == HE_LAYER_EXTRA) {
+                he.hasExtras = qtrue;
+            }
+        }
+    }
+}
+
+static qboolean HE_NamedShadow(const itemDef_t* it) {
+    return it->window.name && Q_stristr(it->window.name, "shadow") != NULL;
+}
+
+static qboolean HE_BlackText(const itemDef_t* it) {
+    return it->window.foreColor[0] <= 0.1f && it->window.foreColor[1] <= 0.1f && it->window.foreColor[2] <= 0.1f;
+}
+
+static qboolean HE_SameContent(const itemDef_t* a, const itemDef_t* b) {
+    if (a->window.ownerDrawFlags != b->window.ownerDrawFlags || a->window.ownerDrawFlags2 != b->window.ownerDrawFlags2) {
+        return qfalse;
+    }
+    if (a->window.ownerDraw || b->window.ownerDraw) {
+        return a->window.ownerDraw == b->window.ownerDraw;
+    }
+    return a->text && b->text && a->text[0] && !strcmp(a->text, b->text);
+}
+
+static void HE_FindShadows(void) {
+    int i, j;
+
+    for (i = 0; i < he.numItems; i++) {
+        he.items[i].shadowOf = -1;
+        he.items[i].goneWithParent = qfalse;
+    }
+    for (i = 0; i < he.numItems; i++) {
+        heItem_t* s = &he.items[i];
+        qboolean named = HE_NamedShadow(s->item);
+
+        if (!named && !HE_BlackText(s->item)) {
+            continue;
+        }
+        for (j = 0; j < he.numItems; j++) {
+            heItem_t* m = &he.items[j];
+            const rectDef_t* ra = &s->item->window.rectClient;
+            const rectDef_t* rb = &m->item->window.rectClient;
+
+            if (j == i || m->menu != s->menu || !HE_SameContent(s->item, m->item) || HE_NamedShadow(m->item)) {
+                continue;
+            }
+            if (!named && HE_BlackText(m->item)) {
+                continue;
+            }
+            if (fabs(ra->x - rb->x) > 8.0f || fabs(ra->y - rb->y) > 8.0f) {
+                continue;
+            }
+            s->shadowOf = j;
+            s->shadowOfs[0] = ra->x - rb->x;
+            s->shadowOfs[1] = ra->y - rb->y;
+            s->shadowOfs[2] = ra->w - rb->w;
+            s->shadowOfs[3] = ra->h - rb->h;
+            s->shadowScale = s->item->textscale == m->item->textscale;
+            break;
         }
     }
 }
@@ -630,6 +721,7 @@ static qboolean HE_LoadFiles(const char* listFile) {
     }
     HV_Load(he.files, he.numFiles, he.menusPerFile);
     HE_BuildItems();
+    HE_FindShadows();
     for (f = 0; f < he.numFiles; f++) {
         if (he.menusPerFile[f] < 0) {
             continue;
@@ -939,6 +1031,10 @@ static void HE_Get(int i, int key, float* v) {
         v[0] = it->widescreenFlag ? (float)it->widescreen : -1.0f;
         return;
     }
+    if (key == HEK_TEXTSTYLE) {
+        v[0] = (float)it->textStyle;
+        return;
+    }
     f = HE_Field(it, key);
     for (n = 0; n < heKeys[key].count; n++) {
         v[n] = f[n];
@@ -970,6 +1066,8 @@ static void HE_Set(int i, int key, const float* v) {
             it->widescreen = (int)v[0] & 3;
             it->widescreenFlag = 1;
         }
+    } else if (key == HEK_TEXTSTYLE) {
+        it->textStyle = (int)v[0];
     } else {
         f = HE_Field(it, key);
         for (n = 0; n < heKeys[key].count; n++) {
@@ -1028,7 +1126,11 @@ static void HE_Swap(heUndo_t* from, int* fromCount, heUndo_t* to, int* toCount) 
 
         HE_PushStack(to, toCount, u.item, u.key, group);
         HE_Set(u.item, u.key, u.values);
-        he.selected = he.items[u.item].removed ? -1 : u.item;
+        {
+            int owner = he.items[u.item].shadowOf >= 0 ? he.items[u.item].shadowOf : u.item;
+
+            he.selected = he.items[owner].removed ? -1 : owner;
+        }
     }
     if (he.numMarked > 0) {
         int i;
@@ -1559,8 +1661,12 @@ static void HE_MousePx(float* x, float* y) {
     *y = smTop + smMY * smScale;
 }
 
+static qboolean HE_LayerOn(int i) {
+    return he.items[i].layer == HE_LAYER_HUD || (he.items[i].layer == HE_LAYER_EXTRA && he.extras);
+}
+
 static qboolean HE_ItemPickable(int i) {
-    if (he.items[i].removed) {
+    if (he.items[i].removed || he.items[i].shadowOf >= 0 || !HE_LayerOn(i)) {
         return qfalse;
     }
     if (!he.items[i].fileVisible && i != he.selected) {
@@ -1569,7 +1675,7 @@ static qboolean HE_ItemPickable(int i) {
     if (HV_ItemInvisible(he.items[i].item) && i != he.selected) {
         return qfalse;
     }
-    return HV_ItemShown(he.items[i].item) || hvScene.showAll || i == he.selected;
+    return HV_ItemShown(he.items[i].item) || hvScene.showAll || i == he.selected || he.items[i].layer == HE_LAYER_EXTRA;
 }
 
 static qboolean HE_InCanvas(float px, float py) {
@@ -1691,6 +1797,9 @@ static int HE_AddItem(int pal, float px, float py) {
     e->fresh = heNumNew++;
     e->slot = menu->itemCount++;
     e->fileVisible = qtrue;
+    e->shadowOf = -1;
+    e->goneWithParent = qfalse;
+    e->layer = HE_LAYER_HUD;
     HE_BeginUndo();
     HE_PushUndo(i, HEK_ALIVE);
     HE_Set(i, HEK_ALIVE, &alive);
@@ -2131,7 +2240,8 @@ static void HE_MarkAll(void) {
     HE_ClearMarks();
     he.selected = -1;
     for (i = 0; i < he.numItems; i++) {
-        if (!he.items[i].removed && HE_Editable(i) && !HV_ItemInvisible(he.items[i].item)) {
+        if (!he.items[i].removed && he.items[i].shadowOf < 0 && HE_LayerOn(i) && HE_Editable(i) &&
+            !HV_ItemInvisible(he.items[i].item)) {
             heMark[i] = qtrue;
             he.numMarked++;
         }
@@ -2610,8 +2720,13 @@ static void HE_PaintTop(void) {
                  "Switch team") +
          10.0f;
     he.mapMenuX = x;
-    HE_Pill(x, y, HE_CTRL_H, heMapNames[he.map], HE_FA_MAP, NULL, HE_PILL_SECONDARY, HE_HIT_MAP, 0,
-            "Change the background");
+    x += HE_Pill(x, y, HE_CTRL_H, heMapNames[he.map], HE_FA_MAP, NULL, HE_PILL_SECONDARY, HE_HIT_MAP, 0,
+                 "Change the background") +
+         10.0f;
+    if (he.hasExtras) {
+        HE_Pill(x, y, HE_CTRL_H, "Extras", HE_FA_LAYERS, NULL, he.extras ? HE_PILL_PRIMARY : HE_PILL_SECONDARY,
+                HE_HIT_EXTRAS, 0, "Elements this HUD shows with a key, like a custom zoom");
+    }
 
     right = smVW - HE_M;
     right -= HE_CTRL_H;
@@ -2745,7 +2860,7 @@ static void HE_CountTiles(void) {
 
     memset(heTileCount, 0, sizeof(heTileCount));
     for (i = 0; i < he.numItems; i++) {
-        heItemTile[i] = he.items[i].removed ? -1 : HE_TileOf(he.items[i].item);
+        heItemTile[i] = he.items[i].removed || he.items[i].shadowOf >= 0 || !HE_LayerOn(i) ? -1 : HE_TileOf(he.items[i].item);
         if (heItemTile[i] >= 0) {
             heTileCount[heItemTile[i]]++;
         }
@@ -3119,6 +3234,100 @@ static qboolean HE_HasText(const itemDef_t* it) {
     return (it->text && it->text[0]) || (it->window.ownerDraw && !it->window.background);
 }
 
+static int HE_ShadowItem(int i) {
+    int s;
+
+    for (s = 0; s < he.numItems; s++) {
+        if (he.items[s].shadowOf == i) {
+            return s;
+        }
+    }
+    return -1;
+}
+
+static qboolean HE_HasShadow(int i) {
+    int s = HE_ShadowItem(i);
+    int style = he.items[i].item->textStyle;
+
+    return (s >= 0 && !he.items[s].removed) || style == ITEM_TEXTSTYLE_SHADOWED || style == ITEM_TEXTSTYLE_SHADOWEDMORE;
+}
+
+static void HE_SetShadow(int i, qboolean on) {
+    static const float off = 0.0f, alive = 1.0f;
+    int s = HE_ShadowItem(i);
+
+    if (on == HE_HasShadow(i)) {
+        return;
+    }
+    HE_BeginUndo();
+    if (on) {
+        if (s >= 0) {
+            HE_PushUndo(s, HEK_ALIVE);
+            HE_Set(s, HEK_ALIVE, &alive);
+        } else {
+            float style = (float)ITEM_TEXTSTYLE_SHADOWED;
+
+            HE_PushUndo(i, HEK_TEXTSTYLE);
+            HE_Set(i, HEK_TEXTSTYLE, &style);
+        }
+        return;
+    }
+    if (s >= 0 && !he.items[s].removed) {
+        HE_PushUndo(s, HEK_ALIVE);
+        HE_Set(s, HEK_ALIVE, &off);
+    }
+    if (he.items[i].item->textStyle == ITEM_TEXTSTYLE_SHADOWED || he.items[i].item->textStyle == ITEM_TEXTSTYLE_SHADOWEDMORE) {
+        HE_PushUndo(i, HEK_TEXTSTYLE);
+        HE_Set(i, HEK_TEXTSTYLE, &off);
+    }
+}
+
+static void HE_SyncShadows(void) {
+    static const float off = 0.0f, alive = 1.0f;
+    int i, n;
+
+    for (i = 0; i < he.numItems; i++) {
+        heItem_t* s = &he.items[i];
+        const heItem_t* m;
+        float want[4], have[4];
+
+        if (s->shadowOf < 0 || s->locked) {
+            continue;
+        }
+        m = &he.items[s->shadowOf];
+        if (m->removed) {
+            if (!s->removed) {
+                s->goneWithParent = qtrue;
+                HE_Set(i, HEK_ALIVE, &off);
+            }
+            continue;
+        }
+        if (s->goneWithParent) {
+            s->goneWithParent = qfalse;
+            HE_Set(i, HEK_ALIVE, &alive);
+        }
+        if (s->removed) {
+            continue;
+        }
+        HE_Get(s->shadowOf, HEK_RECT, want);
+        HE_Get(i, HEK_RECT, have);
+        for (n = 0; n < 4; n++) {
+            want[n] += s->shadowOfs[n];
+        }
+        if (memcmp(want, have, sizeof(want))) {
+            HE_Set(i, HEK_RECT, want);
+        }
+        HE_Get(s->shadowOf, HEK_WIDESCREEN, want);
+        HE_Get(i, HEK_WIDESCREEN, have);
+        if (want[0] != have[0]) {
+            HE_Set(i, HEK_WIDESCREEN, want);
+        }
+        if (s->shadowScale && s->item->textscale != m->item->textscale) {
+            HE_Set(i, HEK_TEXTSCALE, &m->item->textscale);
+        }
+    }
+}
+
 static void HE_PaintEmpty(float x, float y, float w) {
     HE_IconCenter(x, y + 40.0f, w, 50.0f, 34.0f, heGhost, HE_FA_MOVE);
     HE_TextCenter(x, y + 104.0f, w, 26.0f, 17.0f, heHi, "Select an element", qtrue);
@@ -3391,6 +3600,7 @@ static qboolean HE_PaintsBack(const itemDef_t* it) {
 static void HE_PaintProps(void) {
     static const char* anchors[5] = {"Auto", "Stretch", "Left", "Center", "Right"};
     static const char* tabs[2] = {"Properties", "Options"};
+    static const char* shadows[2] = {"No shadow", "Shadow"};
     float px = smVW - HE_G - HE_RIGHT_W, py = HE_BAR, ph = HE_PanelH();
     float x = px + 20.0f, w = HE_RIGHT_W - 40.0f, y = py + HE_HEAD_H, half = (w - 8.0f) * 0.5f;
     heItem_t* e;
@@ -3467,6 +3677,8 @@ static void HE_PaintProps(void) {
         HE_Caps(x, y, 20.0f, 15.0f, heMd, "Text");
         y += 26.0f;
         HE_NumberField(x, y, w, "Size", HF_SCALE, editable);
+        y += 46.0f;
+        HE_Segment(x, y, w, 40.0f, shadows, 2, HE_HasShadow(he.selected) ? 1 : 0, HE_HIT_SHADOW, editable, qtrue);
         y += 58.0f;
     }
 
@@ -3768,12 +3980,13 @@ static void HE_PaintCanvas(void) {
             }
         }
     }
-    if (hvScene.showAll) {
-        for (i = 0; i < he.numItems; i++) {
-            if (!he.items[i].removed && !HV_ItemShown(he.items[i].item) && he.items[i].fileVisible &&
-                i != he.selected) {
-                HV_PaintItem(he.items[i].item);
-            }
+    for (i = 0; i < he.numItems; i++) {
+        if (he.items[i].removed || HV_ItemShown(he.items[i].item) || !he.items[i].fileVisible || i == he.selected ||
+            !HE_LayerOn(i)) {
+            continue;
+        }
+        if (hvScene.showAll || he.items[i].layer == HE_LAYER_EXTRA) {
+            HV_PaintItem(he.items[i].item);
         }
     }
     if (he.grid) {
@@ -4000,6 +4213,7 @@ void UI_HudEditor_Paint(void) {
     he.tip = NULL;
     he.tipTitle = NULL;
     HE_Layout();
+    HE_SyncShadows();
     HE_CountTiles();
     if (he.drag != HE_DRAG_NONE && !trap_Key_IsDown(K_MOUSE1)) {
         if (he.drag == HE_DRAG_NEW) {
@@ -4210,6 +4424,20 @@ static qboolean HE_Click(void) {
             case HE_HIT_ANCHOR:
                 if (HE_Editable(he.selected)) {
                     HE_SetAnchor(he.selected, hit->index - 1);
+                }
+                return qtrue;
+            case HE_HIT_EXTRAS:
+                he.extras = !he.extras;
+                if (!he.extras) {
+                    HE_ClearMarks();
+                    if (he.selected >= 0 && he.items[he.selected].layer == HE_LAYER_EXTRA) {
+                        he.selected = -1;
+                    }
+                }
+                return qtrue;
+            case HE_HIT_SHADOW:
+                if (HE_Editable(he.selected)) {
+                    HE_SetShadow(he.selected, hit->index == 1);
                 }
                 return qtrue;
             case HE_HIT_SWATCH:
