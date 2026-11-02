@@ -51,8 +51,6 @@ void Item_UpdatePosition(itemDef_t* item);
 #define HE_FA_GRID 0xf00a
 #define HE_FA_SAVE 0xf0c7
 #define HE_FA_CLOSE 0xf00d
-#define HE_FA_EYE 0xf06e
-#define HE_FA_EYE_OFF 0xf070
 #define HE_FA_IMAGE 0xf03e
 #define HE_FA_TEXT 0xf031
 #define HE_FA_BOX 0xf096
@@ -113,6 +111,7 @@ typedef struct {
     qboolean removed;
     int fresh;
     int slot;
+    qboolean fileVisible;
 } heItem_t;
 
 #define HEK_ALIVE HEK_COUNT
@@ -308,7 +307,6 @@ typedef enum {
     HE_HIT_UNDO,
     HE_HIT_REDO,
     HE_HIT_GRID,
-    HE_HIT_ALL,
     HE_HIT_MAP,
     HE_HIT_SAVE,
     HE_HIT_CLOSE,
@@ -340,7 +338,9 @@ typedef enum {
     HE_DRAG_SIZE,
     HE_DRAG_ALPHA,
     HE_DRAG_SCALE,
-    HE_DRAG_NEW
+    HE_DRAG_NEW,
+    HE_DRAG_GROUP,
+    HE_DRAG_BOX
 } heDrag_t;
 
 enum { HF_X, HF_Y, HF_W, HF_H, HF_SCALE, HF_BORDER, HF_COUNT };
@@ -405,6 +405,7 @@ static struct {
     float hudMenuX;
     qboolean mapMenu;
     float mapMenuX;
+    int numMarked;
     int tileHover;
     int scrollTile;
     int dragTile;
@@ -432,6 +433,8 @@ static struct {
 } he;
 
 static int heItemTile[HE_MAX_ITEMS];
+static qboolean heMark[HE_MAX_ITEMS];
+static float heGroupStart[HE_MAX_ITEMS][4];
 static int heTileCount[ARRAY_LEN(heTiles)];
 static hdDoc_t heDocs[HE_MAX_DOCS];
 static char heText[HD_MAX_TEXT];
@@ -588,6 +591,7 @@ static void HE_BuildItems(void) {
             e->removed = qfalse;
             e->fresh = -1;
             e->slot = j;
+            e->fileVisible = (menu->items[j]->window.flags & WINDOW_VISIBLE) ? qtrue : qfalse;
         }
     }
 }
@@ -610,6 +614,8 @@ static qboolean HE_LoadFiles(const char* listFile) {
     he.numItems = 0;
     he.lockedFiles = 0;
     he.selected = -1;
+    he.numMarked = 0;
+    memset(heMark, 0, sizeof(heMark));
     he.drag = HE_DRAG_NONE;
     he.numUndo = he.numRedo = 0;
     he.dirty = qfalse;
@@ -1024,6 +1030,20 @@ static void HE_Swap(heUndo_t* from, int* fromCount, heUndo_t* to, int* toCount) 
         HE_Set(u.item, u.key, u.values);
         he.selected = he.items[u.item].removed ? -1 : u.item;
     }
+    if (he.numMarked > 0) {
+        int i;
+        qboolean gone = qfalse;
+
+        for (i = 0; i < he.numItems; i++) {
+            gone |= heMark[i] && he.items[i].removed;
+        }
+        if (gone) {
+            he.numMarked = 0;
+            memset(heMark, 0, sizeof(heMark));
+        } else {
+            he.selected = -1;
+        }
+    }
 }
 
 static void HE_Undo(void) {
@@ -1278,7 +1298,18 @@ static qboolean HE_UseList(const char* menuPath, char* listPath, int size) {
     return HV_ReadList(listPath, files, HV_MAX_FILES) == 1 && !Q_stricmp(files[0], menuPath) ? qtrue : qfalse;
 }
 
+static void HE_RestoreMarks(const qboolean* marks, int count) {
+    int i;
+
+    for (i = 0; i < he.numItems && count > 1; i++) {
+        heMark[i] = marks[i];
+    }
+    he.numMarked = count > 1 ? count : 0;
+}
+
 static qboolean HE_SaveNamed(const char* as) {
+    static qboolean keepMarks[HE_MAX_ITEMS];
+    int keepCount = he.numMarked;
     char name[64], path[MAX_QPATH], listPath[MAX_QPATH], list[MAX_MENUDEFFILE];
     char paths[HV_MAX_FILES][MAX_QPATH];
     qboolean changed[HE_MAX_DOCS];
@@ -1288,6 +1319,7 @@ static qboolean HE_SaveNamed(const char* as) {
         HE_OpenSaveAs();
         return qfalse;
     }
+    memcpy(keepMarks, heMark, sizeof(keepMarks));
     if (as) {
         Q_strncpyz(name, as, sizeof(name));
     }
@@ -1373,6 +1405,7 @@ static qboolean HE_SaveNamed(const char* as) {
         if (keepSel < he.numItems) {
             he.selected = keepSel;
         }
+        HE_RestoreMarks(keepMarks, keepCount);
         HE_Status("Saved");
         return qtrue;
     }
@@ -1391,6 +1424,7 @@ static qboolean HE_SaveNamed(const char* as) {
     if (keepSel < he.numItems) {
         he.selected = keepSel;
     }
+    HE_RestoreMarks(keepMarks, keepCount);
     HE_Status(va("Saved as %s", listPath));
     return qtrue;
 }
@@ -1529,7 +1563,7 @@ static qboolean HE_ItemPickable(int i) {
     if (he.items[i].removed) {
         return qfalse;
     }
-    if (!(he.items[i].item->window.flags & WINDOW_VISIBLE) && i != he.selected) {
+    if (!he.items[i].fileVisible && i != he.selected) {
         return qfalse;
     }
     if (HV_ItemInvisible(he.items[i].item) && i != he.selected) {
@@ -1656,6 +1690,7 @@ static int HE_AddItem(int pal, float px, float py) {
     e->removed = qtrue;
     e->fresh = heNumNew++;
     e->slot = menu->itemCount++;
+    e->fileVisible = qtrue;
     HE_BeginUndo();
     HE_PushUndo(i, HEK_ALIVE);
     HE_Set(i, HEK_ALIVE, &alive);
@@ -2041,17 +2076,209 @@ static void HE_StartDrag(int mode, int handle) {
     HE_PushUndo(he.selected, HEK_RECT);
 }
 
+static void HE_MarksDone(void);
+
 static void HE_EndDrag(void) {
     if ((he.drag == HE_DRAG_MOVE || he.drag == HE_DRAG_SIZE) && !he.moved && he.numUndo > 0) {
         he.numUndo--;
+    }
+    if (he.drag == HE_DRAG_BOX) {
+        HE_MarksDone();
     }
     he.drag = HE_DRAG_NONE;
     he.guideX = he.guideY = -1.0f;
 }
 
+static void HE_ClearMarks(void) {
+    he.numMarked = 0;
+    memset(heMark, 0, sizeof(heMark));
+}
+
+static void HE_MarksDone(void) {
+    int i;
+
+    if (he.numMarked != 1) {
+        return;
+    }
+    for (i = 0; i < he.numItems; i++) {
+        if (heMark[i]) {
+            HE_ClearMarks();
+            he.selected = i;
+            he.rightTab = 0;
+            return;
+        }
+    }
+}
+
+static void HE_ToggleMark(int i) {
+    if (he.selected >= 0 && he.selected != i && HE_Editable(he.selected)) {
+        heMark[he.selected] = qtrue;
+        he.numMarked++;
+    } else if (he.selected == i) {
+        he.selected = -1;
+        return;
+    }
+    he.selected = -1;
+    heMark[i] = !heMark[i];
+    he.numMarked += heMark[i] ? 1 : -1;
+    he.rightTab = 0;
+    HE_MarksDone();
+}
+
+static void HE_MarkAll(void) {
+    int i;
+
+    HE_ClearMarks();
+    he.selected = -1;
+    for (i = 0; i < he.numItems; i++) {
+        if (!he.items[i].removed && HE_Editable(i) && !HV_ItemInvisible(he.items[i].item)) {
+            heMark[i] = qtrue;
+            he.numMarked++;
+        }
+    }
+    he.rightTab = 0;
+    if (he.numMarked > 1) {
+        HE_Status(va(hvScene.showAll ? "All %d elements selected." : "All %d elements selected, also the ones for other modes.", he.numMarked));
+    }
+    HE_MarksDone();
+}
+
+static qboolean HE_MarkedAt(float px, float py) {
+    int i;
+
+    for (i = 0; i < he.numItems; i++) {
+        float r[4];
+
+        if (!heMark[i] || he.items[i].removed || !HE_ItemPickable(i)) {
+            continue;
+        }
+        HE_ItemBox(i, r);
+        if (px >= r[0] && px < r[0] + r[2] && py >= r[1] && py < r[1] + r[3]) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+static void HE_StartGroup(void) {
+    int i;
+
+    for (i = 0; i < he.numItems; i++) {
+        if (heMark[i]) {
+            HE_Get(i, HEK_RECT, heGroupStart[i]);
+        }
+    }
+    HE_MousePx(&he.pressX, &he.pressY);
+    he.drag = HE_DRAG_GROUP;
+    he.moved = qfalse;
+}
+
+static void HE_GroupUpdate(void) {
+    float mx, my;
+    qboolean snap = he.grid && !trap_Key_IsDown(K_ALT);
+    int i;
+
+    HE_MousePx(&mx, &my);
+    if (!he.moved) {
+        if (fabs(mx - he.pressX) < 2.0f && fabs(my - he.pressY) < 2.0f) {
+            return;
+        }
+        he.moved = qtrue;
+        HE_BeginUndo();
+        for (i = 0; i < he.numItems; i++) {
+            if (heMark[i]) {
+                HE_PushUndo(i, HEK_RECT);
+            }
+        }
+    }
+    for (i = 0; i < he.numItems; i++) {
+        float x0 = he.pressX, y0 = he.pressY, x1 = mx, y1 = my, r[4];
+        int anchor;
+
+        if (!heMark[i]) {
+            continue;
+        }
+        anchor = HE_ItemAnchor(i);
+        HV_FromScreen(anchor, &x0, &y0);
+        HV_FromScreen(anchor, &x1, &y1);
+        x1 = (float)floor(x1 - x0 + 0.5f);
+        y1 = (float)floor(y1 - y0 + 0.5f);
+        if (snap) {
+            x1 = (float)floor(x1 / HE_GRID + 0.5f) * HE_GRID;
+            y1 = (float)floor(y1 / HE_GRID + 0.5f) * HE_GRID;
+        }
+        r[0] = heGroupStart[i][0] + x1;
+        r[1] = heGroupStart[i][1] + y1;
+        r[2] = heGroupStart[i][2];
+        r[3] = heGroupStart[i][3];
+        HE_Set(i, HEK_RECT, r);
+    }
+}
+
+static void HE_BoxUpdate(void) {
+    float mx, my, x0, y0, x1, y1;
+    int i;
+
+    HE_MousePx(&mx, &my);
+    x0 = mx < he.pressX ? mx : he.pressX;
+    x1 = mx < he.pressX ? he.pressX : mx;
+    y0 = my < he.pressY ? my : he.pressY;
+    y1 = my < he.pressY ? he.pressY : my;
+    HE_ClearMarks();
+    if (x1 - x0 < 3.0f && y1 - y0 < 3.0f) {
+        return;
+    }
+    for (i = 0; i < he.numItems; i++) {
+        float r[4];
+
+        if (!HE_ItemPickable(i) || !HE_Editable(i)) {
+            continue;
+        }
+        HE_ItemBox(i, r);
+        if (r[0] < x1 && r[0] + r[2] > x0 && r[1] < y1 && r[1] + r[3] > y0) {
+            heMark[i] = qtrue;
+            he.numMarked++;
+        }
+    }
+}
+
+static void HE_RemoveMarked(void) {
+    static const float gone = 0.0f;
+    int i, n = 0;
+
+    HE_BeginUndo();
+    for (i = 0; i < he.numItems; i++) {
+        if (heMark[i] && HE_Removable(i)) {
+            HE_PushUndo(i, HEK_ALIVE);
+            HE_Set(i, HEK_ALIVE, &gone);
+            n++;
+        }
+    }
+    HE_ClearMarks();
+    HE_Status(va("Deleted %d. Ctrl+Z brings them back.", n));
+}
+
 static void HE_Nudge(float dx, float dy, float dw, float dh) {
     float r[4];
 
+    if (he.numMarked > 1) {
+        int i;
+
+        if (dx == 0.0f && dy == 0.0f) {
+            return;
+        }
+        HE_BeginUndo();
+        for (i = 0; i < he.numItems; i++) {
+            if (heMark[i]) {
+                HE_PushUndo(i, HEK_RECT);
+                HE_Get(i, HEK_RECT, r);
+                r[0] += dx;
+                r[1] += dy;
+                HE_Set(i, HEK_RECT, r);
+            }
+        }
+        return;
+    }
     if (!HE_Editable(he.selected)) {
         return;
     }
@@ -2342,14 +2569,15 @@ static void HE_Segment(float x, float y, float w, float h, const char** labels, 
 }
 
 static void HE_PaintTop(void) {
-    static const char* modes[ARRAY_LEN(heModes)];
+    static const char* modes[ARRAY_LEN(heModes) + 1];
     float y = (HE_BAR - HE_CTRL_H) * 0.5f, x, right, gw;
     int i, sel = 0;
 
+    modes[0] = "All";
     for (i = 0; i < (int)ARRAY_LEN(heModes); i++) {
-        modes[i] = heModes[i].label;
-        if (hvScene.gametype == heModes[i].gametype) {
-            sel = i;
+        modes[i + 1] = heModes[i].label;
+        if (!hvScene.showAll && hvScene.gametype == heModes[i].gametype) {
+            sel = i + 1;
         }
     }
     SM_Fill(0.0f, 0.0f, smVW, HE_BAR, hePanel, NULL);
@@ -2374,8 +2602,8 @@ static void HE_PaintTop(void) {
     }
 
     x = HE_ColX0();
-    gw = HE_SegmentW(modes, ARRAY_LEN(heModes), 0.0f);
-    HE_Segment(x, y, gw, HE_CTRL_H, modes, ARRAY_LEN(heModes), sel, HE_HIT_MODE, qtrue, qfalse);
+    gw = HE_SegmentW(modes, ARRAY_LEN(modes), 0.0f);
+    HE_Segment(x, y, gw, HE_CTRL_H, modes, ARRAY_LEN(modes), sel, HE_HIT_MODE, qtrue, qfalse);
     x += gw + 10.0f;
     x += HE_Pill(x, y, HE_CTRL_H, hvScene.team == TEAM_BLUE ? "Blue" : "Red", 0,
                  hvScene.team == TEAM_BLUE ? heTeamBlue : heTeamRed, HE_PILL_SECONDARY, HE_HIT_TEAM, 0,
@@ -2391,16 +2619,14 @@ static void HE_PaintTop(void) {
     right -= 8.0f + HE_PillW("Save", HE_FA_SAVE);
     HE_Pill(right, y, HE_CTRL_H, "Save", HE_FA_SAVE, NULL, he.dirty ? HE_PILL_PRIMARY : HE_PILL_SECONDARY,
             HE_HIT_SAVE, 0, "Save (Ctrl+S)");
-    right -= 12.0f + 4.0f * 36.0f + 8.0f + 13.0f;
-    HE_Round(right, y, 4.0f * 36.0f + 8.0f + 13.0f, HE_CTRL_H, HE_R, heCard);
+    right -= 12.0f + 3.0f * 36.0f + 8.0f + 13.0f;
+    HE_Round(right, y, 3.0f * 36.0f + 8.0f + 13.0f, HE_CTRL_H, HE_R, heCard);
     HE_IconButton(right + 4.0f, y + 2.0f, 36.0f, HE_FA_UNDO, HE_HIT_UNDO, 0, qfalse, he.numUndo == 0,
                   "Undo (Ctrl+Z)");
     HE_IconButton(right + 40.0f, y + 2.0f, 36.0f, HE_FA_REDO, HE_HIT_REDO, 0, qfalse, he.numRedo == 0,
                   "Redo (Ctrl+Y)");
     SM_Fill(right + 82.0f, y + 11.0f, 1.0f, HE_CTRL_H - 22.0f, heEdge, NULL);
     HE_IconButton(right + 89.0f, y + 2.0f, 36.0f, HE_FA_GRID, HE_HIT_GRID, 0, he.grid, qfalse, "Snap to grid (G)");
-    HE_IconButton(right + 125.0f, y + 2.0f, 36.0f, hvScene.showAll ? HE_FA_EYE : HE_FA_EYE_OFF, HE_HIT_ALL, 0,
-                  hvScene.showAll, qfalse, "Show hidden elements");
 }
 
 static float HE_ListTop(void) {
@@ -2898,6 +3124,8 @@ static void HE_PaintEmpty(float x, float y, float w) {
     HE_TextCenter(x, y + 104.0f, w, 26.0f, 17.0f, heHi, "Select an element", qtrue);
     HE_TextCenter(x, y + 134.0f, w, 22.0f, 15.0f, heMd, "Click it on your HUD or on", qfalse);
     HE_TextCenter(x, y + 156.0f, w, 22.0f, 15.0f, heMd, "its icon on the left.", qfalse);
+    HE_TextCenter(x, y + 196.0f, w, 22.0f, 15.0f, heMd, "Drag on an empty spot to select several.", qfalse);
+    HE_TextCenter(x, y + 220.0f, w, 22.0f, 15.0f, heMd, "Ctrl+A selects everything.", qfalse);
 }
 
 enum { HE_OG_WEAPON, HE_OG_HUD, HE_OG_CROSSHAIR, HE_OG_MESSAGES, HE_OG_COUNT };
@@ -3179,6 +3407,14 @@ static void HE_PaintProps(void) {
         return;
     }
 
+    if (he.numMarked > 1) {
+        HE_Text(x, y - 6.0f, 30.0f, 21.0f, heHi, va("%d elements", he.numMarked), qtrue);
+        HE_Text(x, y + 21.0f, 22.0f, 15.0f, heMd, "Selected together", qfalse);
+        HE_Text(x, y + 62.0f, 22.0f, 15.0f, heMd, "Drag any of them to move them all.", qfalse);
+        HE_Text(x, y + 86.0f, 22.0f, 15.0f, heMd, "Arrow keys nudge them.", qfalse);
+        HE_Text(x, y + 110.0f, 22.0f, 15.0f, heMd, "Delete removes them.", qfalse);
+        return;
+    }
     if (he.selected < 0) {
         HE_PaintEmpty(x, y, w);
         return;
@@ -3534,8 +3770,7 @@ static void HE_PaintCanvas(void) {
     }
     if (hvScene.showAll) {
         for (i = 0; i < he.numItems; i++) {
-            if (!he.items[i].removed && !HV_ItemShown(he.items[i].item) &&
-                (he.items[i].item->window.flags & WINDOW_VISIBLE) &&
+            if (!he.items[i].removed && !HV_ItemShown(he.items[i].item) && he.items[i].fileVisible &&
                 i != he.selected) {
                 HV_PaintItem(he.items[i].item);
             }
@@ -3596,6 +3831,37 @@ static void HE_PaintCanvas(void) {
             HE_CanvasLabel(r, HV_ItemLabel(he.items[he.selected].item), qtrue);
         }
     }
+    if (he.numMarked > 0) {
+        for (i = 0; i < he.numItems; i++) {
+            float r[4];
+
+            if (!heMark[i] || he.items[i].removed || !HE_ItemPickable(i)) {
+                continue;
+            }
+            HE_ItemBox(i, r);
+            HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, heAccent);
+        }
+    }
+    if (he.drag == HE_DRAG_BOX) {
+        float x0 = he.pressX, y0 = he.pressY, x1, y1;
+        static const vec4_t band = {1.0f, 1.0f, 1.0f, 0.1f};
+
+        HE_MousePx(&x1, &y1);
+        if (x1 < x0) {
+            float s = x0;
+
+            x0 = x1;
+            x1 = s;
+        }
+        if (y1 < y0) {
+            float s = y0;
+
+            y0 = y1;
+            y1 = s;
+        }
+        HE_PxFill(x0, y0, x1 - x0, y1 - y0, band);
+        HE_PxFrame(x0, y0, x1 - x0, y1 - y0, 1.0f, heAccent);
+    }
     if (he.guideX >= 0.0f) {
         HE_PxFill(he.guideX, y, 1.0f, h, heGuide);
     }
@@ -3618,7 +3884,7 @@ static float HE_KeyHint(float x, float y, float h, const char* key, const char* 
 
 static void HE_PaintStatus(void) {
     static const char* hints[][2] = {
-        {"Drag", "Move"}, {"Corners", "Resize"}, {"Arrows", "Nudge"}, {"Shift", "x10"}, {"Ctrl", "Resize"},
+        {"Drag", "Move"}, {"Ctrl+A", "All"}, {"Corners", "Resize"}, {"Arrows", "Nudge"}, {"Shift", "x10"}, {"Ctrl", "Resize"},
         {"Alt", "No snapping"}, {"G", "Grid"},
     };
     float x0 = HE_LEFT_W, x1 = smVW - HE_RIGHT_W, y = smBottom - HE_STATUS_H, x = x0 + 18.0f, limit = x1 - 18.0f;
@@ -3683,6 +3949,8 @@ void UI_HudEditor_Open(void) {
     }
     he.tileHover = -1;
     he.scrollTile = -1;
+    hvScene.showAll = qtrue;
+    hvScene.gametype = GT_CA;
     HE_Load(list);
     menu = Menus_FindByName("hudeditor");
     item = menu ? Menu_FindItemByName(menu, "hudeditor") : NULL;
@@ -3741,6 +4009,10 @@ void UI_HudEditor_Paint(void) {
     }
     if ((he.drag == HE_DRAG_MOVE || he.drag == HE_DRAG_SIZE) && HE_Editable(he.selected)) {
         HE_DragUpdate();
+    } else if (he.drag == HE_DRAG_GROUP) {
+        HE_GroupUpdate();
+    } else if (he.drag == HE_DRAG_BOX) {
+        HE_BoxUpdate();
     } else if (he.drag == HE_DRAG_ALPHA && he.selected >= 0 && he.colorKey >= 0) {
         float* c = HE_Field(he.items[he.selected].item, he.colorKey);
         float tx = he.track[0], tw = he.track[1] > 1.0f ? he.track[1] : 1.0f;
@@ -3773,6 +4045,7 @@ static void HE_Select(int i) {
         HE_CommitField();
     }
     he.colorKey = -1;
+    HE_ClearMarks();
     he.selected = i;
     if (i >= 0) {
         he.rightTab = 0;
@@ -3895,7 +4168,8 @@ static qboolean HE_Click(void) {
     if (hit) {
         switch (hit->type) {
             case HE_HIT_MODE:
-                hvScene.gametype = heModes[hit->index].gametype;
+                hvScene.showAll = hit->index == 0 ? qtrue : qfalse;
+                hvScene.gametype = hit->index == 0 ? GT_CA : heModes[hit->index - 1].gametype;
                 return qtrue;
             case HE_HIT_TEAM:
                 hvScene.team = hvScene.team == TEAM_BLUE ? TEAM_RED : TEAM_BLUE;
@@ -3917,9 +4191,6 @@ static qboolean HE_Click(void) {
                 return qtrue;
             case HE_HIT_GRID:
                 he.grid = !he.grid;
-                return qtrue;
-            case HE_HIT_ALL:
-                hvScene.showAll = !hvScene.showAll;
                 return qtrue;
             case HE_HIT_SAVE:
                 HE_Save();
@@ -3985,6 +4256,17 @@ static qboolean HE_Click(void) {
     if (!HE_InCanvas(mx, my)) {
         return qtrue;
     }
+    if (trap_Key_IsDown(K_SHIFT) || trap_Key_IsDown(K_CTRL)) {
+        pick = HE_PickAt(mx, my);
+        if (pick >= 0 && HE_Editable(pick)) {
+            HE_ToggleMark(pick);
+        }
+        return qtrue;
+    }
+    if (he.numMarked > 1 && HE_MarkedAt(mx, my)) {
+        HE_StartGroup();
+        return qtrue;
+    }
     handle = HE_HandleAt(mx, my);
     if (handle >= 0) {
         HE_StartDrag(HE_DRAG_SIZE, handle);
@@ -3994,6 +4276,10 @@ static qboolean HE_Click(void) {
     HE_Select(pick);
     if (pick >= 0 && HE_Editable(pick)) {
         HE_StartDrag(HE_DRAG_MOVE, -1);
+    } else if (pick < 0) {
+        he.pressX = mx;
+        he.pressY = my;
+        he.drag = HE_DRAG_BOX;
     }
     return qtrue;
 }
@@ -4080,7 +4366,9 @@ qboolean UI_HudEditor_HandleKey(int key) {
         case K_DEL:
         case K_KP_DEL:
         case K_BACKSPACE:
-            if (!he.confirm && he.selected >= 0) {
+            if (!he.confirm && he.numMarked > 1) {
+                HE_RemoveMarked();
+            } else if (!he.confirm && he.selected >= 0) {
                 HE_Remove(he.selected);
             }
             return qtrue;
@@ -4094,7 +4382,7 @@ qboolean UI_HudEditor_HandleKey(int key) {
                 he.mapMenu = qfalse;
             } else if (he.colorKey >= 0) {
                 he.colorKey = -1;
-            } else if (he.selected >= 0) {
+            } else if (he.selected >= 0 || he.numMarked > 0) {
                 HE_Select(-1);
             } else {
                 HE_RequestClose();
@@ -4158,6 +4446,10 @@ qboolean UI_HudEditor_HandleKey(int key) {
     }
     if (ctrl && (key == 's' || key == 'S')) {
         HE_Save();
+        return qtrue;
+    }
+    if (ctrl && (key == 'a' || key == 'A')) {
+        HE_MarkAll();
         return qtrue;
     }
     if (!ctrl && (key == 'g' || key == 'G')) {
