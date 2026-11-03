@@ -779,17 +779,12 @@ static int BR_WordsMin(float size, const char* text, qboolean bold) {
 
 static const int* BR_Mins(brServer_t* s) {
     char text[160];
-    int tags, w, i;
+    int w;
 
     if (s->minsScale == smScale) {
         return s->mins;
     }
     s->mins[0] = BR_Px(2 * SM_Len(5.0f) + SM_Len(79.0f));
-    tags = BR_Px(SM_Len(5.0f));
-    for (i = 0; i < s->numTags; i++) {
-        tags += BR_Px(BR_TagWidth(s->tags[i]) + 2 * SM_Len(3.0f));
-    }
-    s->mins[0] = tags > s->mins[0] ? tags : s->mins[0];
     w = BR_WordsMin(14.6667f, s->name, qtrue);
     s->mins[0] = w > s->mins[0] ? w : s->mins[0];
     if (s->password) {
@@ -873,6 +868,11 @@ static brCols_t BR_Columns(float inner) {
                 break;
             }
         }
+    }
+    if (w[0] + w[1] + w[2] > tw) {
+        int shot = BR_Px(2 * SM_Len(5.0f) + SM_Len(79.0f));
+
+        w[0] = tw - w[1] - w[2] > shot ? tw - w[1] - w[2] : shot;
     }
 
     c.main = w[0] / smScale;
