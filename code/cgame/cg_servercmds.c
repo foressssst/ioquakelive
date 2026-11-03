@@ -205,19 +205,8 @@ static void CG_ParseScores_Tdm(void) {
     CG_SetScoreboardSelection();
 }
 
-static void CG_ParseScores_Ca(void) {
-    int i, n;
-
-    i = 1;
-    cg.numScores = atoi(CG_Argv(i++));
-    if (cg.numScores > MAX_CLIENTS) {
-        cg.numScores = MAX_CLIENTS;
-    }
-    cg.teamScores[0] = atoi(CG_Argv(i++));
-    cg.teamScores[1] = atoi(CG_Argv(i++));
-
-    memset(cg.scores, 0, sizeof(cg.scores));
-    for (n = 0; n < cg.numScores && *CG_Argv(i); n++) {
+static int CG_ParseScoreEntries_Ca(int i, int n) {
+    for (; n < MAX_CLIENTS && *CG_Argv(i); n++) {
         score_t *sp = &cg.scores[n];
         sp->client = atoi(CG_Argv(i++));
         sp->team = atoi(CG_Argv(i++));
@@ -243,7 +232,20 @@ static void CG_ParseScores_Ca(void) {
         cgs.clientinfo[sp->client].score = sp->score;
         cgs.clientinfo[sp->client].team = sp->team;
     }
-    cg.numScores = n;
+    return n;
+}
+
+static void CG_ParseScores_Ca(void) {
+    cg.teamScores[0] = atoi(CG_Argv(2));
+    cg.teamScores[1] = atoi(CG_Argv(3));
+
+    memset(cg.scores, 0, sizeof(cg.scores));
+    cg.numScores = CG_ParseScoreEntries_Ca(4, 0);
+    CG_SetScoreboardSelection();
+}
+
+static void CG_ParseScores_Ca_Ext(void) {
+    cg.numScores = CG_ParseScoreEntries_Ca(1, cg.numScores);
     CG_SetScoreboardSelection();
 }
 
@@ -1709,6 +1711,10 @@ static void CG_ServerCommand(void) {
     }
     if (!strcmp(cmd, "scores_ca")) {
         CG_ParseScores_Ca();
+        return;
+    }
+    if (!strcmp(cmd, "scores_ca_ext")) {
+        CG_ParseScores_Ca_Ext();
         return;
     }
     if (!strcmp(cmd, "scores_ctf")) {
