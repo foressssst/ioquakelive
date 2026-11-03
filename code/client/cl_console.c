@@ -630,12 +630,12 @@ static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, floa
         return;
     }
     gap = shader ? size * 0.2f : 0.0f;
-    x += ((CON_AVATAR_CELLS + CON_FLAG_CELLS) * adv - (shader ? size : 0.0f) - gap - size * 2.0f) * 0.5f;
+    x += ((CON_AVATAR_CELLS + CON_FLAG_CELLS) * adv - (shader ? size : 0.0f) - gap - size * 1.5f) * 0.5f;
     if (shader) {
         re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size, size, 0.0f, 0.0f, 1.0f, 1.0f, shader);
         x += size + gap;
     }
-    re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size * 2.0f, size, 0.0f, 0.0f, 1.0f, 1.0f, flag);
+    re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size * 1.5f, size, 0.0f, 0.0f, 1.0f, 1.0f, flag);
 }
 
 static void Con_FindImageLink(const char* txt, char* url, int size) {

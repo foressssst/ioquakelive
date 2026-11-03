@@ -918,7 +918,7 @@ static void CL_ClubThread(void* unused) {
             if (CL_ClubImage(avatar, pic, sizeof(pic), &w, &h) && w == h) {
                 Q_strncpyz(c->avatar, pic, sizeof(c->avatar));
             }
-            if (CL_ClubImage(flag, pic, sizeof(pic), &w, &h) && w == 2 * h) {
+            if (CL_ClubImage(flag, pic, sizeof(pic), &w, &h) && w > h) {
                 Q_strncpyz(c->flag, pic, sizeof(c->flag));
             }
             CL_UpdateSet(&c->state, CLC_READY);

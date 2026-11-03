@@ -104,7 +104,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define FEEDER_FLAG_TOP (4.0f / 32.0f)
 #define FEEDER_FLAG_H (25.0f / 32.0f)
-#define FEEDER_PREFIX_W 27.0f
+#define FEEDER_PREFIX_W 20.0f
 
 typedef struct {
     const char* command;

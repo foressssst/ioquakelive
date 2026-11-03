@@ -666,8 +666,8 @@ static float CG_DrawChatLine(float x, float y, float scale, float* color, const 
             x += size + 3.0f;
         }
         if (flag) {
-            CG_DrawPic(x, y - size + 1.5f, size * 2.0f, size, flag);
-            x += size * 2.0f + 3.0f;
+            CG_DrawPic(x, y - size + 1.5f, size * 1.5f, size, flag);
+            x += size * 1.5f + 3.0f;
         }
         trap_R_SetColor(NULL);
     }

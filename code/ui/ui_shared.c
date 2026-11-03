@@ -3740,8 +3740,8 @@ void Item_ListBox_Paint(itemDef_t* item) {
                                 float side = j > 0 ? listPtr->columnInfo[j - 1].width : listPtr->elementHeight - 1;
                                 float fh = side * FEEDER_FLAG_H;
 
-                                DC->drawHandlePic(tx, y - 2 + listPtr->elementHeight * 0.5f + side * FEEDER_FLAG_TOP, fh * 2.0f, fh, prefix);
-                                tx += fh * 2.0f + 2.0f;
+                                DC->drawHandlePic(tx, y - 2 + listPtr->elementHeight * 0.5f + side * FEEDER_FLAG_TOP, fh * 1.5f, fh, prefix);
+                                tx += fh * 1.5f + 2.0f;
                             }
                             DC->drawText(tx, y + listPtr->elementHeight, item->textscale,
                                          (i == item->cursorPos) ? item->window.selectedColor : item->window.elementColor,
