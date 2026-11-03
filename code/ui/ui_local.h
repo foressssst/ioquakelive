@@ -888,6 +888,7 @@ qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* t
 
 qboolean trap_LAN_SteamRefresh(void);
 qboolean trap_LAN_SteamRefreshing(void);
+qboolean trap_LAN_SteamStopRefresh(void);
 qboolean trap_LAN_SteamDetails(const char* address);
 int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int playersSize);
 qboolean trap_LAN_SteamDetailsInfo(char* info, int infoSize);

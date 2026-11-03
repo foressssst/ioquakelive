@@ -738,6 +738,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return 0;
 
         case UI_LAN_STEAM_REFRESH:
+            if (args[1] == 2) {
+                return Steam_StopServerList();
+            }
             return args[1] ? Steam_ServerListRefreshing() : Steam_RefreshServerList();
 
         case UI_LAN_STEAM_DETAILS:

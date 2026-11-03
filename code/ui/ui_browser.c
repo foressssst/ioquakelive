@@ -43,6 +43,7 @@ typedef enum {
     BR_HIT_TOGGLE,
     BR_HIT_REFRESH_ALL,
     BR_HIT_QUICK_REFRESH,
+    BR_HIT_STOP_REFRESH,
     BR_HIT_SORT,
     BR_HIT_ROW,
     BR_HIT_PLAY,
@@ -779,17 +780,12 @@ static int BR_WordsMin(float size, const char* text, qboolean bold) {
 
 static const int* BR_Mins(brServer_t* s) {
     char text[160];
-    int tags, w, i;
+    int w;
 
     if (s->minsScale == smScale) {
         return s->mins;
     }
     s->mins[0] = BR_Px(2 * SM_Len(5.0f) + SM_Len(79.0f));
-    tags = BR_Px(SM_Len(5.0f));
-    for (i = 0; i < s->numTags; i++) {
-        tags += BR_Px(BR_TagWidth(s->tags[i]) + 2 * SM_Len(3.0f));
-    }
-    s->mins[0] = tags > s->mins[0] ? tags : s->mins[0];
     w = BR_WordsMin(14.6667f, s->name, qtrue);
     s->mins[0] = w > s->mins[0] ? w : s->mins[0];
     if (s->password) {
@@ -873,6 +869,11 @@ static brCols_t BR_Columns(float inner) {
                 break;
             }
         }
+    }
+    if (w[0] + w[1] + w[2] > tw) {
+        int shot = BR_Px(2 * SM_Len(5.0f) + SM_Len(79.0f));
+
+        w[0] = tw - w[1] - w[2] > shot ? tw - w[1] - w[2] : shot;
     }
 
     c.main = w[0] / smScale;
@@ -1329,6 +1330,12 @@ static void BR_DrawList(float left, float top, float width, float height) {
         BR_Button(quickX - SM_Len(10.0f) - allW, sectionY + SM_Len(10.0f), "Refresh All", busy, BR_HIT_REFRESH_ALL, 0,
                   &clip);
         BR_Button(quickX, sectionY + SM_Len(10.0f), "Quick Refresh", busy, BR_HIT_QUICK_REFRESH, 0, &clip);
+        if (busy) {
+            float stopW = BR_ButtonWidth("Stop");
+
+            BR_Button(quickX - 2 * SM_Len(10.0f) - allW - stopW, sectionY + SM_Len(10.0f), "Stop", qfalse,
+                      BR_HIT_STOP_REFRESH, 0, &clip);
+        }
     }
 
     tableY = sectionY + BR_SECTION_H;
@@ -2338,6 +2345,9 @@ qboolean UI_Browser_HandleKey(int key) {
             break;
         case BR_HIT_QUICK_REFRESH:
             trap_LAN_SteamRefresh();
+            break;
+        case BR_HIT_STOP_REFRESH:
+            trap_LAN_SteamStopRefresh();
             break;
         case BR_HIT_SORT:
             BR_Sort(hit->index);

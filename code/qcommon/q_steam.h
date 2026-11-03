@@ -26,6 +26,7 @@ qboolean Steam_RequestServerList(int source);
 void Steam_ServerList_f(void);
 qboolean Steam_ServerListRefreshing(void);
 qboolean Steam_RefreshServerList(void);
+qboolean Steam_StopServerList(void);
 int Steam_ServerListNextUpdated(void);
 const char* Steam_ServerListName(int index);
 
