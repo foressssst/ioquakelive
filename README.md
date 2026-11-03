@@ -38,6 +38,11 @@ git submodule update --init --recursive
 
 - **Linux y macOS:** ejecuta `make release`. Se requiere tener SDL3 instalado.
 
+## Agradecimientos
+
+- [scryd1ke](https://github.com/scryd1ke) — aportes de código.
+- [mmranni](https://github.com/mmranni) — pruebas y reportes.
+
 ## Créditos y licencia
 
 Este proyecto también se basa en el trabajo de otros desarrolladores y proyectos de código abierto:
