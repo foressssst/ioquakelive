@@ -934,6 +934,7 @@ typedef struct {
     qhandle_t medalFrames[6][24];
     qhandle_t chatBalloonFrames[16];
     qhandle_t connectionShader;
+    qhandle_t netShader;
 
     qhandle_t selectShader;
     qhandle_t weaponBarHighlightShader;
