@@ -1708,6 +1708,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.bloodTrailShader = cgs.media.bloodSprayShaders[0];
     cgs.media.lagometerShader = trap_R_RegisterShader("lagometer");
     cgs.media.connectionShader = trap_R_RegisterShader("disconnected");
+    cgs.media.netShader = trap_R_RegisterShaderNoMip("gfx/2d/net.jpg");
 
     cgs.media.waterBubbleShader = trap_R_RegisterShader("waterBubble");
     cgs.media.vignetteShader = trap_R_RegisterShader("gfx/misc/vignette");

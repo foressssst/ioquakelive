@@ -1359,7 +1359,7 @@ static void CG_DrawDisconnect(void) {
 	x = SCREEN_WIDTH - 48;
 	y = SCREEN_HEIGHT - 48;
 
-	CG_DrawPic(x, y, 48, 48, trap_R_RegisterShader("gfx/2d/net.jpg"));
+	CG_DrawPic(x, y, 48, 48, cgs.media.netShader);
 }
 
 static void CG_DrawInputCmds(void) {
