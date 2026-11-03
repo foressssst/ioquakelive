@@ -203,6 +203,92 @@ qboolean Sys_StartSteam(void) {
     return (INT_PTR)ShellExecuteA(NULL, "open", "steam://open/main", NULL, NULL, SW_SHOWNORMAL) > 32 ? qtrue : qfalse;
 }
 
+#ifdef STEAMPATH_NAME
+static qboolean Sys_QLHasWebPak(const char* qlDir) {
+    char path[MAX_OSPATH];
+    FILE* f;
+
+    Com_sprintf(path, sizeof(path), "%s\\web.pak", qlDir);
+    f = fopen(path, "rb");
+    if (f) {
+        fclose(f);
+        return qtrue;
+    }
+    return qfalse;
+}
+
+static qboolean Sys_SteamQLFromLibraries(const char* steamRoot, char* out, int outSize) {
+    static const char* const vdfs[] = { "steamapps\\libraryfolders.vdf", "config\\libraryfolders.vdf" };
+    char vdfPath[MAX_OSPATH];
+    char* buf;
+    const char* p;
+    FILE* f;
+    long size;
+    size_t got;
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(vdfs); i++) {
+        Com_sprintf(vdfPath, sizeof(vdfPath), "%s\\%s", steamRoot, vdfs[i]);
+        f = fopen(vdfPath, "rb");
+        if (!f) {
+            continue;
+        }
+
+        fseek(f, 0, SEEK_END);
+        size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (size <= 0 || size > 4 * 1024 * 1024) {
+            fclose(f);
+            continue;
+        }
+
+        buf = Z_Malloc(size + 1);
+        got = fread(buf, 1, size, f);
+        fclose(f);
+        buf[got] = '\0';
+
+        p = buf;
+        while ((p = strstr(p, "\"path\"")) != NULL) {
+            char lib[MAX_OSPATH];
+            char cand[MAX_OSPATH];
+            int n = 0;
+
+            p += 6;
+            while (*p && *p != '"') {
+                p++;
+            }
+            if (*p != '"') {
+                break;
+            }
+            p++;
+            while (*p && *p != '"' && n < (int)sizeof(lib) - 1) {
+                if (*p == '\\' && p[1] == '\\') {
+                    lib[n++] = '\\';
+                    p += 2;
+                } else {
+                    lib[n++] = *p++;
+                }
+            }
+            lib[n] = '\0';
+            if (*p == '"') {
+                p++;
+            }
+
+            Com_sprintf(cand, sizeof(cand), "%s\\steamapps\\common\\%s", lib, STEAMPATH_NAME);
+            if (Sys_QLHasWebPak(cand)) {
+                Q_strncpyz(out, cand, outSize);
+                Z_Free(buf);
+                return qtrue;
+            }
+        }
+
+        Z_Free(buf);
+    }
+
+    return qfalse;
+}
+#endif
+
 char* Sys_SteamPath(void) {
 #if defined(STEAMPATH_NAME) || defined(STEAMPATH_APPID)
     HKEY steamRegKey;
@@ -246,8 +332,20 @@ char* Sys_SteamPath(void) {
             }
         }
 
-        if (finishPath)
+        if (finishPath) {
+#ifdef STEAMPATH_NAME
+            char steamRoot[MAX_OSPATH];
+            char found[MAX_OSPATH];
+
+            Q_strncpyz(steamRoot, steamPath, sizeof(steamRoot));
             Q_strcat(steamPath, MAX_OSPATH, "\\SteamApps\\common\\" STEAMPATH_NAME);
+
+            if (!Sys_QLHasWebPak(steamPath) && Sys_SteamQLFromLibraries(steamRoot, found, sizeof(found)))
+                Q_strncpyz(steamPath, found, sizeof(steamPath));
+#else
+            Q_strcat(steamPath, MAX_OSPATH, "\\SteamApps\\common\\" STEAMPATH_NAME);
+#endif
+        }
     }
 #endif
 
