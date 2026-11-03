@@ -116,6 +116,7 @@ static void Steam_ServersListen(void);
 static void Steam_StatsListen(void);
 static void Steam_UserStatsListen(void);
 static void Steam_PersonaListen(void);
+static void Steam_ServerChangeListen(void);
 
 typedef struct {
     void** vtable;
@@ -283,6 +284,7 @@ typedef struct {
     steamBool_t(QDECL* UserGetUserStat)(void* self, uint64_t steamId, const char* name, int* value);
     steamCallback_t userStatsReceived;
     steamCallback_t personaChange;
+    steamCallback_t serverChange;
 
     uint64_t tracked[STEAM_MAX_TRACKED];
     int numTracked;
@@ -1270,6 +1272,7 @@ static void Steam_Start(qboolean started) {
     Steam_P2PListen(qfalse);
     Steam_UserStatsListen();
     Steam_PersonaListen();
+    Steam_ServerChangeListen();
     Steam_SetRichPresence("At the main menu");
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
@@ -1504,6 +1507,10 @@ void Steam_Shutdown(void) {
         if (st.personaChange.vtable) {
             st.UnregisterCallback(&st.personaChange);
             st.personaChange.vtable = NULL;
+        }
+        if (st.serverChange.vtable) {
+            st.UnregisterCallback(&st.serverChange);
+            st.serverChange.vtable = NULL;
         }
         if (st.statsReceived.vtable) {
             st.UnregisterCallback(&st.statsReceived);
@@ -3158,6 +3165,73 @@ static void Steam_PersonaListen(void) {
     st.personaChange.flags = 0;
     st.personaChange.id = STEAM_CB_PERSONA_STATE_CHANGE;
     st.RegisterCallback(&st.personaChange, STEAM_CB_PERSONA_STATE_CHANGE);
+}
+
+/*
+ * steam://connect/<ip:puerto> con el juego ya abierto (ql.syncore.org, "Unirse a la partida" de un amigo).
+ * Con el juego cerrado Steam lo abre con +connect; abierto, no lanza otro: le manda al juego
+ * GameServerChangeRequested_t (332) con el servidor y la clave, como hacia el Quake Live original.
+ */
+#define STEAM_CB_GAME_SERVER_CHANGE_REQUESTED 332
+#define STEAM_SERVER_CHANGE_FIELD 64
+
+static qboolean Steam_ValidServerAddress(const char* address) {
+    const char* c;
+
+    if (!address[0]) {
+        return qfalse;
+    }
+    for (c = address; *c; c++) {
+        if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '.' ||
+              *c == ':' || *c == '-' || *c == '_' || *c == '[' || *c == ']')) {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
+static void STEAM_CB Steam_CB_ServerChange(STEAM_CB_SELF, void* param) {
+    const char* data = (const char*)param;
+    char server[STEAM_SERVER_CHANGE_FIELD];
+    char password[STEAM_SERVER_CHANGE_FIELD];
+
+    Q_strncpyz(server, data, sizeof(server));
+    Q_strncpyz(password, data + STEAM_SERVER_CHANGE_FIELD, sizeof(password));
+    if (!Steam_ValidServerAddress(server)) {
+        Com_Printf("Steam: direccion de servidor no valida en steam://connect\n");
+        return;
+    }
+    if (password[0]) {
+        Cvar_Set("password", password);
+    }
+    Com_Printf("Steam: conectando a %s\n", server);
+    Cbuf_ExecuteText(EXEC_APPEND, va("connect %s\n", server));
+}
+
+static void STEAM_CB Steam_CB_ServerChangeIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_ServerChange(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_ServerChangeSize(STEAM_CB_SELF) {
+    return 2 * STEAM_SERVER_CHANGE_FIELD;
+}
+
+static void* steamServerChangeVTable[3];
+
+static void Steam_ServerChangeListen(void) {
+    if (!st.RegisterCallback || st.serverChange.vtable) {
+        return;
+    }
+    steamServerChangeVTable[0] = (void*)Steam_CB_ServerChangeIO;
+    steamServerChangeVTable[1] = (void*)Steam_CB_ServerChange;
+    steamServerChangeVTable[2] = (void*)Steam_CB_ServerChangeSize;
+
+    st.serverChange.vtable = steamServerChangeVTable;
+    st.serverChange.flags = 0;
+    st.serverChange.id = STEAM_CB_GAME_SERVER_CHANGE_REQUESTED;
+    st.RegisterCallback(&st.serverChange, STEAM_CB_GAME_SERVER_CHANGE_REQUESTED);
 }
 
 int Steam_FriendCount(void) {
