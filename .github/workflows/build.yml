@@ -532,6 +532,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
     - uses: actions/checkout@v4
     - name: Extract version from commit message
@@ -555,6 +557,9 @@ jobs:
       with:
         name: release-zips
         path: artifacts
+    - uses: actions/attest-build-provenance@v4
+      with:
+        subject-path: 'artifacts/*.zip'
     - name: Create Pre-release
       uses: softprops/action-gh-release@v2
       with:
@@ -570,6 +575,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
     - uses: actions/checkout@v4
     - name: Extract version from commit message
@@ -593,6 +600,9 @@ jobs:
       with:
         name: release-zips
         path: artifacts
+    - uses: actions/attest-build-provenance@v4
+      with:
+        subject-path: 'artifacts/*.zip'
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
