@@ -43,6 +43,7 @@ typedef enum {
     BR_HIT_TOGGLE,
     BR_HIT_REFRESH_ALL,
     BR_HIT_QUICK_REFRESH,
+    BR_HIT_STOP_REFRESH,
     BR_HIT_SORT,
     BR_HIT_ROW,
     BR_HIT_PLAY,
@@ -1329,6 +1330,12 @@ static void BR_DrawList(float left, float top, float width, float height) {
         BR_Button(quickX - SM_Len(10.0f) - allW, sectionY + SM_Len(10.0f), "Refresh All", busy, BR_HIT_REFRESH_ALL, 0,
                   &clip);
         BR_Button(quickX, sectionY + SM_Len(10.0f), "Quick Refresh", busy, BR_HIT_QUICK_REFRESH, 0, &clip);
+        if (busy) {
+            float stopW = BR_ButtonWidth("Stop");
+
+            BR_Button(quickX - 2 * SM_Len(10.0f) - allW - stopW, sectionY + SM_Len(10.0f), "Stop", qfalse,
+                      BR_HIT_STOP_REFRESH, 0, &clip);
+        }
     }
 
     tableY = sectionY + BR_SECTION_H;
@@ -2338,6 +2345,9 @@ qboolean UI_Browser_HandleKey(int key) {
             break;
         case BR_HIT_QUICK_REFRESH:
             trap_LAN_SteamRefresh();
+            break;
+        case BR_HIT_STOP_REFRESH:
+            trap_LAN_SteamStopRefresh();
             break;
         case BR_HIT_SORT:
             BR_Sort(hit->index);

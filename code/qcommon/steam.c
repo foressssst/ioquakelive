@@ -1824,6 +1824,17 @@ qboolean Steam_ServerListRefreshing(void) {
     return st.listRefreshing;
 }
 
+qboolean Steam_StopServerList(void) {
+    if (!st.listRequest || !st.listRefreshing) {
+        return qfalse;
+    }
+    if (st.CancelQuery) {
+        st.CancelQuery(st.matchmaking, st.listRequest);
+    }
+    st.listRefreshing = qfalse;
+    return qtrue;
+}
+
 qboolean Steam_RefreshServerList(void) {
     if (!st.listRequest || !st.RefreshQuery || st.listRefreshing) {
         return qfalse;

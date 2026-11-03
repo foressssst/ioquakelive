@@ -245,6 +245,10 @@ qboolean trap_LAN_SteamRefreshing(void) {
     return syscall(UI_LAN_STEAM_REFRESH, 1);
 }
 
+qboolean trap_LAN_SteamStopRefresh(void) {
+    return syscall(UI_LAN_STEAM_REFRESH, 2);
+}
+
 qboolean trap_LAN_SteamDetails(const char* address) {
     return syscall(UI_LAN_STEAM_DETAILS, address);
 }
