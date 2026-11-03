@@ -206,6 +206,9 @@ static void CG_ParseScores_Tdm(void) {
 }
 
 static int CG_ParseScoreEntries_Ca(int i, int n) {
+    if (n < 0 || n > MAX_CLIENTS) {
+        n = 0;
+    }
     for (; n < MAX_CLIENTS && *CG_Argv(i); n++) {
         score_t *sp = &cg.scores[n];
         sp->client = atoi(CG_Argv(i++));
