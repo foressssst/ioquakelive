@@ -941,8 +941,21 @@ static void IN_ProcessEvents(void) {
                 break;
 
             case SDL_EVENT_KEY_UP:
-                if ((key = IN_TranslateSDLToQ3Key(&e.key, qfalse)))
-                    Com_QueueEvent(in_eventTime, SE_KEY, key, qfalse, 0, NULL);
+                if ((key = IN_TranslateSDLToQ3Key(&e.key, qfalse))) {
+                    qboolean repeatRelease = qfalse;
+
+                    if (Key_GetCatcher() == 0) {
+                        SDL_Event next;
+
+                        if (SDL_PeepEvents(&next, 1, SDL_PEEKEVENT, SDL_EVENT_FIRST, SDL_EVENT_LAST) == 1
+                            && next.type == SDL_EVENT_KEY_DOWN
+                            && next.key.scancode == e.key.scancode)
+                            repeatRelease = qtrue;
+                    }
+
+                    if (!repeatRelease)
+                        Com_QueueEvent(in_eventTime, SE_KEY, key, qfalse, 0, NULL);
+                }
 
                 lastKeyDown = 0;
                 break;
