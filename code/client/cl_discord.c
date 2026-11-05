@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <unistd.h>
 #endif
 
-#define DISCORD_APP_ID "1288275925359923251"
+#define DISCORD_APP_ID "1568042335189868616"
 #define DISCORD_IMAGE "https://quakeclub.com/icons/favicon-192.png"
 #define DISCORD_SITE "https://quakeclub.com"
 #define DISCORD_RETRY_MSEC 20000

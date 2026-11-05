@@ -641,6 +641,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             re.ModelBounds(args[1], VMA(2), VMA(3));
             return 0;
 
+        case UI_R_SHADERIMAGESIZE:
+            return re.ShaderImageSize(args[1], VMA(2), VMA(3));
+
         case UI_UPDATESCREEN:
             SCR_UpdateScreen();
             return 0;

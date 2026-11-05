@@ -308,18 +308,11 @@ void CL_ClearAvatars(void) {
 
 qhandle_t CL_SteamAvatarShader(uint64_t steamId) {
     qhandle_t shader;
-    qboolean wait;
     byte* rgba;
     int w, h, i;
 
     if (!steamId || !re.RegisterShaderFromRaw) {
         return 0;
-    }
-    if (CL_ClubActive()) {
-        shader = CL_ClubAvatar(steamId, &wait);
-        if (shader || wait) {
-            return shader;
-        }
     }
     for (i = 0; i < clNumAvatars; i++) {
         if (clAvatars[i].steamId == steamId) {
@@ -619,6 +612,9 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
 
         case CG_CLUB_FLAG:
             return CL_ClubFlag(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+
+        case CG_R_SHADERIMAGESIZE:
+            return re.ShaderImageSize(args[1], VMA(2), VMA(3));
 
         case CG_CONSOLE_AVATAR:
             Con_SetPendingAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1], VMA(3));

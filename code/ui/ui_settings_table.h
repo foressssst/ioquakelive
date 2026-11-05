@@ -62,7 +62,7 @@ static const stOption_t stOpts_r_maxqueuedframes[] = {{"Driver", "0"}, {"1 Frame
 static const stCvar_t stCvars[] = {
     {ST_TAB_INPUT, "Mouse Settings", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_INPUT, "Invert Mouse", "m_pitch", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_m_pitch, 2, NULL, 0},
-    {ST_TAB_INPUT, "Mouse Sensitivity", "sensitivity", ST_RANGE, 0.0f, 25.0f, 0.25f, NULL, 0, NULL, 0},
+    {ST_TAB_INPUT, "Mouse Sensitivity", "sensitivity", ST_RANGE, 0.0f, 25.0f, 0.1f, NULL, 0, NULL, 0},
     {ST_TAB_INPUT, "Mouse DPI", "m_cpi", ST_INPUT, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_INPUT, "Mouse Acceleration", "cl_mouseaccel", ST_RANGE, 0.0f, 5.0f, 0.1f, NULL, 0, NULL, 1},
     {ST_TAB_INPUT, "Mouse Acceleration Offset", "cl_mouseacceloffset", ST_RANGE, 0.0f, 25.0f, 0.25f, NULL, 0, NULL, 1},

@@ -2261,6 +2261,7 @@ void trap_R_ApplyBloom(void);
 void trap_R_SetColor(const float* rgba);
 void trap_R_DrawStretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);
 void trap_R_ModelBounds(clipHandle_t model, vec3_t mins, vec3_t maxs);
+qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height);
 int trap_R_LerpTag(orientation_t* tag, clipHandle_t mod, int startFrame, int endFrame, float frac, const char* tagName);
 void trap_R_RemapShader(const char* oldShader, const char* newShader, const char* timeOffset);
 qboolean trap_R_inPVS(const vec3_t p1, const vec3_t p2);

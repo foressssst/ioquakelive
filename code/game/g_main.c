@@ -3526,6 +3526,15 @@ void G_RunFrame(int levelTime) {
 
     if (level.timePauseBegin) {
         level.startTime += level.frametime;
+        if (level.roundState.tNext != 0) {
+            level.roundState.tNext += level.frametime;
+            if (level.roundState.eCurrent == RS_COUNTDOWN) {
+                char cs[MAX_INFO_STRING];
+                trap_GetConfigstring(CS_ROUND_STATUS, cs, sizeof(cs));
+                Info_SetValueForKey(cs, "time", va("%d", level.roundState.tNext));
+                trap_SetConfigstring(CS_ROUND_STATUS, cs);
+            }
+        }
         MP_PauseThink();
     }
 

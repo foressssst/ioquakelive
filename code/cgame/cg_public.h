@@ -179,7 +179,8 @@ typedef enum {
     CG_STEAM_AVATAR,
     CG_CONSOLE_AVATAR,
     CG_GETPENDINGCMD,
-    CG_CLUB_FLAG
+    CG_CLUB_FLAG,
+    CG_R_SHADERIMAGESIZE
 } cgameImport_t;
 
 typedef enum {

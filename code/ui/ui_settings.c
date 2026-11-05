@@ -360,7 +360,7 @@ static const char* ST_TabAction(int tab) {
         case ST_TAB_SOUND:
             return "Apply sound settings";
         case ST_TAB_HUD:
-            return st.fromIngame ? NULL : "Edit HUD";
+            return "Edit HUD";
         default:
             return NULL;
     }
@@ -379,12 +379,16 @@ static void ST_DoTabAction(int tab) {
             trap_Cmd_ExecuteText(EXEC_APPEND, "snd_restart\n");
             break;
         case ST_TAB_HUD:
+            if (st.edit >= 0) {
+                ST_Set(st.edit, st.values[st.edit]);
+                st.edit = -1;
+            }
             if (!st.fromIngame) {
-                if (st.edit >= 0) {
-                    ST_Set(st.edit, st.values[st.edit]);
-                    st.edit = -1;
-                }
                 UI_HudEditor_Start();
+            } else {
+                st.fromIngame = qfalse;
+                _UI_SetActiveMenu(UIMENU_NONE);
+                trap_Cmd_ExecuteText(EXEC_APPEND, "hudedit\n");
             }
             break;
         default:

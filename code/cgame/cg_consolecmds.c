@@ -666,8 +666,15 @@ static float CG_DrawChatLine(float x, float y, float scale, float* color, const 
             x += size + 3.0f;
         }
         if (flag) {
-            CG_DrawPic(x, y - size + 1.5f, size * 1.5f, size, flag);
-            x += size * 1.5f + 3.0f;
+            int iw, ih;
+            float fh = size * 0.8f;
+            float fw = fh;
+
+            if (trap_R_ShaderImageSize(flag, &iw, &ih) && iw > 0 && ih > 0) {
+                fw = fh * (float)iw / (float)ih;
+            }
+            CG_DrawPic(x, y - size + 1.5f + (size - fh) * 0.5f, fw, fh, flag);
+            x += fw + 3.0f;
         }
         trap_R_SetColor(NULL);
     }

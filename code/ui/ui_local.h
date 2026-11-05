@@ -823,6 +823,7 @@ void trap_R_RenderScene(const refdef_t* fd);
 void trap_R_SetColor(const float* rgba);
 void trap_R_DrawStretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);
 void trap_R_ModelBounds(clipHandle_t model, vec3_t mins, vec3_t maxs);
+qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height);
 void trap_UpdateScreen(void);
 int trap_CM_LerpTag(orientation_t* tag, clipHandle_t mod, int startFrame, int endFrame, float frac, const char* tagName);
 void trap_S_StartLocalSound(sfxHandle_t sfx, int channelNum);

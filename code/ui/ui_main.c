@@ -4889,6 +4889,7 @@ void _UI_Init(qboolean inGameLoad) {
     uiInfo.uiDC.textHeight = &UI_TextHeight_DC;
     uiInfo.uiDC.registerModel = &trap_R_RegisterModel;
     uiInfo.uiDC.modelBounds = &trap_R_ModelBounds;
+    uiInfo.uiDC.shaderImageSize = &trap_R_ShaderImageSize;
     uiInfo.uiDC.fillRect = &UI_FillRect;
     uiInfo.uiDC.drawRect = &_UI_DrawRect;
     uiInfo.uiDC.drawSides = &_UI_DrawSides;

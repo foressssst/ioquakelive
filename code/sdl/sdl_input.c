@@ -102,8 +102,26 @@ static void IN_PrintKey(const SDL_KeyboardEvent* keysym, keyNum_t key, qboolean 
 
 static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean down) {
     keyNum_t key = 0;
+    keyNum_t kpDigit = 0;
 
-    if (keysym->scancode >= SDL_SCANCODE_1 && keysym->scancode <= SDL_SCANCODE_0) {
+    switch (keysym->key) {
+        case SDLK_KP_0: kpDigit = '0'; break;
+        case SDLK_KP_1: kpDigit = '1'; break;
+        case SDLK_KP_2: kpDigit = '2'; break;
+        case SDLK_KP_3: kpDigit = '3'; break;
+        case SDLK_KP_4: kpDigit = '4'; break;
+        case SDLK_KP_5: kpDigit = '5'; break;
+        case SDLK_KP_6: kpDigit = '6'; break;
+        case SDLK_KP_7: kpDigit = '7'; break;
+        case SDLK_KP_8: kpDigit = '8'; break;
+        case SDLK_KP_9: kpDigit = '9'; break;
+        case SDLK_KP_PERIOD: kpDigit = '.'; break;
+        default: break;
+    }
+
+    if (kpDigit && (keysym->mod & SDL_KMOD_NUM)) {
+        key = kpDigit;
+    } else if (keysym->scancode >= SDL_SCANCODE_1 && keysym->scancode <= SDL_SCANCODE_0) {
         if (keysym->scancode == SDL_SCANCODE_0)
             key = '0';
         else

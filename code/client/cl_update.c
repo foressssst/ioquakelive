@@ -30,6 +30,7 @@
 #define CL_CLUB_WAIT 4000
 #define CL_CLUB_TRIES 4
 #define CL_CLUB_RETRY 1000
+#define CL_CLUB_RETRY_FAILED 30000
 #define CL_CLUB_IMAGE_MAX 0x40000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
@@ -72,9 +73,7 @@ typedef struct {
     uint64_t steamId;
     volatile long state;
     int asked;
-    char avatar[MAX_QPATH];
     char flag[MAX_QPATH];
-    qhandle_t avatarShader;
     qhandle_t flagShader;
 } clClub_t;
 
@@ -915,10 +914,7 @@ static void CL_ClubThread(void* unused) {
             if (c->steamId != steamId) {
                 continue;
             }
-            if (CL_ClubImage(avatar, pic, sizeof(pic), &w, &h) && w == h) {
-                Q_strncpyz(c->avatar, pic, sizeof(c->avatar));
-            }
-            if (CL_ClubImage(flag, pic, sizeof(pic), &w, &h) && w > h) {
+            if (CL_ClubImage(flag, pic, sizeof(pic), &w, &h) && w > 0 && h > 0) {
                 Q_strncpyz(c->flag, pic, sizeof(c->flag));
             }
             CL_UpdateSet(&c->state, CLC_READY);
@@ -964,24 +960,6 @@ static qhandle_t CL_ClubShader(const char* pic, qhandle_t* shader) {
     return *shader > 0 ? *shader : 0;
 }
 
-qhandle_t CL_ClubAvatar(uint64_t steamId, qboolean* wait) {
-    clClub_t* c = CL_ClubEntry(steamId);
-    long state;
-
-    *wait = qfalse;
-    if (!c) {
-        return 0;
-    }
-    state = CL_UpdateGet(&c->state);
-    if (state == CLC_READY) {
-        return CL_ClubShader(c->avatar, &c->avatarShader);
-    }
-    if (state != CLC_FAILED) {
-        *wait = (qboolean)(!c->asked || cls.realtime - c->asked < CL_CLUB_WAIT);
-    }
-    return 0;
-}
-
 qhandle_t CL_ClubFlag(uint64_t steamId) {
     clClub_t* c = CL_ClubEntry(steamId);
 
@@ -995,7 +973,6 @@ void CL_ClubClearShaders(void) {
     int i;
 
     for (i = 0; i < clClubCount; i++) {
-        clClub[i].avatarShader = 0;
         clClub[i].flagShader = 0;
     }
 }
@@ -1008,7 +985,9 @@ static void CL_ClubFrame(void) {
     }
     clClubAskCount = 0;
     for (i = 0; i < clClubCount && clClubAskCount < CL_CLUB_BATCH; i++) {
-        if (CL_UpdateGet(&clClub[i].state) == CLC_NEW) {
+        long st = CL_UpdateGet(&clClub[i].state);
+
+        if (st == CLC_NEW || (st == CLC_FAILED && cls.realtime - clClub[i].asked > CL_CLUB_RETRY_FAILED)) {
             CL_UpdateSet(&clClub[i].state, CLC_ASKED);
             clClub[i].asked = cls.realtime ? cls.realtime : 1;
             clClubAsk[clClubAskCount++] = i;

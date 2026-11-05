@@ -31,12 +31,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #define WEB_IMAGE_DIR "webimages"
-#define MAX_WEB_IMAGES 24
+#define MAX_WEB_IMAGES 48
 #define MAX_WEB_FETCHING 2
 #define MAX_GIF_FRAMES 48
 #define GIF_MAX_SIDE 200
 #define REGISTER_PER_FRAME 4
-#define WEB_IMAGE_BUDGET 256
+#define WEB_IMAGE_BUDGET 512
 #define WEB_IMAGE_MAX_SIDE 4096
 #define WEB_FETCH_WINDOW_MS 60000
 #define WEB_FETCH_PER_WINDOW 6
@@ -146,7 +146,11 @@ static qboolean CL_WebImage_UrlOk(const char* url) {
 }
 
 static qboolean CL_WebImage_HostAllowed(const char* url) {
-    static const char* const hosts[] = {"imgur.com", "giphy.com", "tenor.com", "discordapp.com", "discordapp.net"};
+    static const char* const hosts[] = {
+        "imgur.com", "giphy.com", "tenor.com", "discordapp.com", "discordapp.net", "discord.com",
+        "ibb.co", "imgbb.com", "postimg.cc", "postimg.org", "gyazo.com", "prntscr.com", "redd.it",
+        "twimg.com", "catbox.moe", "githubusercontent.com", "steamuserimages-a.akamaihd.net",
+        "steamusercontent.com", "wikimedia.org", "imgchest.com", "pixhost.to", "cdninstagram.com"};
     char host[128];
     const char* p;
     int len, i, n;
@@ -724,6 +728,10 @@ qhandle_t CL_WebImage_Get(const char* url) {
         img = &webImages[oldest];
     }
 
+    webImagesRegistered -= img->registered;
+    if (webImagesRegistered < 0) {
+        webImagesRegistered = 0;
+    }
     Com_Memset(img, 0, sizeof(*img));
     Q_strncpyz(img->url, url, sizeof(img->url));
     CL_WebImage_LocalName(url, img->local, sizeof(img->local), img->base, sizeof(img->base));

@@ -412,7 +412,6 @@ int CL_ClubNews(char* buf, int size);
 qboolean CL_ServerVerified(const netadr_t* adr);
 void CL_ServerDropped(const char* reason);
 qboolean CL_ClubActive(void);
-qhandle_t CL_ClubAvatar(uint64_t steamId, qboolean* wait);
 qhandle_t CL_ClubFlag(uint64_t steamId);
 void CL_ClubClearShaders(void);
 void CL_VoiceFrame(void);

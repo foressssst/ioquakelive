@@ -133,6 +133,10 @@ float CL_KeyState(kbutton_t* key) {
         key->downtime = com_frameTime;
     }
 
+    if (key->active && msec == 0) {
+        return 1.0f;
+    }
+
 #if 0
 	if (msec) {
 		Com_Printf ("%i ", msec);

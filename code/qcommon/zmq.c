@@ -21,6 +21,10 @@ typedef int zsocket_t;
 #define ZWOULDBLOCK (errno == EWOULDBLOCK || errno == EAGAIN)
 #endif
 
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
 #define ZMQ_MAX_CONNS 16
 #define ZMQ_IN_SIZE 65536
 #define ZMQ_OUT_SIZE (256 * 1024)
@@ -133,7 +137,7 @@ static qboolean ZMQ_Queue(zconn_t* c, const void* data, int len) {
 
 static void ZMQ_Flush(zsock_t* zs, zconn_t* c) {
     while (c->outLen > 0) {
-        int n = send(c->s, (const char*)c->out, c->outLen, 0);
+        int n = send(c->s, (const char*)c->out, c->outLen, MSG_NOSIGNAL);
 
         if (n <= 0) {
             if (n < 0 && ZWOULDBLOCK) {
@@ -435,6 +439,13 @@ static void ZMQ_Poll(zsock_t* zs) {
             inet_ntop(AF_INET, &from.sin_addr, host, sizeof(host));
             Com_sprintf(c->address, sizeof(c->address), "%s:%i", host, ntohs(from.sin_port));
         }
+#ifdef SO_NOSIGPIPE
+        {
+            int one = 1;
+
+            setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (const char*)&one, sizeof(one));
+        }
+#endif
         ZMQ_NonBlocking(s);
         ZMQ_SendGreeting(zs, c);
     }

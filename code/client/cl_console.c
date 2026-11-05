@@ -593,7 +593,7 @@ static void Con_DrawRowImage(int row, float rowTop, float cellH, float x0, float
         return;
     }
     re.SetColor(NULL);
-    re.DrawStretchPic(x0, y0, w, y1 - y0, 0.0f, (y0 - top) / h, 1.0f, (y1 - top) / h, shader);
+    re.DrawStretchPic(x0 + cellH * 1.5f, y0, w, y1 - y0, 0.0f, (y0 - top) / h, 1.0f, (y1 - top) / h, shader);
 }
 
 void Con_SetPendingAvatar(uint64_t steamId, const char* icon) {
@@ -603,8 +603,8 @@ void Con_SetPendingAvatar(uint64_t steamId, const char* icon) {
 
 static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, float adv) {
     qhandle_t shader, flag;
-    float size, x, gap;
-    int i;
+    float size, x, gap, flagH, flagW;
+    int i, fiw, fih;
 
     for (i = 0; i < CON_MAX_AVATARS; i++) {
         if ((con.avatars[i].steamId || con.avatars[i].icon[0]) && con.avatars[i].line == row) {
@@ -629,13 +629,18 @@ static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, floa
         }
         return;
     }
+    flagH = size * 0.8f;
+    flagW = flagH;
+    if (re.ShaderImageSize(flag, &fiw, &fih) && fiw > 0 && fih > 0) {
+        flagW = flagH * (float)fiw / (float)fih;
+    }
     gap = shader ? size * 0.2f : 0.0f;
-    x += ((CON_AVATAR_CELLS + CON_FLAG_CELLS) * adv - (shader ? size : 0.0f) - gap - size * 1.5f) * 0.5f;
+    x += ((CON_AVATAR_CELLS + CON_FLAG_CELLS) * adv - (shader ? size : 0.0f) - gap - flagW) * 0.5f;
     if (shader) {
         re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size, size, 0.0f, 0.0f, 1.0f, 1.0f, shader);
         x += size + gap;
     }
-    re.DrawStretchPic(x, rowTop + (cellH - size) * 0.5f, size * 1.5f, size, 0.0f, 0.0f, 1.0f, 1.0f, flag);
+    re.DrawStretchPic(x, rowTop + (cellH - flagH) * 0.5f, flagW, flagH, 0.0f, 0.0f, 1.0f, 1.0f, flag);
 }
 
 static void Con_FindImageLink(const char* txt, char* url, int size) {

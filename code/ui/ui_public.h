@@ -184,7 +184,8 @@ typedef enum {
     UI_CLUB_NEWS,
     UI_FS_FILETIME,
     UI_FS_PAKONLY,
-    UI_SET_CLIPBOARD
+    UI_SET_CLIPBOARD,
+    UI_R_SHADERIMAGESIZE
 } uiImport_t;
 
 #define UI_STEAM_NUM_STATS 88

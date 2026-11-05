@@ -334,6 +334,10 @@ void trap_R_ModelBounds(clipHandle_t model, vec3_t mins, vec3_t maxs) {
     syscall(CG_R_MODELBOUNDS, model, mins, maxs);
 }
 
+qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height) {
+    return (qboolean)syscall(CG_R_SHADERIMAGESIZE, shader, width, height);
+}
+
 int trap_R_LerpTag(orientation_t* tag, clipHandle_t mod, int startFrame, int endFrame, float frac, const char* tagName) {
     return syscall(CG_R_LERPTAG, tag, mod, startFrame, endFrame, PASSFLOAT(frac), tagName);
 }

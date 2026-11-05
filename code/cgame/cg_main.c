@@ -366,7 +366,6 @@ vmCvar_t cg_announcerLeadsVO;
 vmCvar_t cg_announcerRewardsVO;
 vmCvar_t cg_announcerTiesVO;
 
-vmCvar_t s_ambient;
 vmCvar_t s_announcerVolume;
 vmCvar_t s_killBeepVolume;
 vmCvar_t s_playSoundVolume;
@@ -747,7 +746,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_announcerRewardsVO, "cg_announcerRewardsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcerTiesVO, "cg_announcerTiesVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
 
-    {&s_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_LATCH | CVAR_ARCHIVE},
     {&s_announcerVolume, "s_announcerVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&s_killBeepVolume, "s_killBeepVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
     {&s_playSoundVolume, "s_playSoundVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "2"},
@@ -2770,9 +2768,7 @@ static const char* CG_ScoreboardName(const char* name, int wide, int fit) {
 }
 
 static const char* CG_ClubName(const clientInfo_t* info, int wide, int fit) {
-    const int flag = CG_ClubFlag(info) ? (int)FEEDER_PREFIX_W : 0;
-
-    return CG_ScoreboardName(info->name, wide - flag, fit - flag);
+    return CG_ScoreboardName(info->name, wide, fit);
 }
 
 static const char* CG_FeederItemTextStats(float feederID, int index, int column, qhandle_t* handle) {
@@ -2992,27 +2988,7 @@ static qhandle_t CG_FeederItemImage(float feederID, int index) {
 }
 
 static qhandle_t CG_FeederItemPrefix(float feederID, int index, int column) {
-    int scoreIndex = 0;
-    int team = -1;
-    clientInfo_t* info;
-
-    if (feederID == FEEDER_REDTEAM_STATS || feederID == FEEDER_BLUETEAM_STATS) {
-        if (column != 0) {
-            return 0;
-        }
-        team = feederID == FEEDER_REDTEAM_STATS ? TEAM_RED : TEAM_BLUE;
-    } else {
-        if (feederID == FEEDER_REDTEAM_LIST) {
-            team = TEAM_RED;
-        } else if (feederID == FEEDER_BLUETEAM_LIST) {
-            team = TEAM_BLUE;
-        }
-        if (column != (cgs.gametype == GT_RACE && team == -1 ? 3 : 5)) {
-            return 0;
-        }
-    }
-    info = CG_InfoFromScoreIndex(index, team, &scoreIndex);
-    return (info && info->infoValid) ? CG_ClubFlag(info) : 0;
+    return 0;
 }
 
 static void CG_FeederSelection(float feederID, int index) {
@@ -3142,6 +3118,7 @@ void CG_LoadHudMenu(void) {
     cgDC.textHeight = &CG_TextHeight_DC;
     cgDC.registerModel = &trap_R_RegisterModel;
     cgDC.modelBounds = &trap_R_ModelBounds;
+    cgDC.shaderImageSize = &trap_R_ShaderImageSize;
     cgDC.fillRect = &CG_FillRect;
     cgDC.drawRect = &CG_DrawRect;
     cgDC.drawSides = &CG_DrawSides;

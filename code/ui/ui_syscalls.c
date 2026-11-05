@@ -317,6 +317,10 @@ void trap_R_ModelBounds(clipHandle_t model, vec3_t mins, vec3_t maxs) {
     syscall(UI_R_MODELBOUNDS, model, mins, maxs);
 }
 
+qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height) {
+    return (qboolean)syscall(UI_R_SHADERIMAGESIZE, shader, width, height);
+}
+
 void trap_UpdateScreen(void) {
     syscall(UI_UPDATESCREEN);
 }

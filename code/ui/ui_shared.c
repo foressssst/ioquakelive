@@ -3731,7 +3731,20 @@ void Item_ListBox_Paint(itemDef_t* item) {
                     for (j = 0; j < listPtr->numColumns; j++) {
                         text = DC->feederItemText(item->special, i, j, &optionalImage);
                         if (optionalImage >= 0) {
-                            DC->drawHandlePic(x + 4 + listPtr->columnInfo[j].pos, y - 2 + listPtr->elementHeight * 0.5f, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
+                            float box = listPtr->columnInfo[j].width;
+                            float ox = x + 4 + listPtr->columnInfo[j].pos;
+                            float oy = y - 2 + listPtr->elementHeight * 0.5f;
+                            float dw = box, dh = box;
+                            int iw, ih;
+
+                            if (DC->shaderImageSize && DC->shaderImageSize(optionalImage, &iw, &ih) && iw > 0 && ih > 0 && iw != ih) {
+                                if (iw > ih) {
+                                    dh = box * (float)ih / (float)iw;
+                                } else {
+                                    dw = box * (float)iw / (float)ih;
+                                }
+                            }
+                            DC->drawHandlePic(ox + (box - dw) * 0.5f, oy + (box - dh) * 0.5f, dw, dh, optionalImage);
                         } else if (text) {
                             float tx = x + 4 + listPtr->columnInfo[j].pos;
                             qhandle_t prefix = DC->feederItemPrefix ? DC->feederItemPrefix(item->special, i, j) : 0;
@@ -3739,9 +3752,20 @@ void Item_ListBox_Paint(itemDef_t* item) {
                             if (prefix) {
                                 float side = j > 0 ? listPtr->columnInfo[j - 1].width : listPtr->elementHeight - 1;
                                 float fh = side * FEEDER_FLAG_H;
+                                float boxW = FEEDER_PREFIX_W - 2.0f;
+                                float py = y - 2 + listPtr->elementHeight * 0.5f + side * FEEDER_FLAG_TOP;
+                                float dw = boxW, dh = fh;
+                                int iw, ih;
 
-                                DC->drawHandlePic(tx, y - 2 + listPtr->elementHeight * 0.5f + side * FEEDER_FLAG_TOP, fh * 1.5f, fh, prefix);
-                                tx += fh * 1.5f + 2.0f;
+                                if (DC->shaderImageSize && DC->shaderImageSize(prefix, &iw, &ih) && iw > 0 && ih > 0) {
+                                    if (boxW / fh > (float)iw / (float)ih) {
+                                        dw = fh * (float)iw / (float)ih;
+                                    } else {
+                                        dh = boxW * (float)ih / (float)iw;
+                                    }
+                                }
+                                DC->drawHandlePic(tx + (boxW - dw) * 0.5f, py + (fh - dh) * 0.5f, dw, dh, prefix);
+                                tx += FEEDER_PREFIX_W;
                             }
                             DC->drawText(tx, y + listPtr->elementHeight, item->textscale,
                                          (i == item->cursorPos) ? item->window.selectedColor : item->window.elementColor,

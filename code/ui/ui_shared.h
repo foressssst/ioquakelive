@@ -396,6 +396,7 @@ typedef struct {
     qhandle_t gradientImage;
     qhandle_t cursor;
     float FPS;
+    qboolean (*shaderImageSize)(qhandle_t shader, int* width, int* height);
 
 } displayContextDef_t;
 
