@@ -3358,7 +3358,7 @@ static void UI_RunMenuScript(char** args) {
             }
         } else if (Q_stricmp(name, "kickPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
-                trap_Cmd_ExecuteText(EXEC_APPEND, va("clientkick %i\n",
+                trap_Cmd_ExecuteText(EXEC_APPEND, va("callvote clientkick %i\n",
                     uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "teamModelChanged") == 0) {
