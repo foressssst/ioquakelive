@@ -206,7 +206,7 @@ void CL_StopRecord_f(void) {
     clc.demorecording = qfalse;
     Cvar_Set("cl_demorecording", "0");
     Cvar_Set("cl_demoname", "");
-    Com_Printf("Stopped demo.\n");
+    Com_Printf("Recording finished: demos/%s.%s%d\n", clc.demoName, DEMOEXT, com_protocol->integer);
 }
 
 static void CL_StopRecordCommand_f(void) {

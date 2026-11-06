@@ -1579,6 +1579,7 @@ static void CG_ServerCommand(void) {
     if (!strcmp(cmd, "screenshot")) {
         if (!cg.demoPlayback) {
             trap_SendConsoleCommand(va("screenshotJPEG \"%s\"\n", CG_Argv(1)));
+            CG_QueueSaveNotice("Screenshot Saved\n");
         }
         return;
     }
@@ -1590,7 +1591,13 @@ static void CG_ServerCommand(void) {
     }
     if (!strcmp(cmd, "stoprecord")) {
         if (!cg.demoPlayback) {
+            char demo[MAX_QPATH];
+
+            trap_Cvar_VariableStringBuffer("cl_demoname", demo, sizeof(demo));
             trap_SendConsoleCommand("stoprecord; wait\n");
+            if (demo[0]) {
+                CG_QueueSaveNotice("Record Saved\n");
+            }
         }
         return;
     }

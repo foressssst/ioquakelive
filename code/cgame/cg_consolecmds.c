@@ -580,6 +580,40 @@ static void CG_ChatImageNotice(const char* text, char* out, int outSize) {
     out[o] = '\0';
 }
 
+/* Avisos de lo que se guardo al terminar una partida. Se muestran un momento despues para que no
+   salgan dentro del screenshot que se esta tomando. */
+#define SAVE_NOTICE_DELAY_MS 500
+#define MAX_SAVE_NOTICES 4
+
+static struct {
+    char text[MAX_SAY_TEXT];
+    int showAt;
+} cg_saveNotices[MAX_SAVE_NOTICES];
+
+void CG_QueueSaveNotice(const char* text) {
+    int i;
+
+    for (i = 0; i < MAX_SAVE_NOTICES; i++) {
+        if (!cg_saveNotices[i].showAt) {
+            Q_strncpyz(cg_saveNotices[i].text, text, sizeof(cg_saveNotices[i].text));
+            cg_saveNotices[i].showAt = trap_Milliseconds() + SAVE_NOTICE_DELAY_MS;
+            return;
+        }
+    }
+}
+
+void CG_RunSaveNotices(void) {
+    int i;
+    int now = trap_Milliseconds();
+
+    for (i = 0; i < MAX_SAVE_NOTICES; i++) {
+        if (cg_saveNotices[i].showAt && now >= cg_saveNotices[i].showAt) {
+            cg_saveNotices[i].showAt = 0;
+            CG_AddChat(cg_saveNotices[i].text, 0, 0);
+        }
+    }
+}
+
 void CG_AddChat(const char *rawText, int teamOnly, int extraTime) {
     CG_AddChatFrom(rawText, teamOnly, extraTime, -1);
 }
