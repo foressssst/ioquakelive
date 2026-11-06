@@ -2139,6 +2139,8 @@ void CG_InitConsoleCommands(void);
 void CG_ScoresDown_f(void);
 void CG_ClearChat(void);
 void CG_AddChat(const char *text, int teamOnly, int extraTime);
+void CG_QueueSaveNotice(const char* text);
+void CG_RunSaveNotices(void);
 void CG_AddChatFrom(const char *text, int teamOnly, int extraTime, int sender);
 void CG_DrawChat(float x, float y, float w, float h, float scale);
 void CG_InitColorWheel(void);

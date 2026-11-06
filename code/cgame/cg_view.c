@@ -1072,6 +1072,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     }
 
     CG_UpdateCvars();
+    CG_RunSaveNotices();
 
     if (cg.infoScreenText[0] != 0) {
         CG_DrawInformation();
