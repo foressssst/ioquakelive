@@ -924,9 +924,13 @@ static void CG_ClientMute_f(void) {
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
         return;
     }
-    if (cgs.clientinfo[clientNum].steamId) {
-        trap_VoiceToggleIgnore(cgs.clientinfo[clientNum].steamId);
+    if (!cgs.clientinfo[clientNum].steamId) {
+        CG_Printf("%s" S_COLOR_WHITE " has no Steam ID and can't be muted.\n", cgs.clientinfo[clientNum].name);
+        return;
     }
+    trap_VoiceToggleIgnore(cgs.clientinfo[clientNum].steamId);
+    CG_Printf("%s" S_COLOR_WHITE " %s.\n", cgs.clientinfo[clientNum].name,
+              trap_VoiceIsIgnored(cgs.clientinfo[clientNum].steamId) ? "muted" : "unmuted");
 }
 
 static void CG_AccDown_f(void) {
