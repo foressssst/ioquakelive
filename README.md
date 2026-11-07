@@ -38,6 +38,10 @@ git submodule update --init --recursive
 
 - **Linux y macOS:** ejecuta `make release`. Se requiere tener SDL3 instalado.
 
+## Firma de código
+
+Los binarios de Windows se firman con la firma de código gratuita para proyectos de código abierto de [SignPath Foundation](https://signpath.org), provista a través de [SignPath.io](https://signpath.io).
+
 ## Agradecimientos
 
 - [scryd1ke](https://github.com/scryd1ke) — aportes de código.
