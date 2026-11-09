@@ -1093,6 +1093,13 @@ void ClientBegin(int clientNum) {
     client->pers.enterTime = level.time;
     client->pers.teamState.state = TEAM_BEGIN;
 
+    // El "priv" que se manda en ClientConnect llega antes de que el cliente cargue el cgame y se pierde
+    // (ui_priv queda en 0 y el menu de admin bloqueado). Aqui el cgame ya corre: se manda otra vez al
+    // entrar, despues de cada cambio de mapa y al pasar a spec o a jugar (SetTeam llama a ClientBegin).
+    if (!(ent->r.svFlags & SVF_BOT)) {
+        trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
+    }
+
     flags = client->ps.eFlags;
     memset(&client->ps, 0, sizeof(client->ps));
     client->ps.eFlags = flags;
