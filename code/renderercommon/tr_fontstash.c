@@ -27,7 +27,10 @@ C89.
 #define FONS_INIT_ATLAS_NODES 256
 #define FONS_VERTEX_COUNT 1024
 #define FONS_MAX_STATES 20
-#define FONS_MAX_FALLBACKS 48
+// Tiene que alcanzar para toda la lista fallbackFontPaths de tr_font.c (hoy 53). Con 48, las ultimas
+// (khmer, birmano, etiope, emoji y droidsansfallbackfull: chino, japones y coreano) nunca se usaban y
+// esas letras salian como cuadritos aunque las fuentes vienen en pak00 y pak01.
+#define FONS_MAX_FALLBACKS 64
 
 static unsigned int fons__hashint(unsigned int a) {
     a += ~(a << 15);
