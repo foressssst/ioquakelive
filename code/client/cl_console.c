@@ -190,7 +190,7 @@ typedef struct {
 
 static conColor_t con_colors[CC_COUNT] = {
     {"con_colBG", "0B0B0DFF", qtrue, "RGBA color of the background; its alpha is multiplied by " S_COLOR_CVAR "con_opacity"},
-    {"con_colBorder", "FFCC33FF", qtrue, "RGBA color of the border"},
+    {"con_colBorder", "4073FFFF", qtrue, "RGBA color of the border"},
     {"con_colArrow", "E03C3CFF", qtrue, "RGBA color of backscroll arrows"},
     {"con_colShadow", "000000FF", qtrue, "RGBA color of text shadows"},
     {"con_colMkBG", "D8D8D8FF", qtrue, "RGBA color of the mark background"},
@@ -1229,7 +1229,8 @@ void Con_Init(void) {
         c->modificationCount = -1;
         Cvar_SetHelp(c->name, c->help);
     }
-    if (!Q_stricmp(con_colors[CC_BORDER].cvar->string, "C01A1AFF")) {
+    if (!Q_stricmp(con_colors[CC_BORDER].cvar->string, "C01A1AFF") ||
+        !Q_stricmp(con_colors[CC_BORDER].cvar->string, "FFCC33FF")) {
         Cvar_Set(con_colors[CC_BORDER].name, con_colors[CC_BORDER].defaultValue);
     }
     if (!Q_stricmp(con_colors[CC_BG].cvar->string, "0B0B0DEB")) {
