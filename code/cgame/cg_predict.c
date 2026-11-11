@@ -31,6 +31,22 @@ static centity_t* cg_triggerEntities[MAX_ENTITIES_IN_SNAPSHOT];
 static int cg_numSkipEntities;
 static int cg_skipEntities[4];
 
+static qboolean cg_predictClip;
+static int cg_clipCmd[MAX_GENTITIES];
+static vec3_t cg_clipOrigin[MAX_GENTITIES];
+
+static void CG_FreezeClipOrigins(int cmdNumber) {
+    int i, n;
+
+    for (i = 0; i < cg_numSolidEntities; i++) {
+        n = cg_solidEntities[i]->currentState.number;
+        if (cg_clipCmd[n] != cmdNumber + 1) {
+            cg_clipCmd[n] = cmdNumber + 1;
+            VectorCopy(cg_solidEntities[i]->lerpOrigin, cg_clipOrigin[n]);
+        }
+    }
+}
+
 void CG_BuildSolidList(void) {
     int i;
     centity_t* cent;
@@ -113,7 +129,7 @@ static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const v
             cmodel = capsule ? trap_CM_TempCapsuleModel(bmins, bmaxs)
                              : trap_CM_TempBoxModel(bmins, bmaxs);
             VectorCopy(vec3_origin, angles);
-            VectorCopy(cent->lerpOrigin, origin);
+            VectorCopy(cg_predictClip ? cg_clipOrigin[ent->number] : cent->lerpOrigin, origin);
         }
 
         if (capsule) {
@@ -466,8 +482,57 @@ static void CG_CheckAutoFire(void) {
     }
 }
 
+static void CG_CheckPredictionError(const playerState_t* base) {
+    vec3_t delta;
+    float len;
+
+    if (cg.thisFrameTeleport) {
+        VectorClear(cg.predictedError);
+        if (cg_showmiss.integer) {
+            CG_Printf("PredictionTeleport\n");
+        }
+        cg.thisFrameTeleport = qfalse;
+    } else {
+        vec3_t adjusted, new_angles;
+        CG_AdjustPositionForMover(cg.predictedPlayerState.origin,
+                                  cg.predictedPlayerState.groundEntityNum, cg.physicsTime, cg.oldTime, adjusted, cg.predictedPlayerState.viewangles, new_angles);
+
+        if (cg_showmiss.integer) {
+            if (!VectorCompare(base->origin, adjusted)) {
+                CG_Printf("prediction error\n");
+            }
+        }
+        VectorSubtract(base->origin, adjusted, delta);
+        len = VectorLength(delta);
+        if (len > 0.1) {
+            if (cg_showmiss.integer) {
+                CG_Printf("Prediction miss: %f\n", len);
+            }
+            if (cg_errorDecay.integer) {
+                int t;
+                float f;
+
+                t = cg.time - cg.predictedErrorTime;
+                f = (cg_errorDecay.value - t) / cg_errorDecay.value;
+                if (f < 0) {
+                    f = 0;
+                }
+                if (f > 0 && cg_showmiss.integer) {
+                    CG_Printf("Double prediction decay: %f\n", f);
+                }
+                VectorScale(cg.predictedError, f, cg.predictedError);
+            } else {
+                VectorClear(cg.predictedError);
+            }
+            VectorAdd(delta, cg.predictedError, cg.predictedError);
+            cg.predictedErrorTime = cg.oldTime;
+        }
+    }
+}
+
 void CG_PredictPlayerState(void) {
     int cmdNum, current;
+    qboolean checked;
     playerState_t oldPlayerState;
     qboolean moved;
     usercmd_t oldestCmd;
@@ -554,7 +619,11 @@ void CG_PredictPlayerState(void) {
         cg.physicsTime = cg.snap->serverTime;
     }
 
+    CG_FreezeClipOrigins(current);
+    cg_predictClip = qtrue;
+
     moved = qfalse;
+    checked = qfalse;
     for (cmdNum = current - CMD_BACKUP + 1; cmdNum <= current; cmdNum++) {
         trap_GetUserCmd(cmdNum, &cg_pmove.cmd);
 
@@ -566,52 +635,9 @@ void CG_PredictPlayerState(void) {
             continue;
         }
 
-        if (cg.predictedPlayerState.commandTime == base->commandTime) {
-            vec3_t delta;
-            float len;
-
-            if (cg.thisFrameTeleport) {
-                VectorClear(cg.predictedError);
-                if (cg_showmiss.integer) {
-                    CG_Printf("PredictionTeleport\n");
-                }
-                cg.thisFrameTeleport = qfalse;
-            } else {
-                vec3_t adjusted, new_angles;
-                CG_AdjustPositionForMover(cg.predictedPlayerState.origin,
-                                          cg.predictedPlayerState.groundEntityNum, cg.physicsTime, cg.oldTime, adjusted, cg.predictedPlayerState.viewangles, new_angles);
-
-                if (cg_showmiss.integer) {
-                    if (!VectorCompare(base->origin, adjusted)) {
-                        CG_Printf("prediction error\n");
-                    }
-                }
-                VectorSubtract(base->origin, adjusted, delta);
-                len = VectorLength(delta);
-                if (len > 0.1) {
-                    if (cg_showmiss.integer) {
-                        CG_Printf("Prediction miss: %f\n", len);
-                    }
-                    if (cg_errorDecay.integer) {
-                        int t;
-                        float f;
-
-                        t = cg.time - cg.predictedErrorTime;
-                        f = (cg_errorDecay.value - t) / cg_errorDecay.value;
-                        if (f < 0) {
-                            f = 0;
-                        }
-                        if (f > 0 && cg_showmiss.integer) {
-                            CG_Printf("Double prediction decay: %f\n", f);
-                        }
-                        VectorScale(cg.predictedError, f, cg.predictedError);
-                    } else {
-                        VectorClear(cg.predictedError);
-                    }
-                    VectorAdd(delta, cg.predictedError, cg.predictedError);
-                    cg.predictedErrorTime = cg.oldTime;
-                }
-            }
+        if (!checked && cg.predictedPlayerState.commandTime == base->commandTime) {
+            CG_CheckPredictionError(base);
+            checked = qtrue;
         }
 
         cg_pmove.gauntletHit = qfalse;
@@ -627,6 +653,10 @@ void CG_PredictPlayerState(void) {
 
         CG_TouchTriggerPrediction();
 
+    }
+
+    if (moved && !checked && cg.predictedPlayerState.commandTime == base->commandTime) {
+        CG_CheckPredictionError(base);
     }
 
     if (moved) {
@@ -637,21 +667,38 @@ void CG_PredictPlayerState(void) {
         cg.realPredictedValid = qtrue;
     }
 
-    if (trap_GetPendingCmd(&cg_pmove.cmd) && cg_pmove.cmd.serverTime > cg.predictedPlayerState.commandTime) {
-        cg_pmove.gauntletHit = qfalse;
+    if (trap_GetPendingCmd(&cg_pmove.cmd)) {
+        if (cg_pmove.cmd.serverTime > cg.predictedPlayerState.commandTime) {
+            int eventSequence = cg.predictedPlayerState.eventSequence;
+            int events[MAX_PS_EVENTS];
+            int eventParms[MAX_PS_EVENTS];
 
-        stepBase = cg.predictedPlayerState.commandTime;
-        Pmove(&cg_pmove);
+            memcpy(events, cg.predictedPlayerState.events, sizeof(events));
+            memcpy(eventParms, cg.predictedPlayerState.eventParms, sizeof(eventParms));
 
-        moved = qtrue;
+            cg_pmove.gauntletHit = qfalse;
 
-        if (cg_pmove.stepTime == cg_pmove.cmd.serverTime && stepBase != cg.pendingStepBase) {
-            CG_UpdateStepChange();
-            cg.pendingStepBase = stepBase;
+            stepBase = cg.predictedPlayerState.commandTime;
+            Pmove(&cg_pmove);
+
+            moved = qtrue;
+
+            if (cg_pmove.stepTime == cg_pmove.cmd.serverTime && stepBase != cg.pendingStepBase) {
+                CG_UpdateStepChange();
+                cg.pendingStepBase = stepBase;
+            }
+
+            CG_TouchTriggerPrediction();
+
+            cg.predictedPlayerState.eventSequence = eventSequence;
+            memcpy(cg.predictedPlayerState.events, events, sizeof(events));
+            memcpy(cg.predictedPlayerState.eventParms, eventParms, sizeof(eventParms));
+        } else if (moved && cg_pmove.cmd.serverTime == cg.predictedPlayerState.commandTime) {
+            PM_UpdateViewAngles(&cg.predictedPlayerState, &cg_pmove.cmd);
         }
-
-        CG_TouchTriggerPrediction();
     }
+
+    cg_predictClip = qfalse;
 
     if (cg_showmiss.integer > 1) {
         CG_Printf("[%i : %i] ", cg_pmove.cmd.serverTime, cg.time);
