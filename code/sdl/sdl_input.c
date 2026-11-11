@@ -503,6 +503,7 @@ static void IN_InitJoystick(void) {
         Com_DPrintf("Joystick is not active.\n");
         SDL_free(joysticks);
         SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+        SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
         return;
     }
 

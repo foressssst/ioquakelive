@@ -282,6 +282,49 @@ static struct addrinfo* SearchAddrInfo(struct addrinfo* hints, sa_family_t famil
     return NULL;
 }
 
+static qboolean Sys_NumericToSockaddr(const char* s, struct sockaddr* sadr, int sadr_len) {
+    struct sockaddr_in* sin = (struct sockaddr_in*)sadr;
+    unsigned long parts[4];
+    unsigned long value;
+    char* end;
+    int i, n = 0;
+
+    if (sadr_len < (int)sizeof(*sin)) {
+        return qfalse;
+    }
+
+    for (;;) {
+        if (*s < '0' || *s > '9' || n == 4) {
+            return qfalse;
+        }
+        parts[n++] = strtoul(s, &end, 0);
+        if (!*end) {
+            break;
+        }
+        if (*end != '.') {
+            return qfalse;
+        }
+        s = end + 1;
+    }
+
+    value = parts[n - 1];
+    if (value > (0xffffffffUL >> (8 * (n - 1)))) {
+        return qfalse;
+    }
+    for (i = 0; i < n - 1; i++) {
+        if (parts[i] > 255) {
+            return qfalse;
+        }
+        value |= parts[i] << (24 - 8 * i);
+    }
+
+    memset(sin, '\0', sizeof(*sin));
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = htonl((unsigned int)value);
+
+    return qtrue;
+}
+
 static qboolean Sys_StringToSockaddr(const char* s, struct sockaddr* sadr, int sadr_len, sa_family_t family) {
     struct addrinfo hints;
     struct addrinfo* res = NULL;
@@ -326,6 +369,8 @@ static qboolean Sys_StringToSockaddr(const char* s, struct sockaddr* sadr, int s
             return qtrue;
         } else
             Com_Printf("Sys_StringToSockaddr: Error resolving %s: No address of required type found.\n", s);
+    } else if (family != AF_INET6 && Sys_NumericToSockaddr(s, sadr, sadr_len)) {
+        return qtrue;
     } else
         Com_Printf("Sys_StringToSockaddr: Error resolving %s: %s\n", s, gai_strerror(retval));
 
