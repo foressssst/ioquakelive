@@ -62,6 +62,8 @@ cvar_t* com_journal;
 cvar_t* com_maxfps;
 cvar_t* com_timedemo;
 qboolean com_uncappedFrames;
+qboolean com_serviceFrame = qtrue;
+static qboolean com_subMsec;
 int com_demoWindowParent;
 cvar_t* com_sv_running;
 cvar_t* com_cl_running;
@@ -1820,7 +1822,7 @@ void Com_Setenv_f(void) {
     }
 }
 
-#define COM_CONFIG_VERSION 5
+#define COM_CONFIG_VERSION 6
 
 static void Com_MigrateConfig(void) {
     cvar_t* version = Cvar_Get("com_configVersion", "0", CVAR_ARCHIVE);
@@ -1903,6 +1905,11 @@ static void Com_MigrateConfig(void) {
             Cvar_Set("g_doWarmup", "1");
             Cvar_Set("g_voteFlags", "0");
         }
+    }
+
+    if (version->integer < 6) {
+        if (Cvar_Flags("ch_drawSpectators") != CVAR_NONEXISTENT && !strcmp(Cvar_VariableString("ch_drawSpectators"), "0"))
+            Cvar_Set("ch_drawSpectators", "1");
     }
 
     if (version->integer != COM_CONFIG_VERSION)
@@ -2121,7 +2128,6 @@ void Com_Init(char* commandLine) {
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
 
     Cvar_Get("com_pid", va("%d", Sys_PID()), CVAR_ROM);
-    Cvar_Get("com_idleSleep", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     Cvar_Get("sv_idleRestart", "1", 0);
     Cvar_Get("fs_copyfiles", "0", CVAR_INIT);
     Cvar_Get("fs_restrict", "", CVAR_INIT);
@@ -2346,6 +2352,7 @@ void Com_WriteClientConfig_f(void) {
 
 int Com_ModifyMsec(int msec) {
     int clampTime;
+    qboolean still = (qboolean)(com_subMsec && msec == 0);
 
     if (com_fixedtime->integer) {
         msec = com_fixedtime->integer;
@@ -2355,7 +2362,7 @@ int Com_ModifyMsec(int msec) {
         msec *= com_timescale->value;
     }
 
-    if (msec < 1 && com_timescale->value) {
+    if (msec < 1 && com_timescale->value && !still) {
         msec = 1;
     }
 
@@ -2640,11 +2647,21 @@ static void Com_IdleExit(void) {
     }
 }
 
+#define COM_SERVICE_MSEC 4
+
 void Com_Frame(void) {
-    Steam_Frame();
-    Com_IdleExit();
-    SV_VoiceFrame();
-    ZMQ_Frame();
+    static int serviceTime;
+    int serviceNow = Sys_Milliseconds();
+
+    com_serviceFrame = (qboolean)(com_dedicated->integer || serviceNow - serviceTime >= COM_SERVICE_MSEC ||
+                                  serviceNow < serviceTime);
+    if (com_serviceFrame) {
+        serviceTime = serviceNow;
+        Steam_Frame();
+        Com_IdleExit();
+        SV_VoiceFrame();
+        ZMQ_Frame();
+    }
     int msec, minMsec;
     int timeVal, timeValSV;
     int capUs;
@@ -2675,6 +2692,7 @@ void Com_Frame(void) {
     }
 
     capUs = 0;
+    com_subMsec = qfalse;
     if (!com_timedemo->integer && !com_uncappedFrames) {
         if (com_dedicated->integer)
             minMsec = SV_FrameMsec();
@@ -2686,8 +2704,10 @@ void Com_Frame(void) {
             } else if (com_maxfps->integer > 0) {
                 minMsec = 1000 / com_maxfps->integer;
                 capUs = 1000000 / com_maxfps->integer;
-            } else
+            } else {
                 minMsec = 1;
+                com_subMsec = CL_SubMsecFrames();
+            }
             if (minMsec < 1)
                 minMsec = 1;
             if (!capUs)
@@ -2700,6 +2720,12 @@ void Com_Frame(void) {
                 bias = minMsec;
 
             minMsec -= bias;
+
+            if (com_subMsec) {
+                minMsec = 0;
+                capUs = 0;
+                bias = 0;
+            }
         }
     } else
         minMsec = 1;
@@ -2782,7 +2808,9 @@ void Com_Frame(void) {
         timeBeforeServer = Sys_Milliseconds();
     }
 
-    SV_Frame(msec);
+    if (msec || !com_subMsec) {
+        SV_Frame(msec);
+    }
 
     if (com_dedicated->modified) {
         Cvar_Get("dedicated", "0", 0);

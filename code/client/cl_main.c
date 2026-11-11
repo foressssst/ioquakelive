@@ -2818,6 +2818,16 @@ void CL_LowLatencyWait(void) {
     }
 }
 
+qboolean CL_SubMsecFrames(void) {
+    if (!com_cl_running || !com_cl_running->integer || clc.state != CA_ACTIVE) {
+        return qfalse;
+    }
+    if (clc.demoplaying || CL_VideoRecording() || cl_avidemo->integer || com_demoWindowParent) {
+        return qfalse;
+    }
+    return qtrue;
+}
+
 static void CL_ReconnectFrame(void) {
     char reason[MAX_STRING_CHARS];
     int left;
@@ -2969,20 +2979,22 @@ void CL_Frame(int msec) {
     CL_CheckForResend();
     CL_RedirectFrame();
 
-    CL_SteamServersFrame();
+    if (com_serviceFrame) {
+        CL_SteamServersFrame();
 
-    CL_WorkshopFrame();
-    CL_WarmPlayers();
-    if (!com_demoWindowParent) {
-        CL_UpdateFrame();
+        CL_WorkshopFrame();
+        CL_WarmPlayers();
+        if (!com_demoWindowParent) {
+            CL_UpdateFrame();
+        }
+        CL_DemoWindowFrame();
+
+        CL_MatchReportFrame();
+        CL_VoiceFrame();
+
+        CL_WebImage_Frame();
+        CL_Discord_Frame();
     }
-    CL_DemoWindowFrame();
-
-    CL_MatchReportFrame();
-    CL_VoiceFrame();
-
-    CL_WebImage_Frame();
-    CL_Discord_Frame();
 
     SCR_UpdateScreen();
 

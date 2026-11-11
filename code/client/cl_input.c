@@ -541,6 +541,7 @@ static void CL_MouseFilterEnd(void) {
 }
 
 static FILE* mouseAccelLog;
+static qboolean cl_stillFrame;
 
 void CL_MouseMove(usercmd_t* cmd) {
     qboolean debug = cl_mouseAccelDebug->integer != 0;
@@ -562,6 +563,10 @@ void CL_MouseMove(usercmd_t* cmd) {
     }
     if (!mouseAccelLog) {
         debug = qfalse;
+    }
+
+    if (cl_stillFrame && cl_mouseAccel->value != 0.0f) {
+        return;
     }
 
     mx = cl.mouseDx[0];
@@ -749,6 +754,7 @@ void CL_CreateNewCommands(void) {
     }
 
     frame_msec = com_frameTime - old_com_frameTime;
+    cl_stillFrame = (qboolean)(frame_msec == 0);
 
     if (frame_msec < 1) {
         frame_msec = 1;
