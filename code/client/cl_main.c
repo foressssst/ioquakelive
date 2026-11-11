@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <limits.h>
 
 #include "../qcommon/q_steam.h"
+#include "../qcommon/official_key.h"
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
 
@@ -2245,6 +2246,15 @@ static void CL_WarmPlayers(void) {
     }
 }
 
+static unsigned long long CL_ConnectSteamID(void) {
+    unsigned long long steamId = Steam_ClientSteamID();
+
+    if (!steamId) {
+        steamId = strtoull(cl_steamId->string, NULL, 10);
+    }
+    return steamId;
+}
+
 void CL_CheckForResend(void) {
     int port;
     char info[MAX_INFO_STRING];
@@ -2269,16 +2279,9 @@ void CL_CheckForResend(void) {
         case CA_CONNECTING:
         {
             byte payload[13 + 8 + 504];
-            unsigned long long steamId = Steam_ClientSteamID();
+            unsigned long long steamId = CL_ConnectSteamID();
             int ticketLen;
 
-            if (!steamId) {
-#ifdef _MSC_VER
-                steamId = strtoull(cl_steamId->string, NULL, 10);
-#else
-                steamId = strtoull(cl_steamId->string, NULL, 10);
-#endif
-            }
             Com_Memcpy(payload,      "getchallenge ", 13);
             Com_Memcpy(payload + 13, &steamId, 8);
 
@@ -2299,6 +2302,12 @@ void CL_CheckForResend(void) {
             Info_SetValueForKey(info, "protocol", va("%i", com_protocol->integer));
             Info_SetValueForKey(info, "qport", va("%i", port));
             Info_SetValueForKey(info, "challenge", va("%i", clc.challenge));
+            if (IOQL_BUILD_KEY[0]) {
+                char proof[OFFICIAL_PROOF_SIZE];
+
+                Com_OfficialProof(IOQL_BUILD_KEY, clc.challenge, CL_ConnectSteamID(), proof, sizeof(proof));
+                Info_SetValueForKey(info, "ioqlp", proof);
+            }
 
             Com_sprintf(data, sizeof(data), "connect \"%s\"", info);
             NET_OutOfBandData(NS_CLIENT, clc.serverAddress, (byte*)data, strlen(data));

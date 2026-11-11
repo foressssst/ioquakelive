@@ -704,6 +704,13 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit);
 void CL_UpdateApplyOnExit(void);
 void CL_Frame(int msec);
 void CL_LowLatencyWait(void);
+qboolean CL_SubMsecFrames(void);
+
+#define OFFICIAL_KEY_SIZE 65
+#define OFFICIAL_PROOF_BYTES 16
+#define OFFICIAL_PROOF_SIZE (OFFICIAL_PROOF_BYTES * 2 + 1)
+void Com_OfficialKey(const char* master, const char* version, char* out, int size);
+void Com_OfficialProof(const char* key, int challenge, uint64_t steamId, char* out, int size);
 void CL_DemoWindowWait(void);
 qboolean CL_GameCommand(void);
 qboolean CL_Connected(void);
@@ -819,6 +826,7 @@ qboolean Sys_VideoAudio(void* video, const short* pcm, int count);
 int Sys_VideoClose(void* video);
 char* Sys_BinaryPath(void);
 extern qboolean com_uncappedFrames;
+extern qboolean com_serviceFrame;
 extern int com_demoWindowParent;
 void* Sys_SharedOpen(const char* name, int size, qboolean create);
 void Sys_SharedClose(void* view);

@@ -35,6 +35,7 @@
     <ClCompile Include="..\..\code\qcommon\ioapi.c" />
     <ClCompile Include="..\..\code\qcommon\md4.c" />
     <ClCompile Include="..\..\code\qcommon\md5.c" />
+    <ClCompile Include="..\..\code\qcommon\official.c" />
     <ClCompile Include="..\..\code\qcommon\msg.c" />
     <ClCompile Include="..\..\code\qcommon\net_chan.c" />
     <ClCompile Include="..\..\code\qcommon\net_ip.c" />
