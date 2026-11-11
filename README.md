@@ -18,7 +18,7 @@ En Windows, el juego detecta automáticamente tu instalación de Quake Live y co
 
 - Compatibilidad con OpenGL, OpenGL 2 y Vulkan, incluyendo soporte para NVIDIA Reflex y AMD Anti-Lag 2 en Vulkan.
 - Carga de recursos en varios hilos y FPS desbloqueados.
-- Reproductor de demos mejorado, con soporte para `cg_xray` (wallhack) durante la reproducción de demos y al espectear. Esta función no está disponible durante las partidas.
+- Reproductor de demos mejorado.
 - Integración con Quake Club.
 - Nuevos comandos de consola: `help <comando o cvar>` y `searchconsole`.
 
@@ -37,10 +37,6 @@ git submodule update --init --recursive
   ```
 
 - **Linux y macOS:** ejecuta `make release`. Se requiere tener SDL3 instalado.
-
-## Firma de código
-
-Los binarios de Windows se firman con la firma de código gratuita para proyectos de código abierto de [SignPath Foundation](https://signpath.org), provista a través de [SignPath.io](https://signpath.io).
 
 ## Agradecimientos
 
