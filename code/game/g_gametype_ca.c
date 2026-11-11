@@ -469,7 +469,6 @@ void ClanArenaScoreboardMessage(gentity_t *ent) {
     char string[1024];
     int stringlength;
     int i, j;
-    qboolean first = qtrue;
     gclient_t *cl;
 
     string[0] = 0;
@@ -520,26 +519,13 @@ void ClanArenaScoreboardMessage(gentity_t *ent) {
                     perfect, alive);
         j = strlen(entry);
         if (stringlength + j > SCORES_LIST_ROOM) {
-            if (first) {
-                trap_SendServerCommand(ent - g_entities,
-                    va("scores_ca %i %i %i%s", level.numConnectedClients,
-                       level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE], string));
-                first = qfalse;
-            } else {
-                trap_SendServerCommand(ent - g_entities, va("scores_ca_ext%s", string));
-            }
-            string[0] = 0;
-            stringlength = 0;
+            break;
         }
         strcpy(string + stringlength, entry);
         stringlength += j;
     }
 
-    if (first) {
-        trap_SendServerCommand(ent - g_entities,
-            va("scores_ca %i %i %i%s", level.numConnectedClients,
-               level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE], string));
-    } else {
-        trap_SendServerCommand(ent - g_entities, va("scores_ca_ext%s", string));
-    }
+    trap_SendServerCommand(ent - g_entities,
+        va("scores_ca %i %i %i%s", i,
+           level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE], string));
 }

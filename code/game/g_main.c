@@ -3513,6 +3513,36 @@ void G_RunThink(gentity_t* ent) {
     ent->think(ent);
 }
 
+#define ROUND_COUNTDOWN_HOLD_MARGIN 300
+
+static void G_HoldRoundCountdown(void) {
+    char cs[MAX_INFO_STRING];
+    int remaining, second, shown, target;
+
+    if (level.roundState.tNext == 0 || level.roundState.eCurrent != RS_COUNTDOWN) {
+        return;
+    }
+
+    trap_GetConfigstring(CS_ROUND_STATUS, cs, sizeof(cs));
+    remaining = level.roundState.tNext - level.time;
+    if (remaining < 0) {
+        remaining = 0;
+    }
+    second = remaining - remaining % 1000;
+    shown = atoi(Info_ValueForKey(cs, "time")) - level.time;
+
+    if (level.timePauseBegin == 0) {
+        target = level.roundState.tNext;
+    } else if (shown >= second + ROUND_COUNTDOWN_HOLD_MARGIN && shown < second + 1000) {
+        return;
+    } else {
+        target = level.time + second + 999;
+    }
+
+    Info_SetValueForKey(cs, "time", va("%d", target));
+    trap_SetConfigstring(CS_ROUND_STATUS, cs);
+}
+
 void G_RunFrame(int levelTime) {
     int i;
     gentity_t* ent;
@@ -3528,14 +3558,9 @@ void G_RunFrame(int levelTime) {
         level.startTime += level.frametime;
         if (level.roundState.tNext != 0) {
             level.roundState.tNext += level.frametime;
-            if (level.roundState.eCurrent == RS_COUNTDOWN) {
-                char cs[MAX_INFO_STRING];
-                trap_GetConfigstring(CS_ROUND_STATUS, cs, sizeof(cs));
-                Info_SetValueForKey(cs, "time", va("%d", level.roundState.tNext));
-                trap_SetConfigstring(CS_ROUND_STATUS, cs);
-            }
         }
         MP_PauseThink();
+        G_HoldRoundCountdown();
     }
 
     G_UpdateCvars();

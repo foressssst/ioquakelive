@@ -139,14 +139,8 @@ Q_HOOKABLE void SV_SetConfigstring(int index, const char* val) {
                 continue;
             }
 
-            if (client->csPending || client->deferredCount > 0 ||
-                client->reliableSequence - client->reliableAcknowledge >= MAX_RELIABLE_COMMANDS / 2) {
-                client->csUpdated[index] = qtrue;
-                client->csPending = qtrue;
-                continue;
-            }
-
-            SV_SendConfigstring(client, index);
+            client->csUpdated[index] = qtrue;
+            client->csPending = qtrue;
         }
     }
 }

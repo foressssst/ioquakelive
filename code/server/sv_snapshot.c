@@ -150,6 +150,22 @@ void SV_UpdateServerCommandsToClient(client_t* client, msg_t* msg) {
     client->reliableSent = client->reliableSequence;
 }
 
+#define RELIABLE_WINDOW_BYTES 700
+
+static void SV_WriteServerCommandWindow(client_t* client, msg_t* msg) {
+    int i;
+
+    for (i = client->reliableAcknowledge + 1; i <= client->reliableSequence; i++) {
+        MSG_WriteByte(msg, svc_serverCommand);
+        MSG_WriteLong(msg, i);
+        MSG_WriteString(msg, client->reliableCommands[i & (MAX_RELIABLE_COMMANDS - 1)]);
+        if (msg->cursize >= RELIABLE_WINDOW_BYTES) {
+            break;
+        }
+    }
+    client->reliableSent = i < client->reliableSequence ? i : client->reliableSequence;
+}
+
 typedef struct {
     int numSnapshotEntities;
     int snapshotEntities[MAX_SNAPSHOT_ENTITIES];
@@ -412,7 +428,7 @@ void SV_SendClientSnapshot(client_t* client) {
 
     MSG_WriteLong(&msg, client->lastClientCommand);
 
-    SV_UpdateServerCommandsToClient(client, &msg);
+    SV_WriteServerCommandWindow(client, &msg);
 
     SV_WriteSnapshotToClient(client, &msg);
 
