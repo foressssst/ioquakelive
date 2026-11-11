@@ -1552,6 +1552,9 @@ void CG_AddViewWeapon(playerState_t* ps) {
     if (cg_gun_frame.integer) {
         hand.frame = hand.oldframe = cg_gun_frame.integer;
         hand.backlerp = 0;
+    } else if (ps->pm_flags & PMF_FOLLOW) {
+        hand.frame = hand.oldframe = 0;
+        hand.backlerp = 0;
     } else {
         ci = &cgs.clientinfo[cent->currentState.clientNum];
         hand.frame = CG_MapTorsoToWeaponFrame(ci, cent->pe.torso.frame);
