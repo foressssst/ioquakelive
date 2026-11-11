@@ -580,6 +580,38 @@ static void CG_ChatImageNotice(const char* text, char* out, int outSize) {
     out[o] = '\0';
 }
 
+#define SAVE_NOTICE_DELAY_MS 500
+#define MAX_SAVE_NOTICES 4
+
+static struct {
+    char text[MAX_SAY_TEXT];
+    int showAt;
+} cg_saveNotices[MAX_SAVE_NOTICES];
+
+void CG_QueueSaveNotice(const char* text) {
+    int i;
+
+    for (i = 0; i < MAX_SAVE_NOTICES; i++) {
+        if (!cg_saveNotices[i].showAt) {
+            Q_strncpyz(cg_saveNotices[i].text, text, sizeof(cg_saveNotices[i].text));
+            cg_saveNotices[i].showAt = trap_Milliseconds() + SAVE_NOTICE_DELAY_MS;
+            return;
+        }
+    }
+}
+
+void CG_RunSaveNotices(void) {
+    int i;
+    int now = trap_Milliseconds();
+
+    for (i = 0; i < MAX_SAVE_NOTICES; i++) {
+        if (cg_saveNotices[i].showAt && now >= cg_saveNotices[i].showAt) {
+            cg_saveNotices[i].showAt = 0;
+            CG_AddChat(cg_saveNotices[i].text, 0, 0);
+        }
+    }
+}
+
 void CG_AddChat(const char *rawText, int teamOnly, int extraTime) {
     CG_AddChatFrom(rawText, teamOnly, extraTime, -1);
 }
@@ -890,9 +922,13 @@ static void CG_ClientMute_f(void) {
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
         return;
     }
-    if (cgs.clientinfo[clientNum].steamId) {
-        trap_VoiceToggleIgnore(cgs.clientinfo[clientNum].steamId);
+    if (!cgs.clientinfo[clientNum].steamId) {
+        CG_Printf("%s" S_COLOR_WHITE " has no Steam ID and can't be muted.\n", cgs.clientinfo[clientNum].name);
+        return;
     }
+    trap_VoiceToggleIgnore(cgs.clientinfo[clientNum].steamId);
+    CG_Printf("%s" S_COLOR_WHITE " %s.\n", cgs.clientinfo[clientNum].name,
+              trap_VoiceIsIgnored(cgs.clientinfo[clientNum].steamId) ? "muted" : "unmuted");
 }
 
 static void CG_AccDown_f(void) {
