@@ -28,7 +28,7 @@ static qboolean CG_IsTeamGametype(int gametype) {
 }
 
 static void CG_RaceBeep(void) {
-    if (cg_raceBeep.integer >= 1 && cg_raceBeep.integer <= 8) {
+    if (cg_raceBeep.integer >= 1 && cg_raceBeep.integer <= 15) {
         trap_S_StartLocalSound(cgs.media.killBeepSounds[cg_raceBeep.integer - 1], CHAN_LOCAL_SOUND);
     }
 }
@@ -191,8 +191,7 @@ static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
     }
 
     if (!cg_cameraOrbit.integer) {
-        CG_CenterPrint(s, cg.warmup ? 144 : 125, 0.3f);
-        cg.centerPrintFrag = qtrue;
+        CG_FragPrint(s);
     }
 }
 
@@ -530,16 +529,16 @@ static void CG_UseItem(centity_t* cent) {
     if (es->number == cg.snap->ps.clientNum) {
         if (!itemNum) {
             if (cg_useItemWarning.integer == 1) {
-                CG_CenterPrint("No item to use", 144, 0.5f);
+                CG_CenterPrint("No item to use", FRAG_MESSAGE_Y, 0.5f);
             } else if (cg_useItemWarning.integer == 2) {
-                CG_CenterPrint("No item to use", 144, 0.25f);
+                CG_CenterPrint("No item to use", FRAG_MESSAGE_Y, 0.25f);
             }
         } else {
             item = BG_FindItemForHoldable(itemNum);
             if (cg_useItemMessage.integer == 1) {
-                CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.5f);
+                CG_CenterPrint(va("Use %s", item->pickup_name), FRAG_MESSAGE_Y, 0.5f);
             } else if (cg_useItemMessage.integer == 2) {
-                CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.25f);
+                CG_CenterPrint(va("Use %s", item->pickup_name), FRAG_MESSAGE_Y, 0.25f);
             }
         }
     }
@@ -1654,7 +1653,12 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                                       cgs.media.electroGibSound[(rand() & 4) ? 3 : 0]);
                 }
             }
-            VectorSet(dir, 0, 0, 1);
+            ByteToDir(es->eventParm, dir);
+            if (!es->eventParm || dir[2] < -0.99f) {
+                VectorSet(dir, 0, 0, 1);
+            } else {
+                dir[2] += 0.6f;
+            }
             CG_GibPlayer(cent->lerpOrigin, dir);
             break;
 

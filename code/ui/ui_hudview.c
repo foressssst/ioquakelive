@@ -1508,15 +1508,31 @@ static void HV_PreviewLagometer(void) {
     }
 }
 
-static float HV_PreviewFPS(float y) {
-    char s[16];
-    float w, h, fps = HV_Cvar("com_maxfps");
+#define HV_BOX_SCALE 0.16092f
+#define HV_BOX_PAD_X 3.5f
+#define HV_BOX_PAD_Y 1.5f
+#define HV_BOX_GAP 2.5f
+#define HV_BOX_RIGHT 636.0f
+#define HV_BOX_TOP 3.0f
 
-    Com_sprintf(s, sizeof(s), "%ifps", fps > 0.0f ? (int)fps : 125);
-    w = HV_Width(s, 0.25f, 2);
-    h = HV_Height(s, 0.25f, 2);
-    HV_PaintText(635.0f - w, y + h, 2, 0.25f, colorWhite, s, 0, ITEM_TEXTSTYLE_SHADOWED);
-    return y + h;
+static float HV_PreviewBox(float right, const char* s) {
+    static const vec4_t band = {0.0f, 0.0f, 0.0f, 0.45f};
+    float w = HV_Width(s, HV_BOX_SCALE, 0);
+    float boxW = w + 2.0f * HV_BOX_PAD_X;
+    float boxH = HV_LineHeight(HV_BOX_SCALE, 0) + 2.0f * HV_BOX_PAD_Y;
+
+    HV_FillRect(right - boxW, HV_BOX_TOP, boxW, boxH, band);
+    HV_PaintText(right - HV_BOX_PAD_X - w, HV_BOX_TOP + (boxH + HV_CapHeight(HV_BOX_SCALE, 0)) * 0.5f, 0, HV_BOX_SCALE,
+                 colorWhite, s, 0, 0);
+    return right - boxW - HV_BOX_GAP;
+}
+
+static float HV_PreviewFPS(float right) {
+    char s[16];
+    float fps = HV_Cvar("com_maxfps");
+
+    Com_sprintf(s, sizeof(s), "FPS: %i", fps > 0.0f ? (int)fps : 125);
+    return HV_PreviewBox(right, s);
 }
 
 static void HV_PreviewSpeedometer(void) {
@@ -1739,14 +1755,17 @@ static void HV_PreviewGun(void) {
 }
 
 static void HV_PaintPreviews(void) {
-    float y = 0.0f;
+    float right = HV_BOX_RIGHT;
 
     HV_PreviewCrosshair();
     HV_PreviewWeaponBar();
     HV_PreviewLagometer();
     hvAnchor = WIDESCREEN_RIGHT;
     if (HV_Cvar("cg_drawFPS") != 0.0f) {
-        y = HV_PreviewFPS(y);
+        right = HV_PreviewFPS(right);
+    }
+    if (HV_Cvar("ch_drawSpectators") != 0.0f) {
+        HV_PreviewBox(right, "Spectators: 2");
     }
     HV_PreviewSpeedometer();
     HV_PreviewFragMessage();

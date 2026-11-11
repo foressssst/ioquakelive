@@ -121,10 +121,31 @@ void CG_KeyNameForCommand(const char* command, char* buf, int buflen) {
 	}
 }
 
+static int cg_hudFontDepth;
+
 static int CG_EngineFont(int fontIndex) {
-	if (fontIndex >= 0 && fontIndex < 3)
-		return fontIndex;
-	return 0;
+	if (fontIndex < 0 || fontIndex >= 3)
+		fontIndex = 0;
+	if (fontIndex == 1 && !cg_hudFontDepth)
+		return 0;
+	return fontIndex;
+}
+
+void CG_PaintHudMenus(void) {
+	cg_hudFontDepth++;
+	Menu_PaintAll();
+	cg_hudFontDepth--;
+}
+
+int CG_HudFontSuspend(void) {
+	int depth = cg_hudFontDepth;
+
+	cg_hudFontDepth = 0;
+	return depth;
+}
+
+void CG_HudFontResume(int depth) {
+	cg_hudFontDepth = depth;
 }
 
 static int CG_IndexForFontPtr(const fontInfo_t* font) {
@@ -136,8 +157,15 @@ static int CG_IndexForFontPtr(const fontInfo_t* font) {
 	return 0;
 }
 
-static float CG_FontPixelSize(float scale) {
-	return (((float)cgs.glconfig.vidHeight / 768.0f) * 96.0f) * scale;
+#define CLASSIC_TEXT_SCALE 0.894f
+
+static float CG_FontPixelSize(int efont, float scale) {
+	float size = (((float)cgs.glconfig.vidHeight / 768.0f) * 96.0f) * scale;
+
+	if (efont == 0 && !cg_hudFontDepth) {
+		size *= CLASSIC_TEXT_SCALE;
+	}
+	return size;
 }
 
 static float CG_TextXScale(void) {
@@ -166,7 +194,7 @@ static void CG_TextToScreen(float* x, float* y) {
 static void CG_PaintTextEngine(float x, float y, int efont, float scale, const vec4_t color,
                                const char* text, int limit, int style) {
 	float sx = x, sy = y;
-	float size = CG_FontPixelSize(scale);
+	float size = CG_FontPixelSize(efont, scale);
 	int lim = (limit > 0) ? limit : -1;
 
 	if (!text || !*text)
@@ -204,7 +232,7 @@ void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* 
 	float xscale = CG_TextXScale();
 	float yscale = cgs.screenYScale;
 
-	trap_R_Font_TextExtents(text, 0, engineFont, CG_FontPixelSize(scale), -1, extents);
+	trap_R_Font_TextExtents(text, 0, engineFont, CG_FontPixelSize(engineFont, scale), -1, extents);
 	if (xscale <= 0.0f)
 		xscale = 1.0f;
 	if (yscale <= 0.0f)
@@ -218,10 +246,11 @@ void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* 
 static void CG_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
 	float extents[5];
 	float xscale, yscale;
-	float size = CG_FontPixelSize(scale);
+	int efont = CG_EngineFont(fontIndex);
+	float size = CG_FontPixelSize(efont, scale);
 	int lim = (limit > 0) ? limit : -1;
 
-	trap_R_Font_TextExtents(text, 0, CG_EngineFont(fontIndex), size, lim, extents);
+	trap_R_Font_TextExtents(text, 0, efont, size, lim, extents);
 
 	xscale = CG_TextXScale();
 	if (xscale <= 0.0f)
@@ -299,8 +328,9 @@ int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex) {
 float CG_DrawTextCapHeight(float scale, int fontIndex) {
 	float extents[5];
 	float yscale = cgs.screenYScale;
+	int efont = CG_EngineFont(fontIndex);
 
-	trap_R_Font_TextExtents("H", 0, CG_EngineFont(fontIndex), CG_FontPixelSize(scale), -1, extents);
+	trap_R_Font_TextExtents("H", 0, efont, CG_FontPixelSize(efont, scale), -1, extents);
 
 	if (yscale <= 0.0f) {
 		yscale = 1.0f;
@@ -313,8 +343,9 @@ int CG_DrawTextLineHeight(float scale, int fontIndex) {
 	float extents[5];
 	float yscale = cgs.screenYScale;
 	float below;
+	int efont = CG_EngineFont(fontIndex);
 
-	trap_R_Font_TextExtents("Ag", 0, CG_EngineFont(fontIndex), CG_FontPixelSize(scale), -1, extents);
+	trap_R_Font_TextExtents("Ag", 0, efont, CG_FontPixelSize(efont, scale), -1, extents);
 
 	if (yscale <= 0.0f) {
 		yscale = 1.0f;
@@ -334,7 +365,7 @@ void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t
 
 	CG_TextToScreen(&sx, &sy);
 	trap_R_SetColor(color);
-	trap_R_Font_DrawString((int)sx, (int)sy, text, 0, CG_FontPixelSize(scale), -1, maxX ? &clip : NULL, 0);
+	trap_R_Font_DrawString((int)sx, (int)sy, text, 0, CG_FontPixelSize(0, scale), -1, maxX ? &clip : NULL, 0);
 	trap_R_SetColor(NULL);
 
 	if (maxX) {
@@ -588,47 +619,170 @@ static float CG_DrawSnapshot(float y) {
 	return y + BIGCHAR_HEIGHT + 4;
 }
 
-#define FPS_FRAMES 4
-#define FPS_HISTORY 1024
-#define FPS_WINDOW 250
-static float CG_DrawFPS(float y) {
-	char* s;
-	int w;
-	int h = 0;
-	static int previousTimes[FPS_HISTORY];
-	static int index;
-	int frames, total;
-	int fps;
-	static int previous;
-	int t, frameTime;
+#define FPS_INTERVAL 250
+#define FPS_STALE 1000
+#define INFO_BOX_SCALE 0.18f
+#define INFO_BOX_PAD_X 3.5f
+#define INFO_BOX_PAD_Y 1.5f
+#define INFO_BOX_ALPHA 0.45f
+#define INFO_BOX_GAP 2.5f
+#define INFO_BOX_MAX 10
+#define INFO_BOX_RIGHT 636.0f
+#define INFO_BOX_TOP 3.0f
+#define INFO_BOX_SPEC_TOP 44.0f
+#define INFO_BOX_SPEC_BAR 556.0f
+#define INFO_BOX_SPEC_CLOCK 356.0f
+
+typedef struct {
+	char text[64];
+	float width;
+} infoBox_t;
+
+static int CG_AddInfoBox(infoBox_t* boxes, int n, const char* text) {
+	static char widest;
+	char slot[64];
+	char run[11];
+	int i, w, best;
+
+	if (n >= INFO_BOX_MAX) {
+		return n;
+	}
+	Q_strncpyz(boxes[n].text, text, sizeof(boxes[n].text));
+	if (!widest) {
+		best = -1;
+		run[10] = '\0';
+		for (i = 0; i < 10; i++) {
+			memset(run, '0' + i, 10);
+			w = CG_DrawTextWidth(run, INFO_BOX_SCALE, 0, 0);
+			if (w > best) {
+				best = w;
+				widest = (char)('0' + i);
+			}
+		}
+	}
+	Q_strncpyz(slot, boxes[n].text, sizeof(slot));
+	for (i = 0; slot[i]; i++) {
+		if (slot[i] >= '0' && slot[i] <= '9') {
+			slot[i] = widest;
+		}
+	}
+	boxes[n].width = (float)CG_DrawTextWidth(slot, INFO_BOX_SCALE, 0, 0) + 2.0f * INFO_BOX_PAD_X;
+
+	return n + 1;
+}
+
+static const char* CG_FPSText(void) {
+	static int frames, since, shown = -1;
+	int t, elapsed;
 
 	t = trap_Milliseconds();
-	frameTime = t - previous;
-	previous = t;
-
-	previousTimes[index % FPS_HISTORY] = frameTime;
-	index++;
-	if (index > FPS_FRAMES) {
-		total = 0;
-		for (frames = 0; frames < FPS_HISTORY && frames < index - 1 && total < FPS_WINDOW; frames++) {
-			total += previousTimes[(index - 1 - frames) % FPS_HISTORY];
+	frames++;
+	elapsed = t - since;
+	if (elapsed > FPS_INTERVAL + FPS_STALE) {
+		frames = 0;
+		since = t;
+	} else if (elapsed >= FPS_INTERVAL) {
+		shown = (1000 * frames + elapsed / 2) / elapsed;
+		if (shown - cg_comMaxfps.integer <= 1 && cg_comMaxfps.integer - shown <= 1) {
+			shown = cg_comMaxfps.integer;
 		}
-		if (!total) {
-			total = 1;
-		}
-		fps = (1000 * frames + total / 2) / total;
-		if (fps - cg_comMaxfps.integer <= 1 && cg_comMaxfps.integer - fps <= 1) {
-			fps = cg_comMaxfps.integer;
-		}
-
-		s = va("%ifps", fps);
-		w = CG_DrawTextWidth(s, 0.25f, 0, 2);
-		h = CG_DrawTextHeight(s, 0.25f, 0, 2);
-
-		CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		frames = 0;
+		since = t;
+	}
+	if (shown < 0) {
+		return NULL;
 	}
 
-	return y + h;
+	return va("FPS: %i", shown);
+}
+
+static int CG_AddLatencyBoxes(infoBox_t* boxes, int n) {
+	char report[256];
+	char* parts[INFO_BOX_MAX];
+	char* s;
+	char* cut;
+	int count;
+
+	trap_Cvar_VariableStringBuffer("r_latencyStats", report, sizeof(report));
+	if (!atoi(report)) {
+		return n;
+	}
+	trap_Cvar_VariableStringBuffer("r_latencyReport", report, sizeof(report));
+	if (!report[0]) {
+		return n;
+	}
+
+	count = 0;
+	s = report;
+	while (count < INFO_BOX_MAX) {
+		parts[count++] = s;
+		cut = strstr(s, " | ");
+		if (!cut) {
+			break;
+		}
+		*cut = '\0';
+		s = cut + 3;
+	}
+	while (count > 0) {
+		n = CG_AddInfoBox(boxes, n, parts[--count]);
+	}
+
+	return n;
+}
+
+static float CG_SpecBarRight(void) {
+	float right;
+
+	right = (cgs.gametype == GT_DUEL || cgs.gametype >= GT_TEAM) ? INFO_BOX_SPEC_BAR : INFO_BOX_SPEC_CLOCK;
+	if (cgs.widescreenBias > 0.0f) {
+		right -= cgs.widescreenBias / ((4.0f * cgs.glconfig.vidHeight / 3.0f) / 640.0f);
+	}
+
+	return right;
+}
+
+static float CG_DrawInfoBoxes(float y, stereoFrame_t stereoFrame) {
+	vec4_t band = {0.0f, 0.0f, 0.0f, INFO_BOX_ALPHA};
+	infoBox_t boxes[INFO_BOX_MAX];
+	const char* s;
+	float total, top, right, boxH;
+	int i, n;
+
+	n = 0;
+	if (cg_drawFPS.integer && (stereoFrame == STEREO_CENTER || stereoFrame == STEREO_RIGHT)) {
+		s = CG_FPSText();
+		if (s) {
+			n = CG_AddInfoBox(boxes, n, s);
+		}
+	}
+	n = CG_AddLatencyBoxes(boxes, n);
+	if (ch_drawSpectators.integer && cg.snap->ps.persistant[PERS_FOLLOWERS] > 0) {
+		n = CG_AddInfoBox(boxes, n, va("Spectators: %i", cg.snap->ps.persistant[PERS_FOLLOWERS]));
+	}
+	if (!n) {
+		return y;
+	}
+
+	total = INFO_BOX_GAP * (n - 1);
+	for (i = 0; i < n; i++) {
+		total += boxes[i].width;
+	}
+	top = y + INFO_BOX_TOP;
+	if (top < INFO_BOX_SPEC_TOP && INFO_BOX_RIGHT - total < CG_SpecBarRight() &&
+	    ((cg.predictedPlayerState.eFlags & EF_SPECTATOR) || cg.predictedPlayerState.pm_type == PM_SPECTATOR)) {
+		top = INFO_BOX_SPEC_TOP;
+	}
+
+	boxH = (float)CG_DrawTextLineHeight(INFO_BOX_SCALE, 0) + 2.0f * INFO_BOX_PAD_Y;
+	right = INFO_BOX_RIGHT;
+	for (i = 0; i < n; i++) {
+		CG_FillRect(right - boxes[i].width, top, boxes[i].width, boxH, band);
+		CG_DrawText(right - boxes[i].width + INFO_BOX_PAD_X, top + (boxH + CG_DrawTextCapHeight(INFO_BOX_SCALE, 0)) * 0.5f, 0,
+		            INFO_BOX_SCALE, colorWhite, boxes[i].text, 0, 0, 0);
+		right -= boxes[i].width + INFO_BOX_GAP;
+	}
+
+	return top + boxH + 1.0f;
 }
 
 static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
@@ -950,32 +1104,6 @@ static float CG_DrawLocalTime(float y) {
 	return y + h;
 }
 
-static void CG_DrawSpectators(void) {
-	static const vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.75f};
-	const char* s;
-	float w, h, eyeW, eyeH, x, y;
-	int count;
-
-	count = cg.snap->ps.persistant[PERS_FOLLOWERS];
-	if (count <= 0) {
-		return;
-	}
-	s = va("%i", count);
-	w = CG_DrawTextWidth(s, 0.25f, 0, 2);
-	h = CG_DrawTextHeight(s, 0.25f, 0, 2);
-	eyeH = h;
-	eyeW = eyeH * 2.0f;
-	x = 635 - w - 3 - eyeW;
-	y = SCREEN_HEIGHT - 5 - h;
-
-	CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
-	trap_R_SetColor(shadow);
-	CG_DrawPic(x + 1, y + 1, eyeW, eyeH, cgs.media.spectatorsShader);
-	trap_R_SetColor(colorWhite);
-	CG_DrawPic(x, y, eyeW, eyeH, cgs.media.spectatorsShader);
-	trap_R_SetColor(NULL);
-}
-
 static float CG_DrawRecording(float y) {
 	const char* s;
 	int w, h;
@@ -992,114 +1120,6 @@ static float CG_DrawRecording(float y) {
 	return y + h;
 }
 
-#define KEY_FORWARD 1
-#define KEY_BACK 2
-#define KEY_LEFT 4
-#define KEY_RIGHT 8
-#define KEY_JUMP 16
-#define KEY_CROUCH 32
-#define KEY_ATTACK 64
-
-static int CG_KeysOf(const playerState_t* ps) {
-	usercmd_t cmd;
-	vec3_t forward, right;
-	float f, s;
-	int keys = 0;
-
-	if (!cg.demoPlayback && ps->clientNum == cg.clientNum && !(ps->pm_flags & PMF_FOLLOW)) {
-		if (!trap_GetUserCmd(trap_GetCurrentCmdNumber(), &cmd)) {
-			return 0;
-		}
-		if (cmd.forwardmove > 0) {
-			keys |= KEY_FORWARD;
-		} else if (cmd.forwardmove < 0) {
-			keys |= KEY_BACK;
-		}
-		if (cmd.rightmove > 0) {
-			keys |= KEY_RIGHT;
-		} else if (cmd.rightmove < 0) {
-			keys |= KEY_LEFT;
-		}
-		if (cmd.upmove > 0) {
-			keys |= KEY_JUMP;
-		} else if (cmd.upmove < 0) {
-			keys |= KEY_CROUCH;
-		}
-		if (cmd.buttons & BUTTON_ATTACK) {
-			keys |= KEY_ATTACK;
-		}
-		return keys;
-	}
-
-	AngleVectors(ps->viewangles, forward, right, NULL);
-	forward[2] = 0;
-	right[2] = 0;
-	VectorNormalize(forward);
-	VectorNormalize(right);
-	f = DotProduct(ps->velocity, forward);
-	s = DotProduct(ps->velocity, right);
-	if (f > 40.0f) {
-		keys |= KEY_FORWARD;
-	} else if (f < -40.0f) {
-		keys |= KEY_BACK;
-	}
-	if (s > 40.0f) {
-		keys |= KEY_RIGHT;
-	} else if (s < -40.0f) {
-		keys |= KEY_LEFT;
-	}
-	if (ps->groundEntityNum == ENTITYNUM_NONE && ps->velocity[2] > 100.0f) {
-		keys |= KEY_JUMP;
-	}
-	if (ps->pm_flags & PMF_DUCKED) {
-		keys |= KEY_CROUCH;
-	}
-	if (ps->weaponstate == WEAPON_FIRING) {
-		keys |= KEY_ATTACK;
-	}
-
-	return keys;
-}
-
-static void CG_DrawKey(float x, float y, float size, const char* label, qboolean down) {
-	vec4_t box = {0.0f, 0.0f, 0.0f, 0.35f};
-	vec4_t text = {1.0f, 1.0f, 1.0f, 0.45f};
-	float scale = size * 0.014f;
-
-	if (down) {
-		box[0] = box[1] = box[2] = 0.85f;
-		box[3] = 0.65f;
-		text[0] = text[1] = text[2] = 0.0f;
-		text[3] = 1.0f;
-	}
-	CG_FillRect(x, y, size, size, box);
-	CG_DrawText(x + (size - CG_DrawTextWidth(label, scale, 0, 0)) * 0.5f,
-				y + (size + CG_DrawTextHeight(label, scale, 0, 0)) * 0.5f, 0, scale, text, label, 0, 0, 0);
-}
-
-static void CG_DrawKeys(void) {
-	const float size = 16.0f;
-	const float gap = 2.0f;
-	float x = 24.0f;
-	float y = 330.0f;
-	int keys;
-
-	if (!cg.snap) {
-		return;
-	}
-	keys = CG_KeysOf(&cg.snap->ps);
-
-	CG_DrawKey(x + size + gap, y, size, "W", (keys & KEY_FORWARD) ? qtrue : qfalse);
-	y += size + gap;
-	CG_DrawKey(x, y, size, "A", (keys & KEY_LEFT) ? qtrue : qfalse);
-	CG_DrawKey(x + size + gap, y, size, "S", (keys & KEY_BACK) ? qtrue : qfalse);
-	CG_DrawKey(x + (size + gap) * 2.0f, y, size, "D", (keys & KEY_RIGHT) ? qtrue : qfalse);
-	y += size + gap;
-	CG_DrawKey(x, y, size, "C", (keys & KEY_CROUCH) ? qtrue : qfalse);
-	CG_DrawKey(x + size + gap, y, size, "J", (keys & KEY_JUMP) ? qtrue : qfalse);
-	CG_DrawKey(x + (size + gap) * 2.0f, y, size, "F", (keys & KEY_ATTACK) ? qtrue : qfalse);
-}
-
 static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	float y;
 
@@ -1111,12 +1131,7 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	if (cg_drawSnapshot.integer) {
 		y = CG_DrawSnapshot(y);
 	}
-	if (cg_drawFPS.integer && (stereoFrame == STEREO_CENTER || stereoFrame == STEREO_RIGHT)) {
-		y = CG_DrawFPS(y);
-	}
-	if (ch_drawKeys.integer) {
-		CG_DrawKeys();
-	}
+	y = CG_DrawInfoBoxes(y, stereoFrame);
 	if (ch_recordMessage.integer) {
 		y = CG_DrawRecording(y);
 	}
@@ -1190,6 +1205,9 @@ static int CG_DrawPickupItem(int y) {
 		x = CG_DrawTextWidth(s, PICKUP_ITEM_SCALE, 0, 1) + 13;
 	}
 	if (cg_drawItemPickups.integer & 1) {
+		if (ch_animateScroll.integer) {
+			trap_R_SetColor(color);
+		}
 		CG_DrawPic((float)x, (float)y, 16, 16, cg_items[value].icon);
 		x += 24;
 	}
@@ -1219,7 +1237,7 @@ static void CG_DrawLowerLeft(void) {
 	CG_DrawPickupItem((int)y);
 }
 
-static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
+static void CG_DrawRewardIcon(float x, float y, float w, float h, qhandle_t shader) {
 	const qhandle_t animated[6] = {cgs.media.medalAssist, cgs.media.medalCapture, cgs.media.medalDefend,
 								   cgs.media.medalExcellent, cgs.media.medalGauntlet, cgs.media.medalImpressive};
 	int mode = ch_animateRewardIcons.integer;
@@ -1241,22 +1259,151 @@ static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 		shader = cgs.media.medalFrames[medal][frame];
 		break;
 	}
-	CG_DrawPic(x, y, size, size, shader);
+	CG_DrawPic(x, y, w, h, shader);
 }
 
-#define REWARD_ICON_SCALE 0.74f
-#define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
-#define REWARD_ICON_STEP (48.0f * REWARD_ICON_SCALE)
-#define REWARD_ROW_CENTER 325.0f
-#define REWARD_ICON_X (REWARD_ROW_CENTER - REWARD_ICON_STEP / 2.0f)
-#define REWARD_COUNT_X (REWARD_ICON_X + 40.0f * REWARD_ICON_SCALE)
-#define REWARD_COUNT_DY (24.0f * REWARD_ICON_SCALE)
-#define REWARD_COUNT_SCALE (0.2f * REWARD_ICON_SCALE)
-#define REWARD_Y (cg.warmup ? 113.0f : 90.0f)
+#define REWARD_ICON_SIZE 32.0f
+#define REWARD_COUNT_GAP 8.0f
+#define REWARD_COUNT_DROP 0.75f
+#define REWARD_COUNT_SCALE 0.2f
+#define REWARD_X 320.0f
+#define REWARD_CLEARANCE 10.0f
+#define REWARD_UNDER 6.0f
+#define REWARD_MIN_Y 4.0f
+#define TITLE_STALE 100
+#define FRAG_MESSAGE_TIME 1550
+#define CENTER_TEXT_MIN 0.25f
+#define CENTER_TEXT_FACTOR 0.8f
+#define FRAG_MESSAGE_SCALE 0.26f
+#define REWARD_SCALE 0.6f
+#define FIGHT_Y 101
+#define CENTER_ROW_Y 110.0f
+#define CENTER_GAP_TITLE 16.0f
+#define CENTER_GAP_LINE 10.0f
+#define CENTER_GAP_BLOCK 12.0f
+#define COUNTDOWN_SUB_RATIO 0.88f
+
+static float cg_titleTop;
+static float cg_titleBottom;
+static int cg_titleTime;
+
+static float CG_CenterTextScale(float retail) {
+	float scale = retail * CENTER_TEXT_FACTOR;
+
+	if (scale < CENTER_TEXT_MIN) {
+		scale = retail < CENTER_TEXT_MIN ? retail : CENTER_TEXT_MIN;
+	}
+	return scale;
+}
+
+static float CG_CenterTextY(float y, float retail, int font) {
+	return y - CG_DrawTextCapHeight(retail, font) + CG_DrawTextCapHeight(CG_CenterTextScale(retail), font);
+}
+
+static void CG_NoteTitle(float top, float bottom) {
+	if (cg_titleTime != cg.time) {
+		cg_titleTime = cg.time;
+		cg_titleTop = top;
+		cg_titleBottom = bottom;
+		return;
+	}
+	if (top < cg_titleTop) {
+		cg_titleTop = top;
+	}
+	if (bottom > cg_titleBottom) {
+		cg_titleBottom = bottom;
+	}
+}
+
+static float CG_CenterPrintTop(float lineH, float* bottom, int stale) {
+	float top = (float)(int)(cg.centerPrintY - cg.centerPrintScale * 16.0f * cg.centerPrintLines);
+	float row = CENTER_ROW_Y + (cgs.gametype == GT_RACE ? 10.0f : 0.0f);
+	float height;
+	int rows = cg.centerPrintLines;
+	int len = (int)strlen(cg.centerPrint);
+	int age = cg.time - cg_titleTime;
+
+	while (rows > 1 && len > 0 && cg.centerPrint[len - 1] == '\n') {
+		rows--;
+		len--;
+	}
+	height = rows * lineH + (rows - 1) * 6.0f;
+	if (top < row) {
+		top = (float)(int)(row - height);
+		if (cg_titleTime && age >= 0 && age <= stale && cg_titleTop < top + height && cg_titleBottom > top) {
+			top = (float)(int)(FRAG_MESSAGE_Y - cg.centerPrintScale * 16.0f);
+		}
+	}
+	if (bottom) {
+		*bottom = top + height;
+	}
+	return top;
+}
+
+static qboolean CG_CenterPrintSpan(float* top, float* bottom) {
+	float w, lineH;
+	int age;
+
+	if (!cg.centerPrintTime) {
+		return qfalse;
+	}
+	age = cg.time - cg.centerPrintTime;
+	if ((cg.centerPrintFrag && ch_animateScroll.integer) ? age >= FRAG_MESSAGE_TIME
+														  : age >= (int)(cg_centertime.value * 1000.0f)) {
+		return qfalse;
+	}
+	CG_MeasureTextInFont("A", 0, cg.centerPrintScale, &w, &lineH);
+	*top = CG_CenterPrintTop(lineH, bottom, TITLE_STALE);
+	*top += lineH - CG_DrawTextCapHeight(cg.centerPrintScale, 0);
+	return qtrue;
+}
+
+static float CG_FragMessageTop(void) {
+	float scale = FRAG_MESSAGE_SCALE;
+	float w, lineH;
+
+	CG_MeasureTextInFont("A", 0, scale, &w, &lineH);
+	return (float)(int)(FRAG_MESSAGE_Y - scale * 16.0f) + lineH - CG_DrawTextCapHeight(scale, 0);
+}
+
+static float CG_RewardY(float h) {
+	static int latchedFor;
+	static float latched;
+	float y, top, bottom;
+	qboolean title, print;
+	int age, pass;
+
+	y = CG_FragMessageTop() - REWARD_CLEARANCE - h;
+	age = cg.time - cg_titleTime;
+	title = cg_titleTime && age >= 0 && age < TITLE_STALE;
+	print = CG_CenterPrintSpan(&top, &bottom);
+	for (pass = 0; pass < 2; pass++) {
+		if (print && top < y + h + REWARD_CLEARANCE && bottom > y - REWARD_CLEARANCE) {
+			y = top - REWARD_CLEARANCE - h;
+		}
+		if (title && cg_titleTop < y + h + REWARD_CLEARANCE && cg_titleBottom > y - REWARD_UNDER) {
+			y = cg_titleTop - REWARD_CLEARANCE - h;
+		}
+	}
+	if (y < REWARD_MIN_Y) {
+		y = REWARD_MIN_Y;
+	}
+	if (latchedFor != cg.rewardTime) {
+		latchedFor = cg.rewardTime;
+		latched = y;
+	}
+	if (y < latched) {
+		latched = y;
+	}
+
+	return latched;
+}
 
 static void CG_DrawReward(void) {
 	vec4_t color;
-	int i, remaining;
+	const char* count;
+	float scale, x, y, w, h, gap, total;
+	int i, remaining, saved;
 
 	remaining = REWARD_TIME - (cg.time - cg.rewardTime);
 	if (!cg.rewardTime || remaining <= 0) {
@@ -1286,13 +1433,24 @@ static void CG_DrawReward(void) {
 	} else {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
+	saved = cg_currentWidescreen;
+	CG_SetWidescreen(WIDESCREEN_CENTER);
+	scale = REWARD_SCALE;
+	w = REWARD_ICON_SIZE * scale;
+	h = REWARD_ICON_SIZE * scale;
+	y = CG_RewardY(h);
+	count = cg.rewardCount[0] > cg_drawRewardsRowSize.integer ? va("%d", cg.rewardCount[0]) : NULL;
+	gap = REWARD_COUNT_GAP * scale;
+	total = count ? w + gap + CG_DrawTextWidth(count, REWARD_COUNT_SCALE * scale, 0, 0) : w;
+	x = REWARD_X - total * 0.5f;
+
 	trap_R_SetColor(color);
-	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
-	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
-		CG_DrawText(REWARD_COUNT_X, REWARD_Y + REWARD_COUNT_DY, 0, REWARD_COUNT_SCALE, color,
-					va("%d", cg.rewardCount[0]), 0, 0, 0);
+	CG_DrawRewardIcon(x, y, w, h, cg.rewardShader[0]);
+	if (count) {
+		CG_DrawText(x + w + gap, y + h * REWARD_COUNT_DROP, 0, REWARD_COUNT_SCALE * scale, color, count, 0, 0, 0);
 	}
 	trap_R_SetColor(NULL);
+	CG_SetWidescreen(saved);
 }
 
 #define LAG_SAMPLES 128
@@ -1332,7 +1490,7 @@ static void CG_DrawDisconnect(void) {
 	int cmdNum;
 	usercmd_t cmd;
 	const char* s;
-	int w;
+	int w, saved;
 
 	if (cg.demoPlayback) {
 		return;
@@ -1349,8 +1507,11 @@ static void CG_DrawDisconnect(void) {
 	}
 
 	s = "Connection Interrupted";
+	saved = cg_currentWidescreen;
+	CG_SetWidescreen(WIDESCREEN_CENTER);
 	w = CG_DrawTextWidth(s, 0.25f, 0, 0);
 	CG_DrawText((float)(320 - w / 2), 116, 0, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	CG_SetWidescreen(saved);
 
 	if ((cg.time >> 9) & 1) {
 		return;
@@ -1362,10 +1523,19 @@ static void CG_DrawDisconnect(void) {
 	CG_DrawPic(x, y, 48, 48, cgs.media.netShader);
 }
 
+#define INPUTCMDS_SIZE 24.0f
+#define INPUTCMDS_KEY 16.0f
+#define INPUTCMDS_DROP 96.0f
+#define INPUTCMDS_STEP_X (56.0f / 3.0f)
+#define INPUTCMDS_STEP_Y 18.0f
+
 static void CG_DrawInputCmds(void) {
-	float size, x, y;
+	static const signed char cell[6][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}, {0, 0}, {0, 0}};
+	qboolean held[6];
+	float size, k, key, x, y;
 	signed char forward, right, up;
 	usercmd_t cmd;
+	int i;
 
 	if (!cg_drawInputCmds.integer) {
 		return;
@@ -1388,27 +1558,50 @@ static void CG_DrawInputCmds(void) {
 		up = cg.snap->ps.upmove;
 	}
 
+	held[0] = (qboolean)(forward > 0);
+	held[1] = (qboolean)(forward < 0);
+	held[2] = (qboolean)(right < 0);
+	held[3] = (qboolean)(right > 0);
+	held[4] = (qboolean)(up > 0);
+	held[5] = (qboolean)(up < 0);
+
 	size = cg_drawInputCmdsSize.value;
 	x = cg_drawInputCmdsX.integer;
 	y = cg_drawInputCmdsY.integer;
 
-	if (forward > 0) {
-		CG_DrawPic(x - 8, y - size - 16, 16, 16, cgs.media.cmdUpShader);
+	if (!cgs.media.keyShaders[0]) {
+		if (held[0]) {
+			CG_DrawPic(x - 8, y - size - 16, 16, 16, cgs.media.cmdUpShader);
+		}
+		if (held[1]) {
+			CG_DrawPic(x - 8, y + size, 16, 16, cgs.media.cmdDownShader);
+		}
+		if (held[3]) {
+			CG_DrawPic(x + size, y - 8, 16, 16, cgs.media.cmdRightShader);
+		}
+		if (held[2]) {
+			CG_DrawPic(x - size - 16, y - 8, 16, 16, cgs.media.cmdLeftShader);
+		}
+		if (held[4]) {
+			CG_DrawPic(x + size + 16, y - size - 16, 16, 16, cgs.media.cmdUpShader);
+		}
+		if (held[5]) {
+			CG_DrawPic(x + size + 16, y + size, 16, 16, cgs.media.cmdDownShader);
+		}
+		return;
 	}
-	if (forward < 0) {
-		CG_DrawPic(x - 8, y + size, 16, 16, cgs.media.cmdDownShader);
-	}
-	if (right > 0) {
-		CG_DrawPic(x + size, y - 8, 16, 16, cgs.media.cmdRightShader);
-	}
-	if (right < 0) {
-		CG_DrawPic(x - size - 16, y - 8, 16, 16, cgs.media.cmdLeftShader);
-	}
-	if (up > 0) {
-		CG_DrawPic(x + size + 16, y - size - 16, 16, 16, cgs.media.cmdUpShader);
-	}
-	if (up < 0) {
-		CG_DrawPic(x + size + 16, y + size, 16, 16, cgs.media.cmdDownShader);
+
+	k = size / INPUTCMDS_SIZE;
+	key = INPUTCMDS_KEY * k;
+	x -= key * 0.5f;
+	y += INPUTCMDS_DROP - key * 0.5f;
+
+	trap_R_SetColor(NULL);
+	for (i = 0; i < 6; i++) {
+		if (held[i]) {
+			CG_DrawPic(x + cell[i][0] * INPUTCMDS_STEP_X * k, y + cell[i][1] * INPUTCMDS_STEP_Y * k, key, key,
+			           cgs.media.keyShaders[i]);
+		}
 	}
 }
 
@@ -1532,7 +1725,7 @@ void CG_CenterPrint(const char* str, int y, float scale) {
 	cg.centerPrintTime = cg.time;
 	cg.centerPrintFrag = qfalse;
 	cg.centerPrintY = y + (cgs.gametype == GT_RACE ? 10 : 0);
-	cg.centerPrintScale = scale;
+	cg.centerPrintScale = CG_CenterTextScale(scale);
 
 	cg.centerPrintLines = 1;
 	s = cg.centerPrint;
@@ -1541,6 +1734,12 @@ void CG_CenterPrint(const char* str, int y, float scale) {
 			cg.centerPrintLines++;
 		s++;
 	}
+}
+
+void CG_FragPrint(const char* str) {
+	CG_CenterPrint(str, FRAG_MESSAGE_Y, 0.0f);
+	cg.centerPrintFrag = qtrue;
+	cg.centerPrintScale = FRAG_MESSAGE_SCALE;
 }
 
 static void CG_DrawCenterString(void) {
@@ -1576,7 +1775,8 @@ static void CG_DrawCenterString(void) {
 
 	start = cg.centerPrint;
 
-	y = (float)(int)(y - scale * 16.0 * cg.centerPrintLines);
+	CG_MeasureTextInFont("A", font, scale, &w, &h);
+	y = CG_CenterPrintTop(h, NULL, 0);
 
 	while (1) {
 		char linebuffer[1024];
@@ -1812,7 +2012,41 @@ static void CG_CrosshairTeamVitalColor(int value, float* color) {
 	}
 }
 
+#define TARGETNAME_FADEIN 50
+#define TARGETNAME_FADEDELAY 250
+#define TARGETNAME_FADEOUT 100
+
+static float CG_CrosshairNameFade(void) {
+	static int client = -1, start, seen;
+	float alpha = 1.0f;
+	int out;
+
+	if (cg.crosshairClientTime != seen) {
+		if (cg.crosshairClientNum != client || cg.crosshairClientTime < seen ||
+			cg.crosshairClientTime - seen >= TARGETNAME_FADEDELAY + TARGETNAME_FADEOUT) {
+			client = cg.crosshairClientNum;
+			start = cg.crosshairClientTime;
+		}
+		seen = cg.crosshairClientTime;
+	}
+	if (!seen || cg.time < seen) {
+		return 0.0f;
+	}
+	out = cg.time - seen - TARGETNAME_FADEDELAY;
+	if (out >= TARGETNAME_FADEOUT) {
+		return 0.0f;
+	}
+	if (cg.time - start < TARGETNAME_FADEIN) {
+		alpha = CG_CpmaEaseOut((float)(cg.time - start) / TARGETNAME_FADEIN);
+	}
+	if (out > 0) {
+		alpha *= 1.0f - CG_CpmaEaseOut((float)out / TARGETNAME_FADEOUT);
+	}
+	return alpha;
+}
+
 static void CG_DrawCrosshairNames(void) {
+	vec4_t animated;
 	float* color;
 	char* name;
 	float opacity;
@@ -1831,7 +2065,13 @@ static void CG_DrawCrosshairNames(void) {
 
 	CG_ScanForCrosshairEntity();
 
-	color = CG_FadeColor(cg.crosshairClientTime, 1000);
+	if (ch_animateScroll.integer) {
+		animated[0] = animated[1] = animated[2] = 1.0f;
+		animated[3] = CG_CrosshairNameFade();
+		color = animated[3] > 0.0f ? animated : NULL;
+	} else {
+		color = CG_FadeColor(cg.crosshairClientTime, 1000);
+	}
 	if (!color) {
 		trap_R_SetColor(NULL);
 		return;
@@ -1899,8 +2139,9 @@ static const float* CG_OverheadTeamColor(int team) {
 static int CG_OverheadTextWidth(const char* text, int fontIndex, float scale, int limit) {
 	float extents[5];
 	float xscale;
+	int efont = CG_EngineFont(fontIndex);
 
-	trap_R_Font_TextExtents(text, 0, fontIndex, CG_FontPixelSize(scale), limit > 0 ? limit : -1, extents);
+	trap_R_Font_TextExtents(text, 0, efont, CG_FontPixelSize(efont, scale), limit > 0 ? limit : -1, extents);
 	if (cgs.widescreenBias > 0.0f) {
 		xscale = cgs.glconfig.vidHeight / 3.0f * 4.0f / 640.0f;
 	} else {
@@ -1914,7 +2155,7 @@ static void CG_DrawTeammateNames(void) {
 	static const vec4_t armorColor = {0.0f, 0.625f, 1.0f, 1.0f};
 	int i, j, len, count, boxWidth, nameWidth, nameHeight, xoff, armorWidth;
 	int health, armor, maxHealth, localTeam;
-	qboolean sameTeam, spectator, frozen, showName, showBars, xrayNames;
+	qboolean sameTeam, spectator, frozen, showName, showBars;
 	float scale, fontSize, sx, sy, nx, ny, x, y, extra, barX, barY, iconX, iconY;
 	const float* textColor;
 	vec3_t point, delta;
@@ -1927,15 +2168,13 @@ static void CG_DrawTeammateNames(void) {
 	char* in;
 	char* out;
 
-	xrayNames = cg.demoPlayback && CG_XrayAllowed();
-
 	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW) &&
-		!cg_specNames.integer && !xrayNames) {
+		!cg_specNames.integer) {
 		return;
 	}
 
 	scale = cgs.screenYScale;
-	fontSize = CG_FontPixelSize(0.12f);
+	fontSize = CG_FontPixelSize(CG_EngineFont(1), 0.12f);
 	localTeam = cg.snap->ps.persistant[PERS_TEAM];
 
 	for (i = 0; i < cgs.maxclients; i++) {
@@ -1993,7 +2232,7 @@ static void CG_DrawTeammateNames(void) {
 		sameTeam = cgs.gametype >= GT_TEAM && localTeam == ci->team;
 		spectator = localTeam == TEAM_SPECTATOR;
 		textColor = CG_OverheadTeamColor(localTeam);
-		if ((spectator || xrayNames) && cgs.gametype >= GT_TEAM) {
+		if (spectator && cgs.gametype >= GT_TEAM) {
 			textColor = CG_OverheadTeamColor(ci->team);
 		}
 
@@ -2001,7 +2240,7 @@ static void CG_DrawTeammateNames(void) {
 		nx = sx / 640.0f;
 		ny = 1.0f - sy / 480.0f;
 
-		if (xrayNames || (spectator && cg_specNames.integer == 2)) {
+		if (spectator && cg_specNames.integer == 2) {
 			showName = qtrue;
 		} else if (sameTeam && cg_teammateNames.integer == 2) {
 			showName = qtrue;
@@ -2014,8 +2253,7 @@ static void CG_DrawTeammateNames(void) {
 		if (frozen) {
 			showBars = qfalse;
 		} else {
-			showBars = (xrayNames && cent->currentState.health > 0) ||
-					   (sameTeam && cg_teammateNames.integer) ||
+			showBars = (sameTeam && cg_teammateNames.integer) ||
 					   (spectator && cg_specNames.integer);
 		}
 
@@ -2029,9 +2267,9 @@ static void CG_DrawTeammateNames(void) {
 			trap_R_DrawStretchPic(x - scale, y - scale - nameHeight * scale, boxWidth * scale + 2 * scale,
 								  nameHeight * scale + 2 * scale + extra, 0, 0, 0, 0, cgs.media.whiteShader);
 			trap_R_SetColor(colorBlack);
-			trap_R_Font_DrawString((int)(x + scale + xoff * scale), (int)(y + scale), name, 1, fontSize, len, NULL, 0);
+			trap_R_Font_DrawString((int)(x + scale + xoff * scale), (int)(y + scale), name, CG_EngineFont(1), fontSize, len, NULL, 0);
 			trap_R_SetColor(textColor);
-			trap_R_Font_DrawString((int)(x + xoff * scale), (int)y, name, 1, fontSize, len, NULL, 0);
+			trap_R_Font_DrawString((int)(x + xoff * scale), (int)y, name, CG_EngineFont(1), fontSize, len, NULL, 0);
 			trap_R_SetColor(NULL);
 		}
 
@@ -2118,8 +2356,9 @@ void CG_DrawSpectator(float x, float y) {
 	if ((cgs.gametype == GT_CA || cgs.gametype == GT_AD) && cg.snap->ps.pm_type == PM_SPECTATOR &&
 		cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
 		CG_SetWidescreen(WIDESCREEN_CENTER);
-		w = CG_DrawTextWidth("Round In Progress", 0.35f, 0, 0);
-		CG_DrawText(320 - w / 2, 60, 0, 0.35f, colorWhite, "Round In Progress", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		w = CG_DrawTextWidth("Round In Progress", CG_CenterTextScale(0.35f), 0, 0);
+		CG_DrawText(320 - w / 2, CG_CenterTextY(60.0f, 0.35f, 0), 0, CG_CenterTextScale(0.35f), colorWhite,
+					"Round In Progress", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 		CG_SetWidescreen(saved);
 		return;
 	}
@@ -2363,7 +2602,7 @@ static void CG_DrawIntermission(void) {
 
 static void CG_DrawAmmoWarning(void) {
 	const char* s;
-	float scale, y;
+	float retail, scale, y;
 
 	if (cg_drawAmmoWarning.integer == 0) {
 		return;
@@ -2378,8 +2617,9 @@ static void CG_DrawAmmoWarning(void) {
 	} else {
 		s = "LOW AMMO WARNING";
 	}
-	scale = (cg_drawAmmoWarning.integer == 1) ? 0.35f : 0.24f;
-	y = (cg_drawAmmoWarning.integer == 1) ? 55.0f : 52.0f;
+	retail = (cg_drawAmmoWarning.integer == 1) ? 0.35f : 0.24f;
+	scale = CG_CenterTextScale(retail);
+	y = CG_CenterTextY((cg_drawAmmoWarning.integer == 1) ? 55.0f : 52.0f, retail, 0);
 	CG_DrawText((float)(320 - CG_DrawTextWidth(s, scale, 0, 0) / 2), y, 0, scale, colorWhite, s, 0, 0,
 				ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
@@ -2413,6 +2653,7 @@ static void CG_DrawProxWarning(void) {
 static void CG_DrawWarmupLine(float y, int font, float scale, vec4_t color, const char* text, int style) {
 	int w = CG_DrawTextWidth(text, scale, 0, font);
 
+	CG_NoteTitle(y - CG_DrawTextCapHeight(scale, font), y);
 	CG_DrawText((float)(320 - w / 2), y, font, scale, color, text, 0, 0, style);
 }
 
@@ -2423,23 +2664,25 @@ static void CG_ReadyUpKeyName(char* buf, int size) {
 static void CG_DrawWarmupTutorial(void) {
 	char key[32];
 	const char* s;
-	float y;
+	float scale = CG_CenterTextScale(0.35f);
+	float y = CG_CenterTextY(35.0f, 0.35f, 0);
 
 	if (!g_skipTrainingEnable.integer) {
 		if (g_training.integer != 1) {
 			return;
 		}
-		CG_DrawWarmupLine(35, 0, 0.35f, colorWhite, "This match will determine", ITEM_TEXTSTYLE_SHADOWEDMORE);
-		CG_DrawWarmupLine(55, 0, 0.35f, colorWhite, "your skill placement", ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawWarmupLine(y, 0, scale, colorWhite, "This match will determine", ITEM_TEXTSTYLE_SHADOWEDMORE);
+		y += CG_CenterTextY(20.0f, 0.35f, 0);
+		CG_DrawWarmupLine(y, 0, scale, colorWhite, "your skill placement", ITEM_TEXTSTYLE_SHADOWEDMORE);
 		CG_ReadyUpKeyName(key, sizeof(key));
 		s = va("Press %s to start the match", key);
-		y = 85;
+		y += CG_CenterTextY(30.0f, 0.25f, 0);
 	} else {
 		CG_ReadyUpKeyName(key, sizeof(key));
 		s = va("Press %s to skip the tutorial", key);
 		y = 30;
 	}
-	CG_DrawWarmupLine(y, 0, 0.25f, colorRed, s, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawWarmupLine(y, 0, CG_CenterTextScale(0.25f), colorRed, s, ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
 static void CG_DrawADRoundResults(void) {
@@ -2523,6 +2766,9 @@ static void CG_DrawADRoundResults(void) {
 
 static void CG_DrawWarmupCountdown(int gt) {
 	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
+	float subScale = CG_CenterTextScale(0.6f) * COUNTDOWN_SUB_RATIO;
+	float subY = y + CENTER_ROW_Y;
+	float headerY = subY - CG_DrawTextCapHeight(subScale, 0) - CENTER_GAP_TITLE;
 	qboolean rounds = (gt == GT_CA || gt == GT_FREEZE || gt == GT_AD || gt == GT_RR) && cg.warmupRound > 0;
 	const char* header = "";
 	int i, first = -1, last = -1, team;
@@ -2566,13 +2812,14 @@ static void CG_DrawWarmupCountdown(int gt) {
 		header = gametypeDisplayNames[gt];
 	}
 
-	CG_DrawWarmupLine(y + 90, 0, 0.6f, colorWhite, header, ITEM_TEXTSTYLE_SHADOWEDMORE);
-	CG_DrawWarmupLine(y + 125, 0, 0.45f, colorWhite, va(rounds ? "%i" : "Starts in: %i", cg.warmupCount),
-					  ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawWarmupLine(headerY, 0, CG_CenterTextScale(0.6f), colorWhite, header, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawWarmupLine(subY, 0, subScale, colorWhite,
+					  va(rounds ? "%i" : "Starts in: %i", cg.warmupCount), ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
 static void CG_DrawWarmup(void) {
 	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
+	float secondY, pressY;
 	int teamCounts[TEAM_NUM_TEAMS];
 	const char* line1;
 	const char* line2;
@@ -2624,6 +2871,9 @@ static void CG_DrawWarmup(void) {
 		}
 	}
 
+	pressY = y + CENTER_ROW_Y;
+	secondY = pressY - CG_DrawTextCapHeight(CG_CenterTextScale(0.25f), 0) - CENTER_GAP_BLOCK;
+	y = secondY - CG_DrawTextCapHeight(CG_CenterTextScale(0.35f), 1) - CENTER_GAP_LINE;
 	if (cg_drawPregameMessages.integer) {
 		line1 = "The match will begin";
 		line2 = "when more players are ready.";
@@ -2660,8 +2910,9 @@ static void CG_DrawWarmup(void) {
 			line1 = "The teams must be balanced";
 			line2 = "before the match can begin.";
 		}
-		CG_DrawWarmupLine(y + 88, 1, 0.35f, colorWhite, line1, ITEM_TEXTSTYLE_SHADOWED);
-		CG_DrawWarmupLine(y + 108, 1, 0.35f, colorWhite, line2, ITEM_TEXTSTYLE_SHADOWED);
+		CG_DrawWarmupLine(y, 1, CG_CenterTextScale(0.35f), colorWhite, line1, ITEM_TEXTSTYLE_SHADOWED);
+		CG_DrawWarmupLine(secondY, 1, CG_CenterTextScale(0.35f), colorWhite, line2,
+						  ITEM_TEXTSTYLE_SHADOWED);
 	}
 
 	if (cgs.clientinfo[cg.clientNum].team == TEAM_SPECTATOR) {
@@ -2676,9 +2927,11 @@ static void CG_DrawWarmup(void) {
 	}
 	CG_ReadyUpKeyName(key, sizeof(key));
 	if (!cgs.clientinfo[cg.clientNum].ready) {
-		CG_DrawWarmupLine(y + 124, 0, 0.25f, colorRed, va("Press %s to ready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawWarmupLine(pressY, 0, CG_CenterTextScale(0.25f), colorRed,
+						  va("Press %s to ready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
 	} else {
-		CG_DrawWarmupLine(y + 124, 0, 0.25f, colorGreen, va("Press %s to unready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawWarmupLine(pressY, 0, CG_CenterTextScale(0.25f), colorGreen,
+						  va("Press %s to unready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
 	}
 }
 
@@ -2731,7 +2984,7 @@ void CG_PlayFightSound(void) {
 		}
 	}
 
-	CG_CenterPrint(text, 120, 0.5f);
+	CG_CenterPrint(text, FIGHT_Y, 0.5f);
 	CG_ResetAnnouncements();
 	trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
 	cg.warmupCount = -1;
@@ -2804,8 +3057,9 @@ static void CG_DrawTimeout(void) {
 	}
 
 	if (sec != 0) {
-		w = CG_Text_Width(s, 0.5f, 0);
-		CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		w = CG_Text_Width(s, CG_CenterTextScale(0.5f), 0);
+		CG_Text_Paint(320 - w / 2, CG_CenterTextY(128.0f, 0.5f, 0), CG_CenterTextScale(0.5f), colorWhite, s, 0, 0,
+					  ITEM_TEXTSTYLE_SHADOWED);
 	}
 
 	if (cg.time - cgs.pauseSoundTime >= 1000) {
@@ -3344,7 +3598,6 @@ static void CG_DrawDemoKeys(void) {
 		{"HOME", "Back to the start"},
 		{"F", "To just before the next frag"},
 		{"C", "The free camera"},
-		{"X", "The X-ray"},
 		{"DEL", "Hides the controls"},
 		{"F1", "This list"},
 		{"MOUSE", "Drags the playhead and works the buttons"},
@@ -3451,8 +3704,6 @@ static void CG_DrawDemoHUD(void) {
 	row[n].label = "1.0x", row[n].key = "[DOWN]", row[n].cmd = "timescale 1\n", row[n++].on = qfalse;
 	row[n].label = "Cam", row[n].key = "[C]", row[n].cmd = "toggle cg_freecam\n",
 		row[n++].on = cg_freecam.integer ? qtrue : qfalse;
-	row[n].label = "X-ray", row[n].key = "[X]", row[n].cmd = "toggle cg_xray\n",
-		row[n++].on = cg_xray.integer ? qtrue : qfalse;
 	row[n].label = "Hide", row[n].key = "[DEL]", row[n].cmd = "toggle cg_drawDemoHUD\n", row[n++].on = qfalse;
 	row[n].label = "Keys", row[n].key = "[F1]", row[n].cmd = "toggle cg_demoKeys\n",
 		row[n++].on = cg_demoKeys.integer ? qtrue : qfalse;
@@ -3572,7 +3823,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	} else {
 		if (!cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0) {
 			if (cg_drawStatus.integer) {
-				Menu_PaintAll();
+				CG_PaintHudMenus();
 				cg_hudPainted = qtrue;
 				CG_DrawTimedMenus();
 			}
@@ -3609,9 +3860,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_DrawUpperRight(stereoFrame);
 		if (cgs.gametype >= GT_TEAM && cg_drawTeamOverlay.integer == 2) {
 			CG_DrawTeamOverlay(408, qtrue, qfalse);
-		}
-		if (ch_drawSpectators.integer) {
-			CG_DrawSpectators();
 		}
 		CG_SetWidescreen(WIDESCREEN_LEFT);
 		CG_DrawLowerLeft();

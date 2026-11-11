@@ -41,9 +41,9 @@ static const stOption_t stOpts_r_overbrightbits[] = {{"Low", "1"}, {"Medium", "2
 static const stOption_t stOpts_r_texturemode[] = {{"Nearest", "GL_NEAREST_MIPMAP_NEAREST"}, {"Bilinear", "GL_LINEAR_MIPMAP_NEAREST"}, {"Trilinear", "GL_LINEAR_MIPMAP_LINEAR"}};
 static const stOption_t stOpts_r_picmip[] = {{"Low", "8"}, {"Medium", "2"}, {"High", "0"}};
 static const stOption_t stOpts_r_enablebloom[] = {{"Off", "0"}, {"On (One Pass)", "1"}, {"On (Two Passes)", "2"}};
-static const stOption_t stOpts_cg_announcer[] = {{"Default", "1"}, {"Vadrigar", "2"}, {"Daemia", "3"}};
+static const stOption_t stOpts_cg_announcer[] = {{"Default", "1"}, {"Vadrigar", "2"}, {"Daemia", "3"}, {"Classic", "4"}};
 static const stOption_t stOpts_cg_hitbeep[] = {{"None", "0"}, {"Single Pitch", "1"}, {"Ascending", "2"}, {"Descending", "3"}};
-static const stOption_t stOpts_cg_killbeep[] = {{"None", "0"}, {"Ting", "1"}, {"Tink", "2"}, {"Dramatic", "3"}, {"Voosh", "4"}, {"Drum", "5"}, {"Bang", "6"}, {"Ding", "7"}, {"Cha-Ching!", "8"}};
+static const stOption_t stOpts_cg_killbeep[] = {{"None", "0"}, {"Ting", "1"}, {"Tink", "2"}, {"Dramatic", "3"}, {"Voosh", "4"}, {"Drum", "5"}, {"Bang", "6"}, {"Ding", "7"}, {"Cha-Ching!", "8"}, {"Tonal D", "9"}, {"Tonal E", "10"}, {"Tonal F#", "11"}, {"Tonal G", "12"}, {"Cork Pop", "13"}, {"Cash Register", "14"}, {"Grapple", "15"}};
 static const stOption_t stOpts_cg_voicechatindicator[] = {{"Off", "0"}, {"Right", "1"}, {"Left", "2"}};
 static const stOption_t stOpts_cg_specnames[] = {{"None", "0"}, {"Targeted", "1"}, {"Always On", "2"}};
 static const stOption_t stOpts_cg_specteamvitals[] = {{"None", "0"}, {"On", "1"}, {"On With HP", "2"}};
@@ -149,6 +149,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_GAME, "Damage Number Style", "cg_damageplumcolorstyle", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_damageplumcolorstyle, 3, "Choose how to colorize the damage dealt numbers.", 0},
     {ST_TAB_GAME, "Player Taunts", "cg_allowtaunt", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Toggle whether you hear players' taunt gestures.", 0},
     {ST_TAB_GAME, "Darken Dead Bodies", "cg_deadbodydarken", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Desaturate and darken the corpse of a dead player using a brightskin.", 0},
+    {ST_TAB_GAME, "Spectator Count", "ch_drawspectators", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show how many players are watching you, next to the FPS counter. The server has to send it.", 0},
     {ST_TAB_GAME, "Field of View", "cg_fov", ST_RANGE, 10.0f, 130.0f, 1.0f, NULL, 0, "Field of Vision, how wide of an area you can see.", 1},
     {ST_TAB_GAME, "Zoom FOV", "cg_zoomfov", ST_RANGE, 10.0f, 130.0f, 1.0f, NULL, 0, "Field of Vision while zoomed-in.", 1},
     {ST_TAB_GAME, "Zoom Sensitivity", "cg_zoomsensitivity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "Mouse sensitivity adjustment (in percent) while zoomed.", 1},
@@ -200,7 +201,6 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_HUD, "Zoom Animation Time", "cg_zoomanimationtime", ST_RANGE, 0.0f, 500.0f, 10.0f, NULL, 0, NULL, 1},
     {ST_TAB_HUD, "Local Time", "ch_drawlocaltime", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_ch_drawlocaltime, 3, "Display the clock of your computer.", 1},
     {ST_TAB_HUD, "Demo Recording Name", "ch_recordmessage", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Display the name of the demo while it is being recorded.", 1},
-    {ST_TAB_HUD, "Spectator Count", "ch_drawspectators", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show an eye with the number of players watching you. The server has to send it.", 1},
     {ST_TAB_TEAM, "Teammates", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Enemies", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Force Team Model", "cg_forceteammodel", ST_MODEL, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
@@ -308,10 +308,10 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SOUND, "Kill Beep Volume", "s_killbeepvolume", ST_RANGE, 0.0f, 2.0f, 0.1f, NULL, 0, NULL, 0},
     {ST_TAB_SOUND, "Server Sounds Volume", "s_playsoundvolume", ST_RANGE, 0.0f, 2.0f, 0.1f, NULL, 0, NULL, 0},
     {ST_TAB_SOUND, "Mute in Background", "s_mutebackground", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 0},
-    {ST_TAB_SOUND, "Announcer Voice", "cg_announcer", ST_SELECT, 1.0f, 3.0f, 0.0f, stOpts_cg_announcer, 3, NULL, 1},
+    {ST_TAB_SOUND, "Announcer Voice", "cg_announcer", ST_SELECT, 1.0f, 4.0f, 0.0f, stOpts_cg_announcer, 4, NULL, 1},
     {ST_TAB_SOUND, "Ambient Sound", "s_ambient", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play ambient map sounds.", 1},
     {ST_TAB_SOUND, "Hit Beep Style", "cg_hitbeep", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_hitbeep, 4, "Sound played when obtaining a hit on an enemy player.", 1},
-    {ST_TAB_SOUND, "Kill Beep Style", "cg_killbeep", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_cg_killbeep, 9, "Sound played when obtaining a frag on an enemy player.", 1},
+    {ST_TAB_SOUND, "Kill Beep Style", "cg_killbeep", ST_SELECT, 0.0f, 15.0f, 0.0f, stOpts_cg_killbeep, 16, "Sound played when obtaining a frag on an enemy player.", 1},
     {ST_TAB_SOUND, "Chat Beep", "cg_chatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a chat message is received.", 1},
     {ST_TAB_SOUND, "Team Chat Beep", "cg_teamchatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a teamchat message is received.", 1},
     {ST_TAB_SOUND, "Doppler Sound", "s_doppler", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Use doppler sound effects.", 1},
@@ -326,10 +326,8 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SPECTATING, "Item Timers", "cg_specitemtimers", ST_SELECT, 0.0f, 15.0f, 0.0f, stOpts_cg_specitemtimers, 4, "Display the item respawn timers for major map items.", 0},
     {ST_TAB_SPECTATING, "Spec FOV", "cg_specfov", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Render the view with the spectated player's FOV.", 0},
     {ST_TAB_SPECTATING, "Draw Input", "cg_drawinputcmds", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cg_drawinputcmds, 3, "Display the player's movement input commands.", 0},
-    {ST_TAB_SPECTATING, "Movement Keys", "ch_drawkeys", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_SPECTATING, "Target Status", "ch_drawtargetstatus", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show the health and armor of any player under the crosshair, not only teammates.", 0},
     {ST_TAB_SPECTATING, "Follow Frags", "ch_followkiller", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Switch to whoever gets a frag, at most once every two seconds.", 0},
-    {ST_TAB_SPECTATING, "X-Ray", "cg_xray", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show players through walls in their team color. Only in demos and as a spectator.", 0},
 };
 
 static const char* const stTabNames[] = {"INPUT", "GAMEPAD", "BASIC", "GAME", "HUD", "TEAM", "WEAPONS", "VIDEO", "SOUND", "SPECTATING"};

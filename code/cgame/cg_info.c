@@ -85,12 +85,27 @@ void CG_LoadingClient(int clientNum) {
     CG_LoadingString(personality);
 }
 
+static void CG_DrawClassicBackdrop(void) {
+    float w = (float)cgs.glconfig.vidWidth;
+    float h = (float)cgs.glconfig.vidHeight;
+    float crop;
+
+    if (w * 9.0f > h * 16.0f) {
+        crop = (1.0f - (h * 16.0f) / (w * 9.0f)) * 0.5f;
+        trap_R_DrawStretchPic(0, 0, w, h, 0, crop, 1.0f, 1.0f - crop, cgs.media.backscreenClassicShader);
+    } else {
+        crop = (1.0f - (w * 9.0f) / (h * 16.0f)) * 0.5f;
+        trap_R_DrawStretchPic(0, 0, w, h, crop, 0, 1.0f - crop, 1.0f, cgs.media.backscreenClassicShader);
+    }
+}
+
 void CG_DrawInformation(void) {
     const char *s;
     const char *info;
     const char *sAuthor, *sAuthor2;
     const char *gametypeName;
     qhandle_t levelshot;
+    char background[MAX_QPATH];
     int i;
     int w;
     float s1, s2;
@@ -116,8 +131,13 @@ void CG_DrawInformation(void) {
 
     if (!cg.infoScreenText[0] && cg.snap) {
         CG_SetWidescreen(WIDESCREEN_CENTER);
-        trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
-                              s1, 0, s2, 1.0f, cgs.media.backscreenSmokeShader);
+        trap_Cvar_VariableStringBuffer("ui_background", background, sizeof(background));
+        if (cgs.media.backscreenClassicShader && Q_stricmp(background, "retail")) {
+            CG_DrawClassicBackdrop();
+        } else {
+            trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
+                                  s1, 0, s2, 1.0f, cgs.media.backscreenSmokeShader);
+        }
         s = "Awaiting gamestate...";
         w = CG_DrawTextWidth(s, 0.3f, 0, 0);
         CG_DrawText(320 - w * 0.5f, 178, 0, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);

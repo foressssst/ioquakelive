@@ -639,6 +639,10 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
 
 #define HM_GRADIENT_SIDE 256
 #define HM_GRADIENT_CACHE 16
+#define HM_OWN_BACKGROUND "ui/assets/backscreen_classic.jpg"
+#define HM_CLASSIC_LOGO_RIGHT 0.898f
+#define HM_CLASSIC_LOGO_AT 0.74f
+#define HM_CLASSIC_EDGE 0.99f
 
 static struct {
     qboolean loaded;
@@ -778,15 +782,68 @@ void UI_Home_Leave(void) {
     }
 }
 
+static qhandle_t UI_Home_OwnBackground(void) {
+    static qboolean tried;
+    static qhandle_t pic;
+    fileHandle_t f;
+
+    if (!tried) {
+        tried = qtrue;
+        if (trap_FS_FOpenFile(HM_OWN_BACKGROUND, &f, FS_READ) > 0) {
+            trap_FS_FCloseFile(f);
+            pic = trap_R_RegisterShaderNoMip(HM_OWN_BACKGROUND);
+        }
+    }
+    return pic;
+}
+
+qboolean UI_Home_ClassicBackdrop(void) {
+    float w = (float)uiInfo.uiDC.glconfig.vidWidth;
+    float h = (float)uiInfo.uiDC.glconfig.vidHeight;
+    float crop;
+    qhandle_t pic;
+
+    if (!Q_stricmp(ui_background.string, "retail") || h <= 0.0f) {
+        return qfalse;
+    }
+    pic = UI_Home_OwnBackground();
+    if (!pic) {
+        return qfalse;
+    }
+    trap_R_SetColor(NULL);
+    if (w * 9.0f > h * 16.0f) {
+        crop = (1.0f - (h * 16.0f) / (w * 9.0f)) * 0.5f;
+        trap_R_DrawStretchPic(0.0f, 0.0f, w, h, 0.0f, crop, 1.0f, 1.0f - crop, pic);
+    } else {
+        crop = (1.0f - (w * 9.0f) / (h * 16.0f)) * 0.5f;
+        trap_R_DrawStretchPic(0.0f, 0.0f, w, h, crop, 0.0f, 1.0f - crop, 1.0f, pic);
+    }
+    return qtrue;
+}
+
 static qhandle_t UI_Home_CustomBackground(void) {
     static char name[MAX_QPATH];
     static qhandle_t pic;
 
     if (strcmp(name, ui_background.string)) {
         Q_strncpyz(name, ui_background.string, sizeof(name));
-        pic = name[0] ? trap_R_RegisterShaderNoMip(name) : 0;
+        pic = (name[0] && Q_stricmp(name, "retail")) ? trap_R_RegisterShaderNoMip(name) : 0;
     }
-    return pic;
+    return name[0] ? pic : UI_Home_OwnBackground();
+}
+
+static void UI_Home_ClassicMenuBackdrop(qhandle_t pic, float top, float w, float h) {
+    static const vec4_t black = {0, 0, 0, 1};
+    float imgW = w / h > 16.0f / 9.0f ? w : h * (16.0f / 9.0f);
+    float imgH = imgW * (9.0f / 16.0f);
+    float crop = (1.0f - h / imgH) * 0.5f;
+    float x = w * HM_CLASSIC_LOGO_AT - imgW * HM_CLASSIC_LOGO_RIGHT;
+    float end = x + imgW * HM_CLASSIC_EDGE;
+
+    SM_PicPart(0, top, end, h, -x / imgW, crop, HM_CLASSIC_EDGE, 1.0f - crop, pic);
+    if (end < w) {
+        SM_Fill(end, top, w - end, h, black, NULL);
+    }
 }
 
 void UI_Home_RetailBackdrop(void) {
@@ -805,6 +862,10 @@ void UI_Home_RetailBackdrop(void) {
     if (custom) {
         w = smVW;
         h = smBottom - top;
+        if (!ui_background.string[0]) {
+            UI_Home_ClassicMenuBackdrop(custom, top, w, h);
+            return;
+        }
         if (w / h > 16.0f / 9.0f) {
             crop = (1.0f - (16.0f / 9.0f) / (w / h)) * 0.5f;
             SM_PicPart(0, top, w, h, 0, crop, 1, 1.0f - crop, custom);

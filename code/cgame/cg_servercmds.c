@@ -1603,7 +1603,7 @@ static void CG_ServerCommand(void) {
     }
 
     if (!strcmp(cmd, "cp")) {
-        CG_CenterPrint(CG_Argv(1), cg.warmup ? 144 : 90, 0.4f);
+        CG_CenterPrint(CG_Argv(1), cg.warmup ? FRAG_MESSAGE_Y : 90, 0.4f);
         return;
     }
 

@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 displayContextDef_t cgDC;
 
 static int cg_forceModelModCounts[6] = { -1, -1, -1, -1, -1, -1 };
+static int cg_hudFilesModCount = -1;
 
 void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum);
 void CG_RegisterCvars(void);
@@ -316,7 +317,6 @@ vmCvar_t ch_chatLines;
 vmCvar_t ch_drawLocalTime;
 vmCvar_t ch_drawSpectators;
 vmCvar_t ch_drawTargetStatus;
-vmCvar_t ch_drawKeys;
 vmCvar_t ch_autoStats;
 vmCvar_t cg_demoKeys;
 vmCvar_t cg_videoRecording;
@@ -390,7 +390,6 @@ vmCvar_t cg_weaponPrimary;
 
 vmCvar_t cg_drawDemoHUD;
 vmCvar_t cg_drawVersion;
-vmCvar_t cg_xray;
 vmCvar_t cg_freecam;
 vmCvar_t cg_followKiller;
 vmCvar_t cg_followPowerup;
@@ -638,7 +637,7 @@ static cvarTable_t cvarTable[] = {
 
     {&cg_armorTiered, "cg_armorTiered", "0", CVAR_ROM},
     {&cg_allowTaunt, "cg_allowTaunt", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_announcer, "cg_announcer", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "3"},
+    {&cg_announcer, "cg_announcer", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "4"},
     {&cg_autoHop, "cg_autoHop", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},
     {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_bob, "cg_bob", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "1.0"},
@@ -677,7 +676,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_impactSparksVelocity, "cg_impactSparksVelocity", "128", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-128", "128"},
     {&cg_itemFx, "cg_itemFx", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "7"},
     {&cg_itemTimers, "cg_itemTimers", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
+    {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "15"},
     {&cg_levelTimerDirection, "cg_levelTimerDirection", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lightningImpact, "cg_lightningImpact", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lowAmmoWarningPercentile, "cg_lowAmmoWarningPercentile", "0.20", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.01", "1.00"},
@@ -694,9 +693,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     {&ch_drawLocalTime, "ch_drawLocalTime", "0", CVAR_ARCHIVE},
-    {&ch_drawSpectators, "ch_drawSpectators", "0", CVAR_ARCHIVE | CVAR_USERINFO},
+    {&ch_drawSpectators, "ch_drawSpectators", "1", CVAR_ARCHIVE | CVAR_USERINFO},
     {&ch_drawTargetStatus, "ch_drawTargetStatus", "1", CVAR_ARCHIVE},
-    {&ch_drawKeys, "ch_drawKeys", "0", CVAR_ARCHIVE},
     {&ch_autoStats, "ch_autoStats", "0", CVAR_ARCHIVE},
     {&cg_demoKeys, "cg_demoKeys", "0", CVAR_ARCHIVE},
     {&cg_videoRecording, "cl_videoRecording", "0", CVAR_ROM},
@@ -708,7 +706,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
     {&cg_demoName, "cl_demoname", "", CVAR_ROM},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
-    {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
+    {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "15"},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamage_Team, "cg_screenDamage_Team", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_simpleItemsBob, "cg_simpleItemsBob", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
@@ -770,7 +768,6 @@ static cvarTable_t cvarTable[] = {
 
     {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawVersion, "cg_drawVersion", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_xray, "cg_xray", "0", CVAR_ARCHIVE, "0", "1"},
     {&cg_freecam, "cg_freecam", "0", 0, "0", "1"},
     {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED, "0", "1"},
     {&cg_followPowerup, "cg_followPowerup", "0", CVAR_VM_CREATED, "0", "2"},
@@ -953,6 +950,12 @@ void CG_UpdateCvars(void) {
             cg_forceModelModCounts[4] = cg_forceRedTeamModel.modificationCount;
             cg_forceModelModCounts[5] = cg_forceBlueTeamModel.modificationCount;
             CG_NewClientInfo(cg.clientNum);
+        }
+        if (cg_hudFilesModCount != cg_hudFiles.modificationCount) {
+            cg_hudFilesModCount = cg_hudFiles.modificationCount;
+            if (Q_stricmp(cg_hudFiles.string[0] ? cg_hudFiles.string : "ui/hud.txt", cg_hudListFile)) {
+                CG_LoadHud_f();
+            }
         }
     }
 }
@@ -1277,6 +1280,8 @@ const char* CG_Argv(int arg) {
 
 static const char* CG_AnnouncerSound(const char* name) {
     const char* voice;
+    const char* path;
+    fileHandle_t f;
 
     switch (cg_announcer.integer) {
         case 2:
@@ -1285,6 +1290,18 @@ static const char* CG_AnnouncerSound(const char* name) {
         case 3:
             voice = "vo_female";
             break;
+        case 4:
+            if (trap_FS_FOpenFile("sound/vo_classic/silence.wav", &f, FS_READ) <= 0) {
+                voice = "vo";
+                break;
+            }
+            trap_FS_FCloseFile(f);
+            path = va("sound/vo_classic/%s", name);
+            if (trap_FS_FOpenFile(path, &f, FS_READ) <= 0) {
+                return "sound/vo_classic/silence.wav";
+            }
+            trap_FS_FCloseFile(f);
+            return path;
         default:
             voice = "vo";
             if (cg_announcer.integer != 1) {
@@ -1479,6 +1496,13 @@ static void CG_RegisterSounds(void) {
     cgs.media.killBeepSounds[5] = trap_S_RegisterSound("sound/feedback/impact6.ogg", qfalse);
     cgs.media.killBeepSounds[6] = trap_S_RegisterSound("sound/world/bell_01.ogg", qfalse);
     cgs.media.killBeepSounds[7] = trap_S_RegisterSound("sound/misc/chaching.ogg", qfalse);
+    cgs.media.killBeepSounds[8] = trap_S_RegisterSound("sound/feedback/tonal_impact_d.wav", qfalse);
+    cgs.media.killBeepSounds[9] = trap_S_RegisterSound("sound/feedback/tonal_impact_e.wav", qfalse);
+    cgs.media.killBeepSounds[10] = trap_S_RegisterSound("sound/feedback/tonal_impact_fs.wav", qfalse);
+    cgs.media.killBeepSounds[11] = trap_S_RegisterSound("sound/feedback/tonal_impact_g.wav", qfalse);
+    cgs.media.killBeepSounds[12] = trap_S_RegisterSound("sound/feedback/cork_pop.wav", qfalse);
+    cgs.media.killBeepSounds[13] = trap_S_RegisterSound("sound/feedback/cash_register.wav", qfalse);
+    cgs.media.killBeepSounds[14] = trap_S_RegisterSound("sound/pure3/grapple/dink.wav", qfalse);
 
     cgs.media.watrInSound = trap_S_RegisterSound("sound/player/watr_in.ogg", qfalse);
     cgs.media.watrOutSound = trap_S_RegisterSound("sound/player/watr_out.ogg", qfalse);
@@ -1664,7 +1688,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.viewDamageShader = trap_R_RegisterShader("viewDamageBlend");
 
     cgs.media.deferShader = trap_R_RegisterShaderNoMip("gfx/2d/defer.png");
-    cgs.media.spectatorsShader = trap_R_RegisterShaderNoMip("gfx/2d/ioql_eye");
 
     cgs.media.scoreboardName = trap_R_RegisterShaderNoMip("menu/tab/name.tga");
     cgs.media.scoreboardPing = trap_R_RegisterShaderNoMip("menu/tab/ping.tga");
@@ -1760,8 +1783,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
     cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
-    cgs.media.xrayMaskShader = trap_R_RegisterShader("ioqlXrayMask");
-    cgs.media.xrayShader = trap_R_RegisterShader("ioqlXray");
     switch (cgs.gametype) {
         case GT_FFA:
         case GT_RACE:
@@ -2000,6 +2021,14 @@ static void CG_RegisterGraphics(void) {
             trap_FS_FCloseFile(f);
             for (n = 0; n < 16; n++) {
                 cgs.media.chatBalloonFrames[n] = trap_R_RegisterShader(va("sprites/ioql_chat%02d", n + 1));
+            }
+        }
+        if (trap_FS_FOpenFile("gfx/2d/key_up.tga", &f, FS_READ) > 0) {
+            static const char* const keyNames[6] = {"up", "down", "left", "right", "jump", "crouch"};
+
+            trap_FS_FCloseFile(f);
+            for (n = 0; n < 6; n++) {
+                cgs.media.keyShaders[n] = trap_R_RegisterShaderNoMip(va("gfx/2d/key_%s", keyNames[n]));
             }
         }
 
@@ -2470,6 +2499,9 @@ void CG_LoadMenus(const char* menuFile) {
     static char buf[MAX_MENUDEFFILE];
 
     start = trap_Milliseconds();
+
+    trap_Cvar_Update(&cg_hudFiles);
+    cg_hudFilesModCount = cg_hudFiles.modificationCount;
 
     len = trap_FS_FOpenFile(menuFile, &f, FS_READ);
     Q_strncpyz(cg_hudListFile, menuFile, sizeof(cg_hudListFile));
@@ -3288,6 +3320,7 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     cgs.media.qlLogoShader = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png");
     cgs.media.logoBackgroundShader = trap_R_RegisterShaderNoMip("ui/assets/main_menu/logo_background.png");
     cgs.media.backscreenSmokeShader = trap_R_RegisterShaderNoMip("ui/assets/backscreen_smoke.jpg");
+    cgs.media.backscreenClassicShader = trap_R_RegisterShaderNoMip("ui/assets/backscreen_classic.jpg");
 
     cg.speedBarColor1[0] = 0.0f; cg.speedBarColor1[1] = 1.0f;
     cg.speedBarColor1[2] = 0.0f; cg.speedBarColor1[3] = 1.0f;

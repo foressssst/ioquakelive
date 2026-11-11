@@ -552,7 +552,7 @@ static qboolean MQ_Slay(int clientNum) {
         return qfalse;
     }
     ent->health = -40;
-    G_AddEvent(ent, EV_GIB_PLAYER, ent->s.number);
+    G_AddEvent(ent, EV_GIB_PLAYER, 0);
     return qtrue;
 }
 

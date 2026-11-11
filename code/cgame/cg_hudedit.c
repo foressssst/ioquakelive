@@ -1028,7 +1028,7 @@ void CG_HudEdit_Draw(void) {
         return;
     }
     if (!cg_hudPainted && !cg.showScores) {
-        Menu_PaintAll();
+        CG_PaintHudMenus();
         cg_hudPainted = qtrue;
     }
     for (i = 0; i < he.numItems; i++)

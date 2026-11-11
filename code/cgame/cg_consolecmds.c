@@ -71,7 +71,7 @@ static void CG_ScoresUp_f(void) {
 
 void Menu_Reset(void);
 
-static void CG_LoadHud_f(void) {
+void CG_LoadHud_f(void) {
     char buff[1024];
     const char* hudSet;
     memset(buff, 0, sizeof(buff));

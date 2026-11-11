@@ -3822,6 +3822,7 @@ static void CG_DrawAdvert(rectDef_t *rect, vec4_t color, qhandle_t iconShader, i
 
 void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle, int fontIndex) {
     rectDef_t rect;
+    int depth;
 
     if (cg_drawStatus.integer == 0) {
         return;
@@ -3939,7 +3940,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawVoteTimer(&rect, scale, color, textStyle, align);
             break;
         case CG_SPEC_MESSAGES:
+            depth = CG_HudFontSuspend();
             CG_DrawSpectator(rect.x, rect.y);
+            CG_HudFontResume(depth);
             break;
         case CG_PLAYER_HEAD:
             CG_DrawPlayerHead(&rect, ownerDrawFlags & CG_SHOW_2DONLY);
@@ -4018,7 +4021,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             break;
         case CG_KILLER:
             if (cg.killerName[0]) {
+                depth = CG_HudFontSuspend();
                 CG_DrawKiller(&rect, scale, color, textStyle, align);
+                CG_HudFontResume(depth);
             }
             break;
         case CG_ACCURACY:
@@ -4057,10 +4062,14 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawSecondPlaceScore(&rect, scale, color, textStyle);
             break;
         case CG_PLAYER_OBIT:
+            depth = CG_HudFontSuspend();
             CG_DrawPlayerObit(&rect, scale);
+            CG_HudFontResume(depth);
             break;
         case CG_AREA_NEW_CHAT:
+            depth = CG_HudFontSuspend();
             CG_DrawChat(rect.x, rect.y, rect.w, rect.h, scale);
+            CG_HudFontResume(depth);
             break;
         case CG_PLYR_END_GAME_SCORE:
             CG_DrawEndGameResult(&rect, scale, color, textStyle);
@@ -4076,7 +4085,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             break;
         case CG_FOLLOW_PLAYER_NAME:
         case CG_FOLLOW_PLAYER_NAME_EX:
+            depth = CG_HudFontSuspend();
             CG_DrawFollowPlayerName(&rect, ownerDraw, align, scale, color, textStyle);
+            CG_HudFontResume(depth);
             break;
         case CG_SPEEDOMETER:
             CG_DrawSpeedometer(&rect, scale, color, textStyle);

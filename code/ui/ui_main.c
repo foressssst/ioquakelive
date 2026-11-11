@@ -5425,7 +5425,13 @@ void UI_DrawConnectScreen(qboolean overlay) {
     menuDef_t* menu = Menus_FindByName("Connect");
 
     if (!overlay && menu) {
+        qhandle_t retail = menu->window.background;
+
+        if (UI_Home_ClassicBackdrop()) {
+            menu->window.background = 0;
+        }
         Menu_Paint(menu, qtrue);
+        menu->window.background = retail;
     }
 
     if (!overlay) {
@@ -5860,6 +5866,8 @@ static void UI_OnAnnouncerChanged(void) {
         s = trap_S_RegisterSound("sound/misc/vo_evil.wav", 7);
     } else if (ui_cg_announcer.integer == 3) {
         s = trap_S_RegisterSound("sound/misc/vo_female.wav", 7);
+    } else if (ui_cg_announcer.integer == 4 && trap_FS_FOpenFile("sound/misc/vo_classic.ogg", NULL, FS_READ) > 0) {
+        s = trap_S_RegisterSound("sound/misc/vo_classic.wav", 7);
     } else {
         s = trap_S_RegisterSound("sound/misc/vo_default.wav", 7);
     }

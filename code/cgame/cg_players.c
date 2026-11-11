@@ -2295,28 +2295,6 @@ void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float 
     trap_R_RenderScene(&refdef);
 }
 
-qboolean CG_XrayAllowed(void) {
-    if (!cg_xray.integer) {
-        return qfalse;
-    }
-    return (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team == TEAM_SPECTATOR) ? qtrue : qfalse;
-}
-
-static void CG_AddXray(const refEntity_t* part, const byte* color) {
-    refEntity_t ent = *part;
-
-    ent.renderfx = (ent.renderfx & ~RF_THIRD_PERSON) | RF_DEPTHHACK | RF_NOSHADOW;
-    ent.customShader = cgs.media.xrayMaskShader;
-    trap_R_AddRefEntityToScene(&ent);
-
-    ent.customShader = cgs.media.xrayShader;
-    ent.shaderRGBA[0] = color[0];
-    ent.shaderRGBA[1] = color[1];
-    ent.shaderRGBA[2] = color[2];
-    ent.shaderRGBA[3] = 255;
-    trap_R_AddRefEntityToScene(&ent);
-}
-
 static void CG_AddEnemyOutline(const refEntity_t* part, const centity_t* cent, qboolean enemy) {
     static const float widths[] = {0.4f, 0.6f, 0.9f, 1.3f, 1.8f, 2.5f, 3.5f, 5.0f};
     refEntity_t outline;
@@ -2674,12 +2652,6 @@ void CG_Player(centity_t* cent) {
                                cgs.media.nightmareSound);
     }
 
-    if (CG_XrayAllowed() && enemy && !(cent->currentState.eFlags & EF_DEAD) &&
-        cent->currentState.number != cg.snap->ps.clientNum) {
-        CG_AddXray(&legs, torso.shaderRGBA);
-        CG_AddXray(&torso, torso.shaderRGBA);
-        CG_AddXray(&head, torso.shaderRGBA);
-    }
 }
 
 void CG_ResetPlayerEntity(centity_t* cent) {

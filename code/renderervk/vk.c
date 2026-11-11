@@ -7748,7 +7748,7 @@ static void vk_latency_report( void )
 	lastReport = now;
 
 	if ( !vk.lowLatency2 || !qvkGetLatencyTimingsNV || vk.swapchain == VK_NULL_HANDLE ) {
-		ri.Cvar_Set( "r_latencyReport", vk.antiLag ? "Anti-Lag 2 on (the driver gives no timings)" : "no driver latency data" );
+		ri.Cvar_Set( "r_latencyReport", vk.antiLag ? "Anti-Lag 2: On (the driver gives no timings)" : "No driver latency data" );
 		return;
 	}
 
@@ -7779,11 +7779,11 @@ static void vk_latency_report( void )
 	}
 
 	if ( !n ) {
-		ri.Cvar_Set( "r_latencyReport", "Reflex on, waiting for driver timings" );
+		ri.Cvar_Set( "r_latencyReport", "Reflex: On (waiting for driver timings)" );
 		return;
 	}
-	ri.Cvar_Set( "r_latencyReport", va( "PC latency %.1f ms | GPU %.1f ms | queue %.1f ms | Reflex %s",
-		pc / n / 1000.0, gpu / n / 1000.0, queue / n / 1000.0, r_lowLatency->integer > 1 ? "boost" : r_lowLatency->integer ? "on" : "off" ) );
+	ri.Cvar_Set( "r_latencyReport", va( "PC Latency: %.1fms | GPU: %.1fms | Queue: %.1fms | Reflex: %s",
+		pc / n / 1000.0, gpu / n / 1000.0, queue / n / 1000.0, r_lowLatency->integer > 1 ? "Boost" : r_lowLatency->integer ? "On" : "Off" ) );
 }
 
 void vk_present_frame( void )

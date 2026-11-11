@@ -1073,8 +1073,8 @@ void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {
         origin[1] += crandom() * cg_gibFloatingOriginOffset.value;
         origin[2] += crandom() * cg_gibFloatingOriginOffsetZ.value;
 
-        velocity[0] = 0;
-        velocity[1] = 0;
+        velocity[0] = gibDir[0] * cg_gibFloatingVelocity.value * 1.5f * mix;
+        velocity[1] = gibDir[1] * cg_gibFloatingVelocity.value * 1.5f * mix;
         velocity[2] = cg_gibFloatingVelocity.value +
                       crandom() * cg_gibFloatingRandomness.value;
 

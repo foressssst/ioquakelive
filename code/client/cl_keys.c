@@ -1158,8 +1158,6 @@ static const char *CL_DemoKeyCommand(int key) {
         return "seekdemo 0\n";
     case 'c':
         return "toggle cg_freecam\n";
-    case 'x':
-        return "toggle cg_xray\n";
     case 'f':
         return "fragforward\n";
     case K_F1:

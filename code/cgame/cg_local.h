@@ -864,6 +864,7 @@ typedef struct {
     qhandle_t qlLogoShader;
     qhandle_t logoBackgroundShader;
     qhandle_t backscreenSmokeShader;
+    qhandle_t backscreenClassicShader;
 
     qhandle_t redCubeModel;
     qhandle_t blueCubeModel;
@@ -933,6 +934,7 @@ typedef struct {
     qhandle_t balloonShader;
     qhandle_t medalFrames[6][24];
     qhandle_t chatBalloonFrames[16];
+    qhandle_t keyShaders[6];
     qhandle_t connectionShader;
     qhandle_t netShader;
 
@@ -945,7 +947,6 @@ typedef struct {
     qhandle_t tracerShader;
     qhandle_t crosshairShader[NUM_CROSSHAIRS];
     qhandle_t lagometerShader;
-    qhandle_t spectatorsShader;
     qhandle_t backTileShader;
     qhandle_t noammoShader;
 
@@ -988,8 +989,6 @@ typedef struct {
     qhandle_t spawnArmor2Shader;
     qhandle_t noPlayerClipShader;
     qhandle_t gooShader;
-    qhandle_t xrayMaskShader;
-    qhandle_t xrayShader;
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;
     qhandle_t invisShader;
@@ -1173,7 +1172,7 @@ typedef struct {
     sfxHandle_t talkSound;
     sfxHandle_t landSound;
     sfxHandle_t hitSounds[4];
-    sfxHandle_t killBeepSounds[8];
+    sfxHandle_t killBeepSounds[15];
     sfxHandle_t watrInSound;
     sfxHandle_t watrOutSound;
     sfxHandle_t watrUnSound;
@@ -1528,9 +1527,7 @@ extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_drawDemoHUD;
 extern vmCvar_t cg_drawVersion;
-extern vmCvar_t cg_xray;
 extern vmCvar_t cg_freecam;
-qboolean CG_XrayAllowed(void);
 extern qboolean cg_demoCursor;
 qboolean CG_MenuHoldsKeys(void);
 void CG_DemoCursorFrame(void);
@@ -1768,7 +1765,6 @@ extern vmCvar_t ch_chatLines;
 extern vmCvar_t ch_drawLocalTime;
 extern vmCvar_t ch_drawSpectators;
 extern vmCvar_t ch_drawTargetStatus;
-extern vmCvar_t ch_drawKeys;
 extern vmCvar_t cg_autoAction;
 extern vmCvar_t ch_autoStats;
 extern vmCvar_t cg_demoKeys;
@@ -1817,6 +1813,7 @@ void CG_UpdateCvars(void);
 int CG_CrosshairPlayer(void);
 int CG_LastAttacker(void);
 void CG_LoadMenus(const char* menuFile);
+void CG_LoadHud_f(void);
 void CG_ParseMenu(const char* menuFile);
 extern char cg_hudListFile[MAX_QPATH];
 extern int cg_hudMenuCount;
@@ -1916,7 +1913,9 @@ extern char teamChat2[256];
 
 void CG_AddLagometerFrameInfo(void);
 void CG_AddLagometerSnapshotInfo(snapshot_t* snap);
+#define FRAG_MESSAGE_Y 153
 void CG_CenterPrint(const char* str, int y, float scale);
+void CG_FragPrint(const char* str);
 void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles, const byte* color);
 void CG_DrawActive(stereoFrame_t stereoView);
 void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean force2D);
@@ -2299,6 +2298,9 @@ void trap_ConsoleAvatar(uint64_t steamId, const char* icon);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);
+void CG_PaintHudMenus(void);
+int CG_HudFontSuspend(void);
+void CG_HudFontResume(int depth);
 void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style);
 void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h);
 void trap_S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume);

@@ -178,13 +178,13 @@ static const cvarHelp_t cvarHelp[] = {
                           HV("2") "Small"},
     {"cg_complaintWarning", "after a teammate kills you, asks whether to file a complaint"},
     {"cg_centertime", "seconds messages in the centre of the screen stay"},
-    {"cg_drawInputCmds", "arrows for the movement keys being held\n"
+    {"cg_drawInputCmds", "the movement keys being held, under the crosshair\n"
                          HV("0") "Off\n"
                          HV("1") "Always, except for a free-flying spectator\n"
                          HV("2") "Only while following a player"},
-    {"cg_drawInputCmdsSize", "size of the movement arrows"},
-    {"cg_drawInputCmdsX", "horizontal position of the movement arrows"},
-    {"cg_drawInputCmdsY", "vertical position of the movement arrows"},
+    {"cg_drawInputCmdsSize", "size of the movement keys"},
+    {"cg_drawInputCmdsX", "horizontal position of the movement keys"},
+    {"cg_drawInputCmdsY", "vertical position of the movement keys"},
     {"cg_itemTimers", "shows item respawn times when the server sends them (" HC("g_itemTimers") ")"},
 
     {"cg_drawTeamOverlay", "your teammates' health, armor, weapon and location\n"
@@ -251,7 +251,8 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_announcer", "announcer voice\n"
                      HV("1") "Default\n"
                      HV("2") "Vadrigar\n"
-                     HV("3") "Daemia"},
+                     HV("3") "Daemia\n"
+                     HV("4") "Classic, the old Quake Live voice; lines it never had stay silent"},
     {"cg_announcerLastStandingVO", "the announcer calls out the last player standing"},
     {"cg_announcerLeadsVO", "the announcer calls out changes of the lead"},
     {"cg_announcerRewardsVO", "the announcer calls out medals"},
@@ -270,7 +271,14 @@ static const cvarHelp_t cvarHelp[] = {
                     HV("5") "Drum\n"
                     HV("6") "Bang\n"
                     HV("7") "Ding\n"
-                    HV("8") "Cha-ching"},
+                    HV("8") "Cha-ching\n"
+                    HV("9") "Tonal D\n"
+                    HV("10") "Tonal E\n"
+                    HV("11") "Tonal F#\n"
+                    HV("12") "Tonal G\n"
+                    HV("13") "Cork pop\n"
+                    HV("14") "Cash register\n"
+                    HV("15") "Grapple"},
     {"cg_raceBeep", "race: sound at each checkpoint, one of the " HC("cg_killBeep") " sounds"},
     {"cg_buzzerSound", "plays the buzzer when the time runs out"},
     {"cg_allowTaunt", "plays other players' taunts"},
@@ -383,7 +391,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"ui_browserSortKey", "column the server browser sorts by"},
     {"ui_legalsViewed", "set once the legal notice at startup has gone by, for the rest of the session"},
     {"ui_browserShowFull", "the server browser lists full servers"},
-    {"ui_background", "your own image for the menu background, in place of the retail art: a 16:9 jpg, png or tga (1920x1080) from the baseq3 folder of your files, e.g. fondos/mio.jpg; empty = retail"},
+    {"ui_background", "your own image for the menu background, in place of the retail art: a 16:9 jpg, png or tga (1920x1080) from the baseq3 folder of your files, e.g. fondos/mio.jpg; empty = the classic Quake Live background, also on the connecting screen; retail = the retail art"},
     {"ui_browserShowEmpty", "the server browser lists empty servers"},
     {"ui_browserMaster", "master server the server browser asks"},
     {"ui_browserGameType", "game type the server browser shows"},
@@ -742,7 +750,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_demoLength", "length of the demo being played, in milliseconds"},
     {"cl_demoPos", "where the demo being played is, in milliseconds from its start"},
     {"cl_demoMarks", "where the match restarts in the demo, in milliseconds, marked on its timeline"},
-    {"cg_xray", "shows players through walls in their team colour; only in demos and as a spectator"},
     {"cg_freecam", "a free camera in demos, flown with the movement keys and the mouse"},
     {"cl_shownet", "prints network messages"},
     {"cl_showSend", "prints sent packets"},
@@ -928,6 +935,7 @@ static const cvarHelp_t cvarHelp[] = {
                          HV("1") "24 hours\n"
                          HV("2") "12 hours, with am and pm"},
     {"ch_recordMessage", "while a demo is being recorded, its name on the screen"},
+    {"ch_drawSpectators", "how many players are watching you, next to the fps counter; the server has to send it"},
     {"ch_autoStats", "when a match ends, writes the console, with the scores in it, to a file "
                      "under stats/"},
     {"cg_demoKeys", "the list of the demo player's keys, which F1 opens and closes"},
@@ -937,9 +945,6 @@ static const cvarHelp_t cvarHelp[] = {
                         "powerups and the flag"},
     {"ch_gameEvents", "the kill feed also carries the flag taken and captured, and, while you "
                       "watch, what the players pick up"},
-    {"ch_drawKeys", "the movement keys of whoever you are watching, over the left of the "
-                    "screen; yours are the ones you press, anybody else's are read back "
-                    "from the way they move"},
     {"ch_drawTargetStatus", "watching a demo or spectating, the health and armour under the "
                             "crosshair are anybody's, not only your team's; it needs "
                             HC("cg_drawCrosshairTeamHealth")},
@@ -1431,7 +1436,8 @@ static const cvarHelp_t cvarHelp[] = {
                               HV("0") "Still\n"
                               HV("1") "Plays once and stops on the last frame\n"
                               HV("2") "Loops"},
-    {"ch_animateScroll", "the chat and the item pickups fade in, slide as lines come and go, and fade out; "
+    {"ch_animateScroll", "the chat, the item pickups and the name under the crosshair fade in, slide as "
+                         "lines come and go, and fade out; "
                          "the chat history and the chat behind the scoreboard come and go the same way"},
     {"ch_chatLines", "lines of chat shown with " HC("ch_animateScroll")},
     {"cg_zoomAnimationTime", "milliseconds the zoom takes to go in or out, up to 500"},
