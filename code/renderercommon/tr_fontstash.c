@@ -27,7 +27,7 @@ C89.
 #define FONS_INIT_ATLAS_NODES 256
 #define FONS_VERTEX_COUNT 1024
 #define FONS_MAX_STATES 20
-#define FONS_MAX_FALLBACKS 48
+#define FONS_MAX_FALLBACKS 64
 
 static unsigned int fons__hashint(unsigned int a) {
     a += ~(a << 15);

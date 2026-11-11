@@ -1093,6 +1093,10 @@ void ClientBegin(int clientNum) {
     client->pers.enterTime = level.time;
     client->pers.teamState.state = TEAM_BEGIN;
 
+    if (!g_training.integer && !(ent->r.svFlags & SVF_BOT)) {
+        trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
+    }
+
     flags = client->ps.eFlags;
     memset(&client->ps, 0, sizeof(client->ps));
     client->ps.eFlags = flags;
