@@ -1181,6 +1181,8 @@ void Sys_GLimpInit(void) {
 void Sys_PlatformInit(void) {
     TIMECAPS ptc;
 
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+
     Sys_SetFloatEnv();
 
     if (timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR) {

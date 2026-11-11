@@ -120,7 +120,13 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
 
     vm->dllHandle = Sys_LoadGameDll(dllPath, &vm->entryPoint, VM_DllSyscall);
     if (!vm->dllHandle || !vm->entryPoint) {
-        Com_Error(ERR_FATAL, "VM_Create: failed to load DLL '%s'", dllPath);
+        Com_Error(ERR_FATAL,
+            "VM_Create: failed to load '%s'.\n"
+            "Your antivirus may have quarantined this file, or a cloud-synced folder such as "
+            "OneDrive or Dropbox may have left it incomplete. Restore the file, add the "
+            "ioquakelive folder as an antivirus exclusion, and install the game outside any "
+            "synced folder.",
+            dllPath);
     }
 
     vm->systemCall = systemCalls;
