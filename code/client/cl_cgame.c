@@ -1013,6 +1013,25 @@ static void CL_SmoothTimeAdvance(double nowMs) {
     cl.smoothDelta += step;
 }
 
+static void CL_HoldTimeWhilePaused(void) {
+    if (cl.smoothActive) {
+        double nowMs = Sys_Microseconds() / 1000.0;
+        double dt = nowMs - cl.smoothLastMs;
+
+        if (dt > 0) {
+            int i;
+
+            cl.smoothDelta -= dt;
+            cl.smoothTarget -= dt;
+            for (i = 0; i < cl.smoothSampleCount; i++) {
+                cl.smoothSamples[i] -= dt;
+            }
+        }
+        cl.smoothLastMs = nowMs;
+    }
+    cl.serverTimeDelta = cl.serverTime - cls.realtime;
+}
+
 static qboolean CL_SmoothTimeAllowed(void) {
     return cl_smoothClock->integer && !clc.demoplaying && com_timescale->value == 1;
 }
@@ -1122,6 +1141,7 @@ void CL_SetCGameTime(void) {
     }
 
     if (sv_paused->integer && CL_CheckPaused() && com_sv_running->integer) {
+        CL_HoldTimeWhilePaused();
         return;
     }
 
