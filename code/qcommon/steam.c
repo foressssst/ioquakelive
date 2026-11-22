@@ -909,15 +909,17 @@ static void SD_Close(void) {
 static void* SD_Open(void) {
     char path[MAX_OSPATH];
     char dir[MAX_OSPATH];
-    void* lib = (void*)LoadLibraryA(SD_LIB_NAME);
+    void* lib = NULL;
 
-    if (!lib && SD_RegistryString("Software\\Valve\\Steam\\ActiveProcess", "SteamClientDll64", path,
-                                  sizeof(path))) {
+    if (SD_RegistryString("Software\\Valve\\Steam\\ActiveProcess", "SteamClientDll64", path, sizeof(path))) {
         lib = (void*)LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
     if (!lib && SD_RegistryString("Software\\Valve\\Steam", "SteamPath", dir, sizeof(dir))) {
         Com_sprintf(path, sizeof(path), "%s\\" SD_LIB_NAME, dir);
         lib = (void*)LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    }
+    if (!lib) {
+        lib = (void*)LoadLibraryA(SD_LIB_NAME);
     }
     return lib;
 }
@@ -943,7 +945,7 @@ static void* SD_Open(void) {
     };
     char path[MAX_OSPATH];
     const char* home = getenv("HOME");
-    void* lib = dlopen(SD_LIB_NAME, RTLD_NOW);
+    void* lib = NULL;
     int i;
 
     for (i = 0; !lib && home && home[0] && i < ARRAY_LEN(places); i++) {
@@ -955,6 +957,9 @@ static void* SD_Open(void) {
         lib = dlopen("/Applications/Steam.app/Contents/MacOS/" SD_LIB_NAME, RTLD_NOW);
     }
 #endif
+    if (!lib) {
+        lib = dlopen(SD_LIB_NAME, RTLD_NOW);
+    }
     return lib;
 }
 #endif
