@@ -19,6 +19,11 @@ LAYER_SHARED = {
     'engine-macos-arm64':   False,
 }
 
+ROOT_KEEP = ('baseq3', 'ioquakelive-launcher', 'ioquakelive-launcher.exe', 'ioquakelive-launcher.app')
+
+def layout(rel):
+    return rel if rel.split('/', 1)[0] in ROOT_KEEP else 'bin/' + rel
+
 def add_tree(zf, root, dest_prefix, keep=None):
 
     for dirpath, dirnames, filenames in os.walk(root):
@@ -28,7 +33,7 @@ def add_tree(zf, root, dest_prefix, keep=None):
             rel = os.path.relpath(abs_path, root).replace(os.sep, '/')
             if keep and not keep(rel):
                 continue
-            arc = f'{dest_prefix}/{rel}' if dest_prefix else rel
+            arc = layout(f'{dest_prefix}/{rel}' if dest_prefix else rel)
             st = os.stat(abs_path)
             with open(abs_path, 'rb') as f:
                 data = f.read()

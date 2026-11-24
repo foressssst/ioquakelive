@@ -477,6 +477,21 @@ char* Sys_ParseProtocolUri(const char* uri) {
 #endif
 #endif
 
+static const char* Sys_LayoutRoot(const char* dir) {
+    static char root[MAX_OSPATH];
+    char copy[MAX_OSPATH];
+    char probe[MAX_OSPATH];
+
+    Q_strncpyz(copy, dir, sizeof(copy));
+    if (Q_stricmp(Sys_Basename(copy), "bin")) {
+        return dir;
+    }
+    Q_strncpyz(copy, dir, sizeof(copy));
+    Q_strncpyz(root, Sys_Dirname(copy), sizeof(root));
+    Com_sprintf(probe, sizeof(probe), "%s%c" BASEGAME_DIR, root, PATH_SEP);
+    return Sys_PathIsDir(probe) ? root : dir;
+}
+
 void Sys_SigHandler(int signal) {
     static qboolean signalcaught = qfalse;
 
@@ -558,7 +573,7 @@ int main(int argc, char** argv) {
         Q_strncpyz(path, argv[0], sizeof(path));
         Sys_SetBinaryPath(Sys_Dirname(path));
     }
-    Sys_SetDefaultInstallPath(DEFAULT_BASEDIR);
+    Sys_SetDefaultInstallPath(Sys_LayoutRoot(DEFAULT_BASEDIR));
 
     for (i = 1; i < argc; i++) {
         commandLineSize += (int)strlen(argv[i]) + 3;

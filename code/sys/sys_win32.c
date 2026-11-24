@@ -836,6 +836,12 @@ qboolean Sys_LowPhysicalMemory(void) {
     return (stat.dwTotalPhys <= MEM_THRESHOLD) ? qtrue : qfalse;
 }
 
+qboolean Sys_PathIsDir(const char* path) {
+    DWORD attributes = GetFileAttributesA(path);
+
+    return (qboolean)(attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
+}
+
 const char* Sys_Basename(char* path) {
     static char base[MAX_OSPATH] = {0};
     int length;
@@ -1284,6 +1290,13 @@ static qboolean Sys_StartLauncher(const wchar_t* args, DWORD wait) {
     }
     launcher[ARRAY_LEN(launcher) - 1] = L'\0';
     n = GetFileAttributesW(launcher);
+    if ((n == INVALID_FILE_ATTRIBUTES || (n & FILE_ATTRIBUTE_DIRECTORY)) && (slash = wcsrchr(dir, L'\\')) && !_wcsicmp(slash + 1, L"bin")) {
+        *slash = L'\0';
+        if (_snwprintf(launcher, ARRAY_LEN(launcher) - 1, L"%ls\\ioquakelive-launcher.exe", dir) < 0) {
+            return qfalse;
+        }
+        n = GetFileAttributesW(launcher);
+    }
     if (n == INVALID_FILE_ATTRIBUTES || (n & FILE_ATTRIBUTE_DIRECTORY)) {
         return qfalse;
     }

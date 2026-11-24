@@ -572,6 +572,12 @@ qboolean Sys_LowPhysicalMemory(void) {
     return qfalse;
 }
 
+qboolean Sys_PathIsDir(const char* path) {
+    struct stat buf;
+
+    return (qboolean)(!stat(path, &buf) && S_ISDIR(buf.st_mode));
+}
+
 const char* Sys_Basename(char* path) {
     return basename(path);
 }
@@ -1197,6 +1203,14 @@ static qboolean Sys_StartLauncher(int argc, char** argv, int wait) {
     *cut = '\0';
     snprintf(launcher, sizeof(launcher), "%s/ioquakelive-launcher", exe);
 #endif
+    if ((stat(launcher, &st) != 0 || !S_ISREG(st.st_mode)) && (cut = strrchr(exe, '/')) && !strcmp(cut + 1, "bin")) {
+        *cut = '\0';
+#ifdef __APPLE__
+        snprintf(launcher, sizeof(launcher), "%s/ioquakelive-launcher.app/Contents/MacOS/ioquakelive-launcher", exe);
+#else
+        snprintf(launcher, sizeof(launcher), "%s/ioquakelive-launcher", exe);
+#endif
+    }
     if (stat(launcher, &st) != 0 || !S_ISREG(st.st_mode)) {
         return qfalse;
     }

@@ -25,6 +25,11 @@ def check(ok, what, failures):
         failures.append(what)
 
 
+def placed(root, name):
+    inside = os.path.join(root, 'bin', name)
+    return inside if os.path.exists(inside) else os.path.join(root, name)
+
+
 def runnable(path):
     return os.path.isfile(path) and (os.name == 'nt' or os.access(path, os.X_OK))
 
@@ -113,7 +118,7 @@ def main():
         'LAUNCHER_DESKTOP': desktop + os.sep,
         'LAUNCHER_NOSTEAM': '1',
     }, args.timeout)
-    game = os.path.join(root, args.game)
+    game = placed(root, args.game)
     launcher = os.path.join(root, args.self_name)
     check(runnable(game), f'game is in place and runnable: {args.game}', failures)
     check(runnable(launcher), f'launcher copied itself and is runnable: {args.self_name}', failures)
@@ -122,7 +127,7 @@ def main():
     check(not leftovers(root), 'no .new, .part or .old files left', failures)
     check(os.path.isfile(os.path.join(work, 'install.png')), 'install screenshot saved', failures)
     if sys.platform == 'darwin':
-        app = os.path.join(root, args.game.split('/Contents/')[0])
+        app = game.split('/Contents/')[0]
         signed, why = signature(app)
         print(f'  info  game bundle signature after install: {why}')
 

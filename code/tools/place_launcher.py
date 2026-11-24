@@ -150,6 +150,7 @@ def place(stage, engines):
                     mode = (zi.external_attr >> 16) & 0o777
                     if mode:
                         os.chmod(path, mode)
+            shutil.copyfile(LICENSE, os.path.join(dest, LICENSE_NAME))
         os.makedirs(os.path.join(dest, 'baseq3'), exist_ok=True)
         shutil.copyfile(BACKGROUND, os.path.join(dest, 'baseq3', 'launcher.jpg'))
         print(f'  {name} -> {ENGINES[key]}')

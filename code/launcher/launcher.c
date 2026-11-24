@@ -53,14 +53,17 @@
 
 #ifdef _WIN32
 #define GAME_EXT ".exe"
+#define LIB_EXT ".dll"
 #define PACKAGE_OS "windows"
 #define LINK_NAME "ioquakelive.lnk"
 #elif defined(__APPLE__)
 #define GAME_EXT ""
+#define LIB_EXT ".dylib"
 #define PACKAGE_OS "macos"
 #define LINK_NAME "ioquakelive"
 #else
 #define GAME_EXT ""
+#define LIB_EXT ".so"
 #define PACKAGE_OS "linux"
 #define LINK_NAME "ioquakelive.desktop"
 #endif
@@ -237,6 +240,7 @@
 #define PAK_OURS "baseq3/pak01.pk3"
 #endif
 #define VULKAN_NAME "ioquakelive-vulkan." GAME_ARCH GAME_EXT
+#define BIN_DIR "bin/"
 #define FOLDER_NAME "ioquakelive"
 #define ZIP_TAIL (65536 + 22)
 #define ZIP_BLOCK 0x10000
@@ -1335,6 +1339,10 @@ static unsigned char* Pak_Read(const char* pak, const char* name, size_t* outSiz
 
     SDL_snprintf(path, sizeof(path), "%s%s", pak[0] == '/' || (pak[0] && pak[1] == ':') ? "" : basePath, pak);
     io = SDL_IOFromFile(path, "rb");
+    if (!io && pak[0] != '/' && !(pak[0] && pak[1] == ':')) {
+        SDL_snprintf(path, sizeof(path), "%s" BIN_DIR "%s", basePath, pak);
+        io = SDL_IOFromFile(path, "rb");
+    }
     if (!io) {
         return NULL;
     }
@@ -4229,13 +4237,31 @@ static void Cfg_Word(const char* text, const char* key, char* out, size_t size) 
     }
 }
 
+static bool Game_Has(const char* root, const char* name) {
+    char path[1200];
+
+    SDL_snprintf(path, sizeof(path), "%s" BIN_DIR "%s", root, name);
+    if (Path_IsFile(path)) {
+        return true;
+    }
+    SDL_snprintf(path, sizeof(path), "%s%s", root, name);
+    return Path_IsFile(path);
+}
+
+static void Game_At(const char* root, const char* name, char* out, size_t size) {
+    SDL_snprintf(out, size, "%s" BIN_DIR "%s", root, name);
+    if (!Path_IsFile(out)) {
+        SDL_snprintf(out, size, "%s%s", root, name);
+    }
+}
+
 static bool Game_Version(const char* root, char* out, size_t size) {
     static const char mark[] = "ioquakelive ";
     char path[1200];
     size_t length, i, n;
     char* data;
 
-    SDL_snprintf(path, sizeof(path), "%s" GAME_NAME, root);
+    Game_At(root, GAME_NAME, path, sizeof(path));
     data = SDL_LoadFile(path, &length);
     if (!data) {
         return false;
@@ -4961,6 +4987,58 @@ static int Zip_Extract(const char* zip, const char* root, char* version, size_t 
     return fail;
 }
 
+static SDL_EnumerationResult SDLCALL Tree_Drop(void* userdata, const char* dir, const char* name);
+
+static void Tree_Remove(const char* path) {
+    SDL_EnumerateDirectory(path, Tree_Drop, NULL);
+    SDL_RemovePath(path);
+}
+
+static SDL_EnumerationResult SDLCALL Tree_Drop(void* userdata, const char* dir, const char* name) {
+    char path[1400];
+    SDL_PathInfo info;
+
+    (void)userdata;
+    SDL_snprintf(path, sizeof(path), "%s%s", dir, name);
+    if (SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
+        Tree_Remove(path);
+    } else {
+        SDL_RemovePath(path);
+    }
+    return SDL_ENUM_CONTINUE;
+}
+
+static void Layout_Tidy(const char* root) {
+    static const char* const old[] = {
+#ifdef __APPLE__
+        "ioquakelive.app",
+#else
+        GAME_NAME,
+        VULKAN_NAME,
+        "opengl1" GAME_ARCH LIB_EXT,
+        "opengl2" GAME_ARCH LIB_EXT,
+        "vulkan" GAME_ARCH LIB_EXT,
+#ifdef _WIN32
+        "SDL3.dll",
+#else
+        "libSDL3.so.0",
+#endif
+#endif
+        "ioquakelive-launcher-OFL.txt",
+    };
+    char path[1200];
+    size_t i;
+
+    SDL_snprintf(path, sizeof(path), "%s" BIN_DIR GAME_NAME, root);
+    if (!Path_IsFile(path)) {
+        return;
+    }
+    for (i = 0; i < SDL_arraysize(old); i++) {
+        SDL_snprintf(path, sizeof(path), "%s%s", root, old[i]);
+        Tree_Remove(path);
+    }
+}
+
 static void Zip_Note(const char* zip, char* out, size_t size) {
     char note[64];
     unsigned count = 0, dirSize = 0;
@@ -4983,6 +5061,24 @@ static void Zip_Note(const char* zip, char* out, size_t size) {
     }
 }
 
+static bool Zip_HasBin(const char* zip) {
+    char note[64], name[260];
+    unsigned count = 0, dirSize = 0, k;
+    const unsigned char* p;
+    bool found = false;
+    SDL_IOStream* io = SDL_IOFromFile(zip, "rb");
+    unsigned char* dir = io ? Zip_Dir(io, &count, &dirSize, note, sizeof(note)) : NULL;
+
+    for (p = dir, k = 0; dir && !found && k < count && Zip_Next(dir, dirSize, &p, name, sizeof(name)); k++) {
+        found = !strncmp(name, BIN_DIR, strlen(BIN_DIR));
+    }
+    free(dir);
+    if (io) {
+        SDL_CloseIO(io);
+    }
+    return found;
+}
+
 static bool Local_Fresh(void) {
     return install.local && (SDL_GetAtomicInt(&checkState) != CHECK_DONE || (install.have[0] && Version_Compare(install.have, latestVersion) >= 0));
 }
@@ -4990,8 +5086,8 @@ static bool Local_Fresh(void) {
 static void Install_Refresh(void) {
     char path[1200];
 
-    SDL_snprintf(path, sizeof(path), "%s/" GAME_NAME, install.dir);
-    install.adopt = Path_IsFile(path);
+    SDL_snprintf(path, sizeof(path), "%s/", install.dir);
+    install.adopt = Game_Has(path, GAME_NAME);
     install.fail = FAIL_NONE;
 }
 
@@ -5000,7 +5096,7 @@ static int Install_Work(bool update) {
     const char* source = install.zip;
     const char* desktop = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
     pack_t* pack = update ? &packLatest : &packJob;
-    bool fetched = false, listed = false, local = !update && install.local;
+    bool fetched = false, listed = false, hasBin, local = !update && install.local;
     int fail;
 #ifdef LAUNCHER_SHOT
     const char* option = SDL_getenv("LAUNCHER_ZIP");
@@ -5062,12 +5158,21 @@ static int Install_Work(bool update) {
             fetched = true;
         }
         SDL_SetAtomicInt(&jobPhase, PHASE_INSTALL);
+        hasBin = Zip_HasBin(source);
         fail = Zip_Extract(source, root, fetched ? NULL : jobVersion, sizeof(jobVersion));
         if (fetched) {
             SDL_RemovePath(path);
         }
         if (fail != FAIL_NONE) {
             return fail;
+        }
+        SDL_snprintf(path, sizeof(path), "%s" BIN_DIR GAME_NAME, root);
+        if (!hasBin && Path_IsFile(path)) {
+            SDL_snprintf(path, sizeof(path), "%s" BIN_DIR, root);
+            Tree_Remove(path);
+        }
+        if (hasBin) {
+            Layout_Tidy(root);
         }
         if (SDL_strcmp(jobVersion, "0") && Game_Version(root, found, sizeof(found)) && Version_Compare(found, jobVersion)) {
             return FAIL_FILE;
@@ -7695,8 +7800,8 @@ static void Install_Pick(void) {
     }
     leaf = strrchr(install.dir, '/');
     leaf = leaf ? leaf + 1 : install.dir;
-    SDL_snprintf(path, sizeof(path), "%s/" GAME_NAME, install.dir);
-    if (SDL_strcasecmp(leaf, FOLDER_NAME) && !Path_IsFile(path)) {
+    SDL_snprintf(path, sizeof(path), "%s/", install.dir);
+    if (SDL_strcasecmp(leaf, FOLDER_NAME) && !Game_Has(path, GAME_NAME)) {
         SDL_strlcat(install.dir, "/" FOLDER_NAME, sizeof(install.dir));
     }
     Install_Refresh();
@@ -8023,7 +8128,7 @@ static bool Game_Start(void) {
     bool vulkan = rendererHint >= 0 ? rendererHint == 1 : SDL_GetAtomicInt(&vulkanState) != VULKAN_MISSING;
     int i;
 
-    SDL_snprintf(path, sizeof(path), "%s%s", basePath, (vulkan && vulkanFound) ? VULKAN_NAME : GAME_NAME);
+    Game_At(basePath, (vulkan && vulkanFound) ? VULKAN_NAME : GAME_NAME, path, sizeof(path));
     File_Exec(path);
     args[0] = path;
     for (i = 0; i < gameArgCount && i < 32; i++) {
@@ -13436,8 +13541,9 @@ int main(int argc, char** argv) {
         return 0;
     }
 #endif
-    gameFound = File_Exists(GAME_NAME);
-    vulkanFound = File_Exists(VULKAN_NAME);
+    Layout_Tidy(basePath);
+    gameFound = Game_Has(basePath, GAME_NAME);
+    vulkanFound = Game_Has(basePath, VULKAN_NAME);
     if (failed) {
         return Launcher_Fail(failure);
     }

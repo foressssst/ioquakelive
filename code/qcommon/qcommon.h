@@ -810,6 +810,7 @@ void Sys_Quit(void) __attribute__((noreturn));
 char* Sys_GetClipboardData(void);
 void Sys_SetClipboardData(const char* text);
 void Sys_OpenURL(const char* url);
+qboolean Sys_PathIsDir(const char* path);
 qboolean Sys_LauncherHandoff(int argc, char** argv);
 qboolean Sys_OpenLauncher(void);
 void Sys_ReturnToLauncher(void);
