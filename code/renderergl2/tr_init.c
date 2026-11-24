@@ -1582,6 +1582,7 @@ refexport_t* GetRefAPI(int apiVersion, refimport_t* rimp) {
     re.BeginBloomScene = RE_BeginBloomScene;
     re.ApplyBloom = RE_ApplyBloom;
     re.RegisterShaderFromRaw = RE_RegisterShaderFromRaw;
+    re.DrawTriangles2D = RE_DrawTriangles2D;
 
     return &re;
 }

@@ -450,7 +450,8 @@ static void R_Font_SetContrast( int id, const char *path ) {
 }
 
 static void R_Font_SetSizing( int id, const char *path ) {
-	if ( !Q_stricmpn( path, "webui/fonts/", 12 ) || !Q_stricmp( path, "fonts/LiberationSans-Regular.ttf" ) ) {
+	if ( !Q_stricmpn( path, "webui/fonts/", 12 ) || !Q_stricmp( path, "fonts/LiberationSans-Regular.ttf" ) ||
+		!Q_stricmp( path, "fonts/Outfit-SemiBold.ttf" ) ) {
 		fonsSetFontEmSize( fontContext, id );
 	}
 }

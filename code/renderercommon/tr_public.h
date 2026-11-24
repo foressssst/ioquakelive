@@ -98,6 +98,8 @@ typedef struct {
     qhandle_t (*RegisterShaderFromRaw)(const char* name, const byte* rgba, int width, int height);
 
     void (*PrefetchSkin)(const char* name);
+
+    void (*DrawTriangles2D)(int numVerts, const polyVert_t* verts, qhandle_t hShader);
 } refexport_t;
 
 typedef struct {

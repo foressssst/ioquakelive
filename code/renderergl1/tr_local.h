@@ -1612,6 +1612,14 @@ typedef struct {
 
 typedef struct {
 	int		commandId;
+	shader_t	*shader;
+	int		numVerts;
+} drawTris2DCommand_t;
+
+void RE_DrawTriangles2D( int numVerts, const polyVert_t *verts, qhandle_t hShader );
+
+typedef struct {
+	int		commandId;
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;
 	drawSurf_t *drawSurfs;
@@ -1642,6 +1650,7 @@ typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
 	RC_STRETCH_PIC,
+	RC_DRAW_TRIS_2D,
 	RC_DRAW_SURFS,
 	RC_DRAW_BUFFER,
 	RC_SWAP_BUFFERS,

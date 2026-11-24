@@ -1947,6 +1947,12 @@ static void FixRenderCommandList( int newShader ) {
 				curCmd = (const void *)(sp_cmd + 1);
 				break;
 				}
+			case RC_DRAW_TRIS_2D:
+				{
+				const drawTris2DCommand_t *dt_cmd = (const drawTris2DCommand_t *)curCmd;
+				curCmd = (const void *)( (const polyVert_t *)( dt_cmd + 1 ) + dt_cmd->numVerts );
+				break;
+				}
 			case RC_DRAW_SURFS:
 				{
 				int i;

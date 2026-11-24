@@ -915,7 +915,6 @@ void UI_Settings_Close(void);
 
 #define UI_HOME 602
 void UI_Home_Open(void);
-void UI_Home_Leave(void);
 void UI_Home_Paint(void);
 qboolean UI_Home_HandleKey(int key);
 void UI_Home_ShowError(const char* text);

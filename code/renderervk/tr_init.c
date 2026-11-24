@@ -1996,6 +1996,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.LowLatencyWait = vk_low_latency_input;
 	re.LowLatencyFlash = vk_low_latency_flash;
 	re.RegisterShaderFromRaw = RE_RegisterShaderFromRaw;
+	re.DrawTriangles2D = RE_DrawTriangles2D;
 
 	return &re;
 }

@@ -547,6 +547,13 @@ qboolean CL_DemoWindowKey(int key, qboolean down);
 qboolean CL_DemoWindowChar(int ch);
 qboolean CL_DemoWindowMouse(int x, int y);
 void CL_DemoWindowDraw(void);
+
+qboolean CL_IntroActive(void);
+qboolean CL_IntroCoversUI(void);
+void CL_IntroDraw(void);
+qboolean CL_IntroKey(int key, qboolean down);
+qboolean CL_IntroChar(void);
+void CL_IntroShutdown(void);
 void CL_DemoWindowFrame(void);
 qboolean CL_DemoWindowRoute(const char* name);
 qboolean CL_DemoWindowTakeFrame(const byte* image, int size);

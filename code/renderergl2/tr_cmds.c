@@ -206,6 +206,29 @@ void RE_StretchPic(float x, float y, float w, float h, float s1, float t1, float
     cmd->t2 = t2;
 }
 
+void RE_DrawTriangles2D(int numVerts, const polyVert_t* verts, qhandle_t hShader) {
+    drawTris2DCommand_t* cmd;
+
+    if (!tr.registered || !verts) {
+        return;
+    }
+    if (numVerts > 3 * 1024) {
+        numVerts = 3 * 1024;
+    }
+    numVerts -= numVerts % 3;
+    if (numVerts <= 0) {
+        return;
+    }
+    cmd = R_GetCommandBuffer(sizeof(*cmd) + numVerts * sizeof(polyVert_t));
+    if (!cmd) {
+        return;
+    }
+    cmd->commandId = RC_DRAW_TRIS_2D;
+    cmd->shader = R_GetShaderByHandle(hShader);
+    cmd->numVerts = numVerts;
+    Com_Memcpy(cmd + 1, verts, numVerts * sizeof(polyVert_t));
+}
+
 #define MODE_RED_CYAN 1
 #define MODE_RED_BLUE 2
 #define MODE_RED_GREEN 3

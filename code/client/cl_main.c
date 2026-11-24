@@ -3215,6 +3215,8 @@ static __attribute__((format(printf, 2, 3))) void QDECL CL_RefPrintf(int print_l
 }
 
 void CL_ShutdownRef(void) {
+    CL_IntroShutdown();
+
     if (re.Shutdown) {
         re.Shutdown(qtrue);
     }

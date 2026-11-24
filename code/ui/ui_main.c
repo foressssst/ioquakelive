@@ -529,7 +529,6 @@ void _UI_Refresh(int realtime) {
 }
 
 void _UI_Shutdown(void) {
-    UI_Home_Leave();
 }
 
 char* defaultMenu = NULL;
@@ -5095,7 +5094,6 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
         v[0] = v[1] = v[2] = 0;
         switch (menu) {
             case UIMENU_NONE:
-                UI_Home_Leave();
                 trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_UI);
                 trap_Key_ClearStates();
                 Menus_CloseAll();

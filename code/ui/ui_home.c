@@ -605,8 +605,6 @@ void UI_Home_Banner(void) {
 #define HM_SELECTOR_TOP SM_Len(155.0f)
 #define HM_SELECTOR_H SM_Len(25.0f)
 #define HM_LIST_TOP SM_Len(183.0f)
-#define HM_LEGALS_MS 5000
-#define HM_LEGALS_FADE 500
 #define HM_TEXT 15.0f
 
 static const vec4_t hmBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
@@ -647,18 +645,13 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
 
 #define HM_GRADIENT_SIDE 256
 #define HM_GRADIENT_CACHE 16
-#define HM_OWN_BACKGROUND "ui/assets/backscreen_classic.jpg"
-
 static struct {
     qboolean loaded;
-    qhandle_t bg, gradient, logo, ranger, idLogo, bethLogo;
+    qhandle_t bg, gradient, logo, ranger;
     char bgColor[MAX_CVAR_VALUE_STRING];
     int numGradients;
     byte gradientColor[HM_GRADIENT_CACHE][4];
     qhandle_t gradients[HM_GRADIENT_CACHE];
-    qboolean legalsViewed;
-    int legalsStart;
-    int legalsLeave;
     int panel;
 } hr;
 
@@ -767,39 +760,8 @@ static void UI_Home_LoadRetail(void) {
     hr.bg = trap_R_RegisterShaderNoMip("webui/img/bg.jpg");
     hr.logo = trap_R_RegisterShaderNoMip("webui/img/logo.png");
     hr.ranger = trap_R_RegisterShaderNoMip("webui/img/characters/ranger.png");
-    hr.idLogo = trap_R_RegisterShaderNoMip("webui/img/id-logo-footer.png");
-    hr.bethLogo = trap_R_RegisterShaderNoMip("webui/img/beth-logo-footer.png");
 
-    trap_Cvar_Register(NULL, "ui_legalsViewed", "0", CVAR_TEMP | CVAR_NORESTART);
     trap_Cvar_Register(NULL, "ui_updateNotesSeen", "", CVAR_TEMP | CVAR_NORESTART);
-    hr.legalsViewed = trap_Cvar_VariableValue("ui_legalsViewed") != 0 ||
-                      trap_Cvar_VariableValue("web_skipLegals") > 0;
-}
-
-static void UI_Home_SkipLegals(int now) {
-    hr.legalsLeave = now ? now : 1;
-    trap_Cvar_Set("ui_legalsViewed", "1");
-}
-
-void UI_Home_Leave(void) {
-    if (hr.legalsStart) {
-        trap_Cvar_Set("ui_legalsViewed", "1");
-    }
-}
-
-static qhandle_t UI_Home_OwnBackground(void) {
-    static qboolean tried;
-    static qhandle_t pic;
-    fileHandle_t f;
-
-    if (!tried) {
-        tried = qtrue;
-        if (trap_FS_FOpenFile(HM_OWN_BACKGROUND, &f, FS_READ) > 0) {
-            trap_FS_FCloseFile(f);
-            pic = trap_R_RegisterShaderNoMip(HM_OWN_BACKGROUND);
-        }
-    }
-    return pic;
 }
 
 static qhandle_t UI_Home_CustomBackground(void) {
@@ -810,7 +772,7 @@ static qhandle_t UI_Home_CustomBackground(void) {
         Q_strncpyz(name, ui_background.string, sizeof(name));
         pic = (name[0] && Q_stricmp(name, "retail")) ? trap_R_RegisterShaderNoMip(name) : 0;
     }
-    return name[0] ? pic : UI_Home_OwnBackground();
+    return pic;
 }
 
 void UI_Home_RetailBackdrop(void) {
@@ -1296,56 +1258,6 @@ static void UI_Home_DrawSide(void) {
     UI_Home_DrawNews(x, top + HM_LIST_TOP + listH + SM_Len(5.0f), w, smBottom - 31.5f - SM_Len(5.0f));
 }
 
-static void UI_Home_DrawLegals(void) {
-    static const char* const notice =
-        "QUAKE LIVE\xe2\x84\xa2 \xc2\xa9 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    float top = -smTop / smScale;
-    float alpha = 1.0f;
-    float lw = smVW * 0.5f;
-    float body = top + (smBottom - top) * 0.84f;
-    vec4_t black = {0, 0, 0, 1};
-    vec4_t tint = {1, 1, 1, 1};
-    vec4_t grey;
-    int now = uiInfo.uiDC.realTime;
-
-    if (hr.legalsViewed) {
-        return;
-    }
-    if (!hr.legalsStart) {
-        hr.legalsStart = now ? now : 1;
-    }
-    if (!hr.legalsLeave && now - hr.legalsStart >= HM_LEGALS_MS) {
-        UI_Home_SkipLegals(now);
-    }
-    if (hr.legalsLeave) {
-        float t = (float)(now - hr.legalsLeave) / HM_LEGALS_FADE;
-
-        if (t >= 1.0f) {
-            hr.legalsViewed = qtrue;
-            return;
-        }
-        alpha = 0.99f - 0.98f * t * t;
-    }
-
-    black[3] = alpha;
-    tint[3] = alpha;
-    Vector4Copy(smSubtle, grey);
-    grey[3] = alpha;
-
-    SM_Fill(-1, top, smVW + 2, smBottom - top + 1, black, NULL);
-    if (hr.logo) {
-        SM_PicColor((smVW - lw) * 0.5f, top + smVW * 0.2f, lw, lw * (485.0f / 1920.0f), hr.logo, tint, NULL);
-    }
-    if (hr.idLogo) {
-        SM_PicColor(smVW * 0.5f - 138.0f + 12.0f, body + 30.0f, 80.0f, 80.0f, hr.idLogo, tint, NULL);
-    }
-    if (hr.bethLogo) {
-        SM_PicColor(smVW * 0.5f - 30.0f + 12.0f, body + 64.0f, 144.0f, 46.0f, hr.bethLogo, tint, NULL);
-    }
-    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, HM_TEXT, body + 146.0f, 24.0f), HM_TEXT, grey, notice, qfalse);
-    SM_Hit(0, top, smVW, smBottom - top, HM_HIT_SOCIAL, 0, NULL);
-}
-
 void UI_Home_Open(void) {
     menuDef_t* menu = Menus_FindByName("main");
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
@@ -1390,7 +1302,6 @@ void UI_Home_Paint(void) {
     (void)top;
 
     UI_Home_Banner();
-    UI_Home_DrawLegals();
     UI_Home_NotesPaint();
     SM_EndFrame();
 }
@@ -1399,12 +1310,6 @@ qboolean UI_Home_HandleKey(int key) {
     const smHit_t* hit;
 
     if (key & K_CHAR_FLAG) {
-        return qtrue;
-    }
-    if (!hr.legalsViewed && hr.legalsStart) {
-        if (key == K_MOUSE1 && !hr.legalsLeave) {
-            UI_Home_SkipLegals(uiInfo.uiDC.realTime);
-        }
         return qtrue;
     }
     if (UI_Home_NotesWanted()) {
@@ -1728,7 +1633,7 @@ static qboolean UI_Home_NotesWanted(void) {
     char version[32];
     char seen[32];
 
-    if (!hr.legalsViewed || UI_Home_InMatch() || UI_Home_ErrorActive()) {
+    if (UI_Home_InMatch() || UI_Home_ErrorActive()) {
         return qfalse;
     }
     trap_Cvar_VariableStringBuffer("cl_updateStatus", status, sizeof(status));

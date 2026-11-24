@@ -2053,6 +2053,12 @@ typedef struct {
 
 typedef struct {
     int commandId;
+    shader_t* shader;
+    int numVerts;
+} drawTris2DCommand_t;
+
+typedef struct {
+    int commandId;
     trRefdef_t refdef;
     viewParms_t viewParms;
     drawSurf_t* drawSurfs;
@@ -2109,6 +2115,7 @@ typedef enum {
     RC_END_OF_LIST,
     RC_SET_COLOR,
     RC_STRETCH_PIC,
+    RC_DRAW_TRIS_2D,
     RC_DRAW_SURFS,
     RC_DRAW_BUFFER,
     RC_SWAP_BUFFERS,
@@ -2187,6 +2194,7 @@ void R_AddPostProcessCmd(void);
 
 void RE_SetColor(const float* rgba);
 void RE_StretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);
+void RE_DrawTriangles2D(int numVerts, const polyVert_t* verts, qhandle_t hShader);
 void RE_BeginFrame(stereoFrame_t stereoFrame);
 void RE_EndFrame(int* frontEndMsec, int* backEndMsec);
 void RE_SaveJPG(char* filename, int quality, int image_width, int image_height, unsigned char* image_buffer, int padding);

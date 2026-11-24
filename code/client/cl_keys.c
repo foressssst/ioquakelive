@@ -1296,6 +1296,10 @@ void CL_KeyUpEvent(int key, unsigned time) {
 }
 
 void CL_KeyEvent(int key, qboolean down, unsigned time) {
+    if (CL_IntroKey(key, down)) {
+        return;
+    }
+
     if (CL_DemoWindowKey(key, down)) {
         return;
     }
@@ -1312,6 +1316,10 @@ void CL_KeyEvent(int key, qboolean down, unsigned time) {
 
 void CL_CharEvent(int key) {
     if (key == 127) {
+        return;
+    }
+
+    if (CL_IntroChar()) {
         return;
     }
 

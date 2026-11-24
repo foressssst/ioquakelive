@@ -380,11 +380,13 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
         }
     }
 
-    if (Key_GetCatcher() & KEYCATCH_UI && uivm) {
+    if (Key_GetCatcher() & KEYCATCH_UI && uivm && !CL_IntroCoversUI()) {
         VM_Call(uivm, UI_REFRESH, cls.realtime);
     }
 
     CL_DemoWindowDraw();
+
+    CL_IntroDraw();
 
     if (!scr_noConsoleFrames) {
         Con_DrawConsole();

@@ -605,6 +605,51 @@ const void* RB_SetColor(const void* data) {
     return (const void*)(cmd + 1);
 }
 
+static const void* RB_DrawTriangles2D(const void* data) {
+    const drawTris2DCommand_t* cmd;
+    const polyVert_t* v;
+    shader_t* shader;
+    int i, k, n;
+
+    cmd = (const drawTris2DCommand_t*)data;
+    v = (const polyVert_t*)(cmd + 1);
+
+    if (glRefConfig.framebufferObject)
+        FBO_Bind(tr.renderFbo);
+
+    RB_SetGL2D();
+
+    shader = cmd->shader;
+    if (shader != tess.shader) {
+        if (tess.numIndexes) {
+            RB_EndSurface();
+        }
+        backEnd.currentEntity = &backEnd.entity2D;
+        RB_BeginSurface(shader, 0, 0);
+    }
+
+    for (i = 0; i + 3 <= cmd->numVerts; i += 3) {
+        RB_CHECKOVERFLOW(3, 3);
+        n = tess.numVertexes;
+        for (k = 0; k < 3; k++) {
+            tess.xyz[n + k][0] = v[i + k].xyz[0];
+            tess.xyz[n + k][1] = v[i + k].xyz[1];
+            tess.xyz[n + k][2] = 0;
+            tess.texCoords[n + k][0] = v[i + k].st[0];
+            tess.texCoords[n + k][1] = v[i + k].st[1];
+            tess.color[n + k][0] = v[i + k].modulate[0] * 257;
+            tess.color[n + k][1] = v[i + k].modulate[1] * 257;
+            tess.color[n + k][2] = v[i + k].modulate[2] * 257;
+            tess.color[n + k][3] = v[i + k].modulate[3] * 257;
+            tess.indexes[tess.numIndexes + k] = n + k;
+        }
+        tess.numVertexes += 3;
+        tess.numIndexes += 3;
+    }
+
+    return (const void*)(v + cmd->numVerts);
+}
+
 const void* RB_StretchPic(const void* data) {
     const stretchPicCommand_t* cmd;
     shader_t* shader;
@@ -1422,6 +1467,9 @@ void RB_ExecuteRenderCommands(const void* data) {
                 break;
             case RC_STRETCH_PIC:
                 data = RB_StretchPic(data);
+                break;
+            case RC_DRAW_TRIS_2D:
+                data = RB_DrawTriangles2D(data);
                 break;
             case RC_DRAW_SURFS:
                 data = RB_DrawSurfs(data);
