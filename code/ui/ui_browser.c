@@ -1117,7 +1117,8 @@ static float BR_RowHeight(void) {
 }
 
 static void BR_DrawRow(const brServer_t* s, int row, float x, float y, const brCols_t* cols, const smRect_t* clip) {
-    qboolean over = SM_Over(BR_HIT_ROW, row) || SM_Over(BR_HIT_PLAY, row) || SM_Over(BR_HIT_TAG, row);
+    qboolean over = SM_Over(BR_HIT_ROW, row) || SM_Over(BR_HIT_PLAY, row) ||
+                    (smHasUnder && smUnder.type == BR_HIT_TAG && smUnder.index / BR_MAX_TAGS == row);
     qboolean selected = (qboolean)(br.hasSelected && !strcmp(br.selected.address, s->address));
     float rowH = BR_RowHeight();
     float w = cols->width;
@@ -2307,9 +2308,14 @@ qboolean UI_Browser_HandleKey(int key) {
     hit = SM_HitAt(smMX, smMY);
 
     if (key == K_MOUSE2) {
-        const brServer_t* s;
+        const brServer_t* s = NULL;
 
-        if (hit && (hit->type == BR_HIT_ROW || hit->type == BR_HIT_PLAY) && (s = BR_RowServer(hit->index)) != NULL) {
+        if (hit && (hit->type == BR_HIT_ROW || hit->type == BR_HIT_PLAY)) {
+            s = BR_RowServer(hit->index);
+        } else if (hit && hit->type == BR_HIT_TAG) {
+            s = BR_RowServer(hit->index / BR_MAX_TAGS);
+        }
+        if (s) {
             br.menuServer = *s;
             br.menuOpen = qtrue;
             br.menuX = smMX + 5;
