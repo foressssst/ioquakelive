@@ -119,6 +119,7 @@ static void Steam_StatsListen(void);
 static void Steam_UserStatsListen(void);
 static void Steam_PersonaListen(void);
 static void Steam_ServerChangeListen(void);
+static void Steam_JoinListen(void);
 
 typedef struct {
     void** vtable;
@@ -287,6 +288,7 @@ typedef struct {
     steamCallback_t userStatsReceived;
     steamCallback_t personaChange;
     steamCallback_t serverChange;
+    steamCallback_t joinRequest;
 
     uint64_t tracked[STEAM_MAX_TRACKED];
     int numTracked;
@@ -1295,6 +1297,7 @@ static void Steam_Start(qboolean started) {
     Steam_UserStatsListen();
     Steam_PersonaListen();
     Steam_ServerChangeListen();
+    Steam_JoinListen();
     Steam_SetRichPresence("status", "At the main menu");
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
@@ -1566,6 +1569,10 @@ void Steam_Shutdown(void) {
         if (st.serverChange.vtable) {
             st.UnregisterCallback(&st.serverChange);
             st.serverChange.vtable = NULL;
+        }
+        if (st.joinRequest.vtable) {
+            st.UnregisterCallback(&st.joinRequest);
+            st.joinRequest.vtable = NULL;
         }
         if (st.statsReceived.vtable) {
             st.UnregisterCallback(&st.statsReceived);
@@ -3435,6 +3442,88 @@ static void Steam_ServerChangeListen(void) {
     st.serverChange.flags = 0;
     st.serverChange.id = STEAM_CB_GAME_SERVER_CHANGE_REQUESTED;
     st.RegisterCallback(&st.serverChange, STEAM_CB_GAME_SERVER_CHANGE_REQUESTED);
+}
+
+#define STEAM_CB_JOIN_REQUESTED 337
+#define STEAM_JOIN_CONNECT 256
+
+static void Steam_NumericAddress(char* server, int size) {
+    char rest[STEAM_SERVER_CHANGE_FIELD];
+    const char* colon = strchr(server, ':');
+    int len = colon ? (int)(colon - server) : (int)strlen(server);
+    unsigned long v;
+    int i;
+
+    if (len < 1 || len > 10) {
+        return;
+    }
+    for (i = 0; i < len; i++) {
+        if (server[i] < '0' || server[i] > '9') {
+            return;
+        }
+    }
+    v = strtoul(server, NULL, 10);
+    Q_strncpyz(rest, colon ? colon : "", sizeof(rest));
+    Com_sprintf(server, size, "%lu.%lu.%lu.%lu%s", (v >> 24) & 255, (v >> 16) & 255, (v >> 8) & 255, v & 255, rest);
+}
+
+static void STEAM_CB Steam_CB_JoinRequested(STEAM_CB_SELF, void* param) {
+    char text[STEAM_JOIN_CONNECT];
+    char server[STEAM_SERVER_CHANGE_FIELD];
+    const char* c;
+    int n = 0;
+
+    Q_strncpyz(text, (const char*)param + 8, sizeof(text));
+    c = text;
+    while (*c == ' ' || *c == '\t') {
+        c++;
+    }
+    if (*c == '+') {
+        c++;
+    }
+    if (Q_stricmpn(c, "connect", 7) || (c[7] != ' ' && c[7] != '\t')) {
+        return;
+    }
+    c += 7;
+    while (*c == ' ' || *c == '\t') {
+        c++;
+    }
+    while (*c && *c != ' ' && *c != '\t' && n < (int)sizeof(server) - 1) {
+        server[n++] = *c++;
+    }
+    server[n] = '\0';
+    if (!Steam_ValidServerAddress(server)) {
+        return;
+    }
+    Steam_NumericAddress(server, sizeof(server));
+    Com_Printf("Steam: conectando a %s\n", server);
+    Cbuf_ExecuteText(EXEC_APPEND, va("connect %s\n", server));
+}
+
+static void STEAM_CB Steam_CB_JoinRequestedIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_JoinRequested(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_JoinRequestedSize(STEAM_CB_SELF) {
+    return 8 + STEAM_JOIN_CONNECT;
+}
+
+static void* steamJoinVTable[3];
+
+static void Steam_JoinListen(void) {
+    if (!st.RegisterCallback || st.joinRequest.vtable) {
+        return;
+    }
+    steamJoinVTable[0] = (void*)Steam_CB_JoinRequestedIO;
+    steamJoinVTable[1] = (void*)Steam_CB_JoinRequested;
+    steamJoinVTable[2] = (void*)Steam_CB_JoinRequestedSize;
+
+    st.joinRequest.vtable = steamJoinVTable;
+    st.joinRequest.flags = 0;
+    st.joinRequest.id = STEAM_CB_JOIN_REQUESTED;
+    st.RegisterCallback(&st.joinRequest, STEAM_CB_JOIN_REQUESTED);
 }
 
 int Steam_FriendCount(void) {
