@@ -3218,6 +3218,7 @@ static void vk_create_shader_modules( void )
 	vk.modules.ql_blur_fs = SHADER_MODULE( qlblur_frag_spv );
 	vk.modules.ql_bloom_fs = SHADER_MODULE( qlbloom_frag_spv );
 	vk.modules.ql_combine_fs = SHADER_MODULE( qlcombine_frag_spv );
+	vk.modules.ql_bloom_gamma_fs = SHADER_MODULE( qlbloomgamma_frag_spv );
 	vk.modules.ql_copy_fs = SHADER_MODULE( qlcopy_frag_spv );
 	vk.modules.gamma_vs = SHADER_MODULE( gamma_vert_spv );
 
@@ -3481,6 +3482,11 @@ void vk_update_post_process_pipelines( void )
 			vk_create_post_process_pipeline( 5, glConfig.vidWidth, glConfig.vidHeight );
 			vk_create_post_process_pipeline( 6, gls.captureWidth, gls.captureHeight );
 			vk_create_post_process_pipeline( 7, glConfig.vidWidth, glConfig.vidHeight );
+			vk_create_post_process_pipeline( 10, glConfig.vidWidth, glConfig.vidHeight );
+			vk_create_post_process_pipeline( 11, 0, 0 );
+			if ( vk.capture.image ) {
+				vk_create_post_process_pipeline( 12, gls.captureWidth, gls.captureHeight );
+			}
 		}
 	}
 }
@@ -4373,6 +4379,7 @@ void vk_initialize( void )
 #endif
 
 	vk.offscreenRender = qtrue;
+	vk.vendorID = props.vendorID;
 
 	if ( props.vendorID == 0x1002 ) {
 		vendor_name = "Advanced Micro Devices, Inc.";
@@ -4533,6 +4540,16 @@ void vk_initialize( void )
 		desc.setLayoutCount = VK_NUM_BLOOM_PASSES;
 
 		VK_CHECK( qvkCreatePipelineLayout( vk.device, &desc, NULL, &vk.pipeline_layout_blend ) );
+
+		push_range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		push_range.offset = 0;
+		push_range.size = sizeof( uint32_t );
+
+		desc.setLayoutCount = 2;
+		desc.pushConstantRangeCount = 1;
+		desc.pPushConstantRanges = &push_range;
+
+		VK_CHECK( qvkCreatePipelineLayout( vk.device, &desc, NULL, &vk.pipeline_layout_bloom_gamma ) );
 
 		SET_OBJECT_NAME( vk.pipeline_layout, "pipeline layout - main", VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_LAYOUT_EXT );
 		SET_OBJECT_NAME( vk.pipeline_layout_post_process, "pipeline layout - post-processing", VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_LAYOUT_EXT );
@@ -4732,6 +4749,18 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 		qvkDestroyPipeline( vk.device, vk.ql_copy_pipeline, NULL );
 		vk.ql_copy_pipeline = VK_NULL_HANDLE;
 	}
+	if ( vk.ql_bloom_tiles_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_bloom_tiles_pipeline, NULL );
+		vk.ql_bloom_tiles_pipeline = VK_NULL_HANDLE;
+	}
+	if ( vk.ql_bloom_gamma_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_bloom_gamma_pipeline, NULL );
+		vk.ql_bloom_gamma_pipeline = VK_NULL_HANDLE;
+	}
+	if ( vk.ql_bloom_capture_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_bloom_capture_pipeline, NULL );
+		vk.ql_bloom_capture_pipeline = VK_NULL_HANDLE;
+	}
 
 	if ( vk.gamma_pipeline ) {
 		qvkDestroyPipeline( vk.device, vk.gamma_pipeline, NULL );
@@ -4804,6 +4833,7 @@ void vk_shutdown( refShutdownCode_t code )
 	qvkDestroyPipelineLayout(vk.device, vk.pipeline_layout_storage, NULL);
 	qvkDestroyPipelineLayout(vk.device, vk.pipeline_layout_post_process, NULL);
 	qvkDestroyPipelineLayout(vk.device, vk.pipeline_layout_blend, NULL);
+	qvkDestroyPipelineLayout(vk.device, vk.pipeline_layout_bloom_gamma, NULL);
 
 #ifdef USE_VBO
 	vk_release_vbo();
@@ -4905,6 +4935,7 @@ void vk_shutdown( refShutdownCode_t code )
 	qvkDestroyShaderModule(vk.device, vk.modules.ql_blur_fs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.ql_bloom_fs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.ql_combine_fs, NULL);
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_bloom_gamma_fs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.ql_copy_fs, NULL);
 
 	qvkDestroyShaderModule(vk.device, vk.modules.gamma_vs, NULL);
@@ -5405,9 +5436,11 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	VkPipelineColorBlendStateCreateInfo blend_state;
 	VkPipelineColorBlendAttachmentState attachment_blend_state;
 	VkGraphicsPipelineCreateInfo create_info;
+	VkPipelineDynamicStateCreateInfo dynamic_state;
+	VkDynamicState dynamic_scissor = VK_DYNAMIC_STATE_SCISSOR;
 	VkViewport viewport;
 	VkRect2D scissor;
-	VkSpecializationMapEntry spec_entries[15];
+	VkSpecializationMapEntry spec_entries[16];
 	VkSpecializationInfo frag_spec_info;
 	VkPipeline *pipeline;
 	VkShaderModule fsmodule;
@@ -5433,6 +5466,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		float bloom_saturation;
 		float bloom_scene_saturation;
 		float bloom_scene_intensity;
+		float bloom_round_bias;
 	} frag_spec_data;
 
 	switch ( program_index ) {
@@ -5471,6 +5505,33 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			samples = vkSamples;
 			pipeline_name = "QL bloom blend pipeline";
 			blend = 2;
+			break;
+		case 10:
+			pipeline = &vk.ql_bloom_tiles_pipeline;
+			fsmodule = vk.modules.ql_bloom_fs;
+			renderpass = vk.render_pass.post_bloom;
+			layout = vk.pipeline_layout_post_process;
+			samples = vkSamples;
+			pipeline_name = "QL bloom tiles pipeline";
+			blend = 2;
+			break;
+		case 11:
+			pipeline = &vk.ql_bloom_gamma_pipeline;
+			fsmodule = vk.modules.ql_bloom_gamma_fs;
+			renderpass = vk.render_pass.gamma;
+			layout = vk.pipeline_layout_bloom_gamma;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "QL bloom gamma pipeline";
+			blend = 0;
+			break;
+		case 12:
+			pipeline = &vk.ql_bloom_capture_pipeline;
+			fsmodule = vk.modules.ql_bloom_gamma_fs;
+			renderpass = vk.render_pass.capture;
+			layout = vk.pipeline_layout_bloom_gamma;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "QL bloom capture pipeline";
+			blend = 0;
 			break;
 		case 6:
 			pipeline = &vk.ql_combine_pipeline;
@@ -5576,6 +5637,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	frag_spec_data.bloom_threshold_mode = r_bloom_threshold_mode->integer;
 	frag_spec_data.bloom_modulate = r_bloom_modulate->integer;
 	frag_spec_data.dither = r_dither->integer;
+	frag_spec_data.bloom_round_bias = ( vk.vendorID == 0x8086 ) ? 0.5f - 1.0f / 1024.0f : 0.5f;
 
 	if ( !vk_surface_format_color_depth( vk.present_format.format, &frag_spec_data.depth_r, &frag_spec_data.depth_g, &frag_spec_data.depth_b ) )
 		ri.Printf( PRINT_ALL, "Format %s not recognized, dither to assume 8bpc\n", vk_format_string( vk.base_format.format ) );
@@ -5640,7 +5702,11 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	spec_entries[14].offset = offsetof(struct FragSpecData, bloom_scene_intensity);
 	spec_entries[14].size = sizeof(frag_spec_data.bloom_scene_intensity);
 
-	frag_spec_info.mapEntryCount = 15;
+	spec_entries[15].constantID = 15;
+	spec_entries[15].offset = offsetof(struct FragSpecData, bloom_round_bias);
+	spec_entries[15].size = sizeof(frag_spec_data.bloom_round_bias);
+
+	frag_spec_info.mapEntryCount = 16;
 	frag_spec_info.pMapEntries = spec_entries;
 	frag_spec_info.dataSize = sizeof( frag_spec_data );
 	frag_spec_info.pData = &frag_spec_data;
@@ -5653,7 +5719,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 	input_assembly_state.primitiveRestartEnable = VK_FALSE;
 
-	if ( program_index == 0 || program_index == 8 ) {
+	if ( program_index == 0 || program_index == 8 || program_index == 11 ) {
 		viewport.x = 0.0 + vk.blitX0;
 		viewport.y = 0.0 + vk.blitY0;
 		viewport.width = gls.windowWidth - vk.blitX0 * 2;
@@ -5759,6 +5825,14 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	create_info.pDepthStencilState = &depth_stencil_state;
 	create_info.pColorBlendState = &blend_state;
 	create_info.pDynamicState = NULL;
+	if ( program_index >= 10 ) {
+		dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dynamic_state.pNext = NULL;
+		dynamic_state.flags = 0;
+		dynamic_state.dynamicStateCount = 1;
+		dynamic_state.pDynamicStates = &dynamic_scissor;
+		create_info.pDynamicState = &dynamic_state;
+	}
 	create_info.layout = layout;
 	create_info.renderPass = renderpass;
 	create_info.subpass = 0;
@@ -7614,6 +7688,8 @@ void vk_begin_frame( void )
 	if ( vk.frame_count++ )
 		return;
 
+	vk.bloomFused = qfalse;
+
 	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_END_NV );
 	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_START_NV );
 
@@ -7751,6 +7827,8 @@ static void vk_resize_geometry_buffer( void )
 	ri.Printf( PRINT_DEVELOPER, "...geometry buffer resized to %iK\n", (int)( vk.geometry_buffer_size / 1024 ) );
 }
 
+static void vk_draw_bloom_gamma( VkPipeline pipeline );
+
 static qboolean vk_ui_neutral( void )
 {
 	if ( web_browserActive->integer )
@@ -7795,11 +7873,14 @@ void vk_end_frame( void )
 			vk_end_render_pass();
 
 			vk_begin_render_pass( vk.render_pass.capture, vk.framebuffers.capture, qfalse, gls.captureWidth, gls.captureHeight );
-			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				( vk_ui_neutral() && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
-			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
-
-			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+			if ( vk.bloomFused ) {
+				vk_draw_bloom_gamma( vk.ql_bloom_capture_pipeline );
+			} else {
+				qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+					( vk_ui_neutral() && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
+				qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
+				qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+			}
 		}
 
 		if ( vk.cmd->swapchain_image_acquired )
@@ -7813,13 +7894,18 @@ void vk_end_frame( void )
 			vk.renderScaleY = 1.0;
 
 			vk_begin_render_pass( vk.render_pass.gamma, vk.framebuffers.gamma[ vk.cmd->swapchain_image_index ], qfalse, vk.renderWidth, vk.renderHeight );
-			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				( vk_ui_neutral() && vk.gamma_neutral_pipeline ) ? vk.gamma_neutral_pipeline : vk.gamma_pipeline );
-			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
-
-			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+			if ( vk.bloomFused ) {
+				vk_draw_bloom_gamma( vk.ql_bloom_gamma_pipeline );
+			} else {
+				qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+					( vk_ui_neutral() && vk.gamma_neutral_pipeline ) ? vk.gamma_neutral_pipeline : vk.gamma_pipeline );
+				qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
+				qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+			}
 		}
 	}
+
+	vk.bloomFused = qfalse;
 
 	vk_end_render_pass();
 
@@ -8483,6 +8569,67 @@ static void vk_ql_blur_pass( uint32_t index, uint32_t source )
 	vk_end_render_pass();
 }
 
+static qboolean vk_ql_bloom_fusion_ok( void )
+{
+	if ( !vk.bloomRectsReady || !vk.ql_bloom_tiles_pipeline || !vk.ql_bloom_gamma_pipeline ) {
+		return qfalse;
+	}
+	if ( vk.capture.image && !vk.ql_bloom_capture_pipeline ) {
+		return qfalse;
+	}
+	if ( vk.msaaActive || ( vk.color_format != VK_FORMAT_R8G8B8A8_UNORM && vk.color_format != VK_FORMAT_B8G8R8A8_UNORM ) ) {
+		return qfalse;
+	}
+	if ( gls.windowWidth != glConfig.vidWidth || gls.windowHeight != glConfig.vidHeight || vk.blitX0 || vk.blitY0 ) {
+		return qfalse;
+	}
+	if ( gls.captureWidth != glConfig.vidWidth || gls.captureHeight != glConfig.vidHeight ) {
+		return qfalse;
+	}
+	return vk_ui_neutral() ? qfalse : qtrue;
+}
+
+static void vk_draw_bloom_rects( uint32_t list )
+{
+	uint32_t i;
+
+	for ( i = 0; i < vk.bloomRectCount[ list ]; i++ ) {
+		qvkCmdSetScissor( vk.cmd->command_buffer, 0, 1, &vk.bloomRects[ list ][ i ] );
+		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	}
+}
+
+static void vk_ql_bloom_tiles( uint32_t level )
+{
+	if ( vk.bloomRectCount[0] ) {
+		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_tiles_pipeline );
+		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
+			&vk.bloom_image_descriptor[ level ], 0, NULL );
+		vk_draw_bloom_rects( 0 );
+	}
+
+	Com_Memset( &vk.cmd->scissor_rect, 0, sizeof( vk.cmd->scissor_rect ) );
+}
+
+static void vk_draw_bloom_gamma( VkPipeline pipeline )
+{
+	VkDescriptorSet dset[2];
+	uint32_t enabled;
+
+	dset[0] = vk.color_descriptor;
+	dset[1] = vk.bloom_image_descriptor[ vk.bloomFusedLevel ];
+
+	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline );
+	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_bloom_gamma, 0, ARRAY_LEN( dset ), dset, 0, NULL );
+
+	for ( enabled = 0; enabled < 2; enabled++ ) {
+		if ( vk.bloomRectCount[ enabled ] ) {
+			qvkCmdPushConstants( vk.cmd->command_buffer, vk.pipeline_layout_bloom_gamma, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof( enabled ), &enabled );
+			vk_draw_bloom_rects( enabled );
+		}
+	}
+}
+
 qboolean vk_ql_bloom( void )
 {
 	qboolean quarter = ( r_bloomPasses->value > 1.0f && vk.blur_pipeline[3] ) ? qtrue : qfalse;
@@ -8520,10 +8667,16 @@ qboolean vk_ql_bloom( void )
 
 	if ( r_bloomSceneSaturation->value == 1.0f && r_bloomSceneIntensity->value == 1.0f ) {
 		vk_begin_post_bloom_render_pass();
-		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
-		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
-			&vk.bloom_image_descriptor[ level ], 0, NULL );
-		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+		vk.bloomFused = vk_ql_bloom_fusion_ok();
+		vk.bloomFusedLevel = level;
+		if ( vk.bloomFused ) {
+			vk_ql_bloom_tiles( level );
+		} else {
+			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
+			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
+				&vk.bloom_image_descriptor[ level ], 0, NULL );
+			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+		}
 	} else {
 		VkDescriptorSet dset[2];
 

@@ -32,6 +32,7 @@ qboolean	VK_CreateSurface( VkInstance instance, VkSurfaceKHR *pSurface );
 #define USE_REVERSED_DEPTH
 
 #define VK_NUM_BLOOM_PASSES 4
+#define VK_BLOOM_RECTS 256
 
 #ifndef _DEBUG
 #define USE_DEDICATED_ALLOCATION
@@ -385,6 +386,7 @@ typedef struct {
 	VkPipelineLayout pipeline_layout_storage;
 	VkPipelineLayout pipeline_layout_post_process;
 	VkPipelineLayout pipeline_layout_blend;
+	VkPipelineLayout pipeline_layout_bloom_gamma;
 
 	VkDescriptorSet color_descriptor;
 	VkDescriptorSet color_descriptor_nearest;
@@ -491,6 +493,7 @@ typedef struct {
 		VkShaderModule ql_blur_fs;
 		VkShaderModule ql_bloom_fs;
 		VkShaderModule ql_combine_fs;
+		VkShaderModule ql_bloom_gamma_fs;
 		VkShaderModule ql_copy_fs;
 
 		VkShaderModule gamma_fs;
@@ -553,6 +556,14 @@ typedef struct {
 	VkPipeline ql_bloom_pipeline;
 	VkPipeline ql_combine_pipeline;
 	VkPipeline ql_copy_pipeline;
+	VkPipeline ql_bloom_tiles_pipeline;
+	VkPipeline ql_bloom_gamma_pipeline;
+	VkPipeline ql_bloom_capture_pipeline;
+	VkRect2D bloomRects[2][VK_BLOOM_RECTS];
+	uint32_t bloomRectCount[2];
+	uint32_t bloomFusedLevel;
+	qboolean bloomRectsReady;
+	qboolean bloomFused;
 	VkPipeline bloom_blend_pipeline;
 
 	uint32_t frame_count;
@@ -593,6 +604,7 @@ typedef struct {
 	qboolean msaaActive;
 
 	qboolean offscreenRender;
+	uint32_t vendorID;
 
 	qboolean windowAdjusted;
 	int		blitX0;

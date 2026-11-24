@@ -1238,6 +1238,7 @@ extern cvar_t	*r_bloomPasses;
 extern cvar_t	*r_bloomSaturation;
 extern cvar_t	*r_bloomSceneIntensity;
 extern cvar_t	*r_bloomSceneSaturation;
+extern cvar_t	*r_bloomFusion;
 extern cvar_t	*r_colorCorrectActive;
 extern cvar_t	*r_contrast;
 extern cvar_t	*web_browserActive;
