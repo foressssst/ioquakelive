@@ -999,7 +999,10 @@ static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
         return "In a lobby";
     }
     if (f->playing) {
-        return f->sameGame ? "Playing Quake Live" : "Playing other game";
+        if (f->sameGame) {
+            return f->status[0] ? f->status : "Playing Quake Live";
+        }
+        return "Playing other game";
     }
     switch (f->state) {
         case 2:

@@ -129,6 +129,6 @@ const char* Steam_PlayerName(void);
 int Steam_FriendCount(void);
 qboolean Steam_FriendGet(int index, steamFriend_t* out);
 const char* Steam_FriendStateName(int state);
-void Steam_SetRichPresence(const char* status);
+qboolean Steam_SetRichPresence(const char* key, const char* value);
 
 #endif

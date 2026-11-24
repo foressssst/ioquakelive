@@ -509,13 +509,95 @@ void CL_Discord_Shutdown(void) {
     Discord_Step(qfalse, "");
 }
 
+enum { PK_STATUS, PK_STATE, PK_MODE, PK_MAP, PK_HOST, PK_PLAYERS, PK_SINCE, PK_CONNECT, PK_DETAIL, PK_COUNT };
+
+static const char* const presenceKeys[PK_COUNT] = {"status",       "ioql_state", "ioql_mode",    "ioql_map",   "ioql_host",
+                                                   "ioql_players", "ioql_since", "ioql_connect", "ioql_detail"};
+
+static void Presence_Steam(int now) {
+    static int lastBuilt;
+    static char sent[PK_COUNT][128];
+    static char sinceWhere[MAX_OSPATH];
+    static long long since;
+    char value[PK_COUNT][128];
+    char where[MAX_OSPATH];
+    int i;
+
+    if (lastBuilt && now - lastBuilt < DISCORD_BUILD_MSEC && now >= lastBuilt) {
+        return;
+    }
+    lastBuilt = now;
+    Com_Memset(value, 0, sizeof(value));
+    where[0] = '\0';
+    if (clc.state == CA_ACTIVE) {
+        const char* info = Discord_ConfigString(CS_SERVERINFO);
+        int gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+
+        Q_strncpyz(value[PK_MODE], Info_ValueForKey(info, "g_factoryTitle"), sizeof(value[PK_MODE]));
+        if (!value[PK_MODE][0] && gametype >= 0 && gametype < (int)ARRAY_LEN(discordGametypes)) {
+            Q_strncpyz(value[PK_MODE], discordGametypes[gametype], sizeof(value[PK_MODE]));
+        }
+        Q_strncpyz(value[PK_MAP], Info_ValueForKey(info, "mapname"), sizeof(value[PK_MAP]));
+        if (clc.demoplaying) {
+            Q_strncpyz(value[PK_STATUS], "Watching a demo", sizeof(value[PK_STATUS]));
+            Q_strncpyz(value[PK_STATE], "demo", sizeof(value[PK_STATE]));
+        } else {
+            Q_strncpyz(value[PK_STATUS], "Playing a match", sizeof(value[PK_STATUS]));
+            Q_strncpyz(value[PK_STATE], "match", sizeof(value[PK_STATE]));
+            Com_sprintf(value[PK_DETAIL], sizeof(value[PK_DETAIL]), "%s on %s",
+                        value[PK_MODE][0] ? value[PK_MODE] : "Playing", value[PK_MAP]);
+            Q_strncpyz(where, clc.servername, sizeof(where));
+            if (Q_stricmp(clc.servername, "localhost")) {
+                int players = 0;
+                int maxPlayers = atoi(Info_ValueForKey(info, "sv_maxclients"));
+
+                Q_strncpyz(value[PK_HOST], Info_ValueForKey(info, "sv_hostname"), sizeof(value[PK_HOST]));
+                Q_CleanStr(value[PK_HOST]);
+                for (i = 0; i < MAX_CLIENTS; i++) {
+                    if (Discord_ConfigString(CS_PLAYERS + i)[0]) {
+                        players++;
+                    }
+                }
+                if (maxPlayers > 0) {
+                    Com_sprintf(value[PK_PLAYERS], sizeof(value[PK_PLAYERS]), "%i/%i", players, maxPlayers);
+                }
+                Q_strncpyz(value[PK_CONNECT], NET_AdrToStringwPort(clc.serverAddress), sizeof(value[PK_CONNECT]));
+            }
+        }
+    } else if (clc.state > CA_DISCONNECTED && clc.state != CA_CINEMATIC) {
+        Q_strncpyz(value[PK_STATUS], "Connecting to a match", sizeof(value[PK_STATUS]));
+        Q_strncpyz(value[PK_STATE], "connecting", sizeof(value[PK_STATE]));
+    } else {
+        Q_strncpyz(value[PK_STATUS], "At the main menu", sizeof(value[PK_STATUS]));
+        Q_strncpyz(value[PK_STATE], "menu", sizeof(value[PK_STATE]));
+    }
+    if (strcmp(where, sinceWhere)) {
+        Q_strncpyz(sinceWhere, where, sizeof(sinceWhere));
+        since = (long long)time(NULL);
+    }
+    if (where[0]) {
+        Com_sprintf(value[PK_SINCE], sizeof(value[PK_SINCE]), "%lld", since);
+    }
+    for (i = 0; i < PK_COUNT; i++) {
+        if (strcmp(value[i], sent[i]) && Steam_SetRichPresence(presenceKeys[i], value[i])) {
+            Q_strncpyz(sent[i], value[i], sizeof(sent[i]));
+        }
+    }
+}
+
 void CL_Discord_Frame(void) {
     static int lastBuilt;
     static char activity[sizeof(discordPending)];
     qboolean wanted;
     int now = Sys_Milliseconds();
 
-    if (!cl_discordPresence || com_dedicated->integer) {
+    if (com_dedicated->integer) {
+        return;
+    }
+    if (!com_demoWindowParent) {
+        Presence_Steam(now);
+    }
+    if (!cl_discordPresence) {
         return;
     }
     wanted = cl_discordPresence->integer ? qtrue : qfalse;

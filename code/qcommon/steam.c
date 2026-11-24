@@ -1195,6 +1195,20 @@ static void Steam_Status_f(void) {
             st.authTicket = 0;
         }
     }
+    if (st.clientUp && st.friends && st.GetFriendRichPresence) {
+        static const char* const keys[] = {"status",       "ioql_state", "ioql_mode",    "ioql_map",   "ioql_host",
+                                           "ioql_players", "ioql_since", "ioql_connect", "ioql_detail"};
+        uint64_t me = Steam_ClientSteamID();
+        int i;
+
+        for (i = 0; i < (int)ARRAY_LEN(keys); i++) {
+            const char* value = st.GetFriendRichPresence(st.friends, me, keys[i]);
+
+            if (value && value[0]) {
+                Com_Printf("presence:    %s = %s\n", keys[i], value);
+            }
+        }
+    }
 
     if (!st.serverUp) {
         return;
@@ -1281,7 +1295,7 @@ static void Steam_Start(qboolean started) {
     Steam_UserStatsListen();
     Steam_PersonaListen();
     Steam_ServerChangeListen();
-    Steam_SetRichPresence("At the main menu");
+    Steam_SetRichPresence("status", "At the main menu");
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
@@ -3439,7 +3453,10 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
     name = st.GetPlayerNickname ? st.GetPlayerNickname(st.friends, id) : NULL;
     Q_strncpyz(out->nickname, name ? name : "", sizeof(out->nickname));
     Steam_StripColors(out->nickname);
-    name = st.GetFriendRichPresence ? st.GetFriendRichPresence(st.friends, id, "status") : NULL;
+    name = st.GetFriendRichPresence ? st.GetFriendRichPresence(st.friends, id, "ioql_detail") : NULL;
+    if (!name || !name[0]) {
+        name = st.GetFriendRichPresence ? st.GetFriendRichPresence(st.friends, id, "status") : NULL;
+    }
     Q_strncpyz(out->status, name ? name : "", sizeof(out->status));
 
     Com_Memset(&game, 0, sizeof(game));
@@ -3543,8 +3560,10 @@ uint64_t Steam_ClientSteamID(void) {
     return st.GetUserSteamID(st.user);
 }
 
-void Steam_SetRichPresence(const char* status) {
-    if (st.clientUp && st.friends && st.SetRichPresence) {
-        st.SetRichPresence(st.friends, "status", status);
+qboolean Steam_SetRichPresence(const char* key, const char* value) {
+    if (!st.clientUp || !st.friends || !st.SetRichPresence) {
+        return qfalse;
     }
+    st.SetRichPresence(st.friends, key, value);
+    return qtrue;
 }
