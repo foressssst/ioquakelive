@@ -1455,6 +1455,8 @@ void Steam_GS_SetKeyValues(const char* info) {
     }
 }
 
+static int steamQueryTime;
+
 qboolean Steam_GS_HandlePacket(netadr_t from, const void* data, int len) {
     unsigned int ip;
 
@@ -1465,11 +1467,17 @@ qboolean Steam_GS_HandlePacket(netadr_t from, const void* data, int len) {
         return qfalse;
     }
     ip = (from.ip[0] << 24) | (from.ip[1] << 16) | (from.ip[2] << 8) | from.ip[3];
-    return st.HandleIncomingPacket(st.gameServer, data, len, ip, BigShort(from.port)) ? qtrue : qfalse;
+    if (!st.HandleIncomingPacket(st.gameServer, data, len, ip, BigShort(from.port))) {
+        return qfalse;
+    }
+    steamQueryTime = Sys_Milliseconds();
+    return qtrue;
 }
 
 #define STEAM_CALLBACK_MSEC 100
 #define STEAM_PLAYING_CALLBACK_MSEC 250
+#define STEAM_LISTEN_SERVER_MSEC 50
+#define STEAM_QUERY_REPLY_MSEC 250
 
 static qboolean steamPlaying;
 
@@ -1481,6 +1489,7 @@ void Steam_Frame(void) {
     static int lastCallbacks, lastServer;
     int now = Sys_Milliseconds();
     int gap = steamPlaying ? STEAM_PLAYING_CALLBACK_MSEC : STEAM_CALLBACK_MSEC;
+    qboolean serverRunning = (qboolean)(com_sv_running && com_sv_running->integer);
 
     if (st.clientUp && (now - lastCallbacks >= gap || now < lastCallbacks)) {
         lastCallbacks = now;
@@ -1489,14 +1498,18 @@ void Steam_Frame(void) {
     if (!st.serverUp) {
         return;
     }
-    if (st.clientUp && !(com_sv_running && com_sv_running->integer)) {
-        if (now - lastServer < STEAM_CALLBACK_MSEC && now >= lastServer) {
+    if (st.clientUp) {
+        int serverGap = serverRunning ? STEAM_LISTEN_SERVER_MSEC : STEAM_CALLBACK_MSEC;
+        qboolean replying =
+            (qboolean)(serverRunning && now - steamQueryTime < STEAM_QUERY_REPLY_MSEC && now >= steamQueryTime);
+
+        if (!replying && now - lastServer < serverGap && now >= lastServer) {
             return;
         }
         lastServer = now;
     }
     st.GameServer_RunCallbacks();
-    if (com_sv_running && com_sv_running->integer) {
+    if (serverRunning) {
         SV_SteamFrame(qfalse);
     }
 
