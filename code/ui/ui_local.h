@@ -925,6 +925,7 @@ qboolean UI_Home_ErrorKey(int key);
 void UI_Home_Backdrop(void);
 void UI_Home_Nav(int active);
 qboolean UI_Home_NavClick(void);
+qboolean UI_Home_FriendRightClick(void);
 qboolean UI_Home_InMatch(void);
 void _UI_SetActiveMenu(uiMenuCommand_t menu);
 void UI_LoadDemos(void);

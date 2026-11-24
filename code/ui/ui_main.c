@@ -2651,6 +2651,9 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
     if (UI_IsWebPage(ownerDraw) && UI_Home_ErrorActive()) {
         return UI_Home_ErrorKey(key);
     }
+    if (UI_IsWebPage(ownerDraw) && key == K_MOUSE2 && UI_Home_FriendRightClick()) {
+        return qtrue;
+    }
     switch (ownerDraw) {
         case UI_STARTMATCH:
             return UI_StartMatch_HandleKey(key);

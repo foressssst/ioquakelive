@@ -441,6 +441,16 @@ qboolean UI_Home_InMatch(void) {
     return cs.connState == CA_ACTIVE;
 }
 
+qboolean UI_Home_FriendRightClick(void) {
+    const smHit_t* hit = SM_HitAt(smMX, smMY);
+
+    if (!hit || hit->type != HM_HIT_FRIEND) {
+        return qfalse;
+    }
+    UI_Home_ContextOpen(hit->index);
+    return qtrue;
+}
+
 qboolean UI_Home_NavClick(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
@@ -452,7 +462,6 @@ qboolean UI_Home_NavClick(void) {
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_FRIEND) {
-        UI_Home_ContextOpen(hit->index);
         return qtrue;
     }
 
