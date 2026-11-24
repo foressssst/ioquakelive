@@ -547,7 +547,7 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     if ((!colorBits) || (colorBits >= 32))
         colorBits = 24;
 
-    if (!r_depthbits->value)
+    if (r_depthbits->value < 24)
         depthBits = 24;
     else
         depthBits = r_depthbits->value;
