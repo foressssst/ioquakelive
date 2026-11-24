@@ -694,6 +694,7 @@ void Com_TouchMemory(void);
 
 void Com_Init(char* commandLine);
 void Com_Frame(void);
+void Com_FrameTimeRender(int64_t us);
 void Com_Shutdown(void);
 
 void CL_InitKeyCommands(void);

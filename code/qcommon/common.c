@@ -2399,17 +2399,103 @@ int Com_TimeVal(int minMsec) {
 }
 
 #define COM_FT_MAX 8192
+#define COM_FT_SHOW 12
+
+enum { COM_FT_WAIT, COM_FT_LATENCY, COM_FT_INPUT, COM_FT_EVENTS, COM_FT_SERVER, COM_FT_GAME, COM_FT_RENDER,
+       COM_FT_STEAM, COM_FT_SERVICES, COM_FT_CONFIG, COM_FT_OTHER, COM_FT_PARTS };
+
+static const char* const com_ftPartNames[COM_FT_PARTS] = {"wait",  "latency", "input",    "events", "server", "game",
+                                                          "render", "steam",  "services", "config", "other"};
 
 static int64_t com_ftSamples[COM_FT_MAX];
+static int com_ftParts[COM_FT_MAX][COM_FT_PARTS];
+static int com_ftCurrent[COM_FT_PARTS];
 static int64_t com_ftLast;
+static int64_t com_ftMark;
+static int64_t com_ftDeduct;
 static int com_ftWanted;
 static int com_ftCount;
+
+static void Com_FrameTimePart(int part) {
+    int64_t now;
+
+    if (!com_ftWanted) {
+        return;
+    }
+    now = Sys_Microseconds();
+    if (com_ftMark) {
+        com_ftCurrent[part] += (int)(now - com_ftMark - com_ftDeduct);
+    }
+    com_ftDeduct = 0;
+    com_ftMark = now;
+}
+
+void Com_FrameTimeRender(int64_t us) {
+    if (!com_ftWanted || !com_ftMark) {
+        return;
+    }
+    com_ftCurrent[COM_FT_RENDER] += (int)us;
+    com_ftDeduct += us;
+}
+
+static void Com_FrameTimeParts(char* out, int size, const int* parts) {
+    int i;
+
+    out[0] = '\0';
+    for (i = 0; i < COM_FT_PARTS; i++) {
+        Q_strcat(out, size, va("%s%s %.2f", i ? ", " : "", com_ftPartNames[i], parts[i] / 1000.0f));
+    }
+}
 
 static int Com_FtCompare(const void* a, const void* b) {
     int64_t x = *(const int64_t*)a;
     int64_t y = *(const int64_t*)b;
 
     return (x > y) - (x < y);
+}
+
+static void Com_FrameTimesSlow(int64_t median) {
+    char line[512];
+    int64_t limit = median * 2, at = 0, cut = 0;
+    int64_t sums[COM_FT_PARTS];
+    int average[COM_FT_PARTS];
+    int i, p, slow = 0, shown = 0;
+
+    Com_Memset(sums, 0, sizeof(sums));
+    for (i = 0; i < com_ftCount; i++) {
+        for (p = 0; p < COM_FT_PARTS; p++) {
+            sums[p] += com_ftParts[i][p];
+        }
+        if (com_ftSamples[i] > limit) {
+            slow++;
+        }
+    }
+    for (p = 0; p < COM_FT_PARTS; p++) {
+        average[p] = (int)(sums[p] / com_ftCount);
+    }
+    Com_FrameTimeParts(line, sizeof(line), average);
+    Com_Printf("  average per part (ms): %s\n", line);
+    if (!slow) {
+        Com_Printf("  slow frames (over %.2f ms, twice the median): none\n", limit / 1000.0f);
+        return;
+    }
+    Com_Printf("  slow frames (over %.2f ms, twice the median): %i%s\n", limit / 1000.0f, slow,
+               slow > COM_FT_SHOW ? va(", showing the %i slowest", COM_FT_SHOW) : "");
+    if (slow > COM_FT_SHOW) {
+        static int64_t sorted[COM_FT_MAX];
+
+        Com_Memcpy(sorted, com_ftSamples, com_ftCount * sizeof(sorted[0]));
+        qsort(sorted, com_ftCount, sizeof(sorted[0]), Com_FtCompare);
+        cut = sorted[com_ftCount - COM_FT_SHOW];
+    }
+    for (i = 0; i < com_ftCount; i++) {
+        if (com_ftSamples[i] > limit && com_ftSamples[i] >= cut && shown < COM_FT_SHOW) {
+            Com_FrameTimeParts(line, sizeof(line), com_ftParts[i]);
+            Com_Printf("    frame %i at %.3f s, %.2f ms: %s\n", i, at / 1000000.0f, com_ftSamples[i] / 1000.0f, line);
+            shown++;
+        }
+        at += com_ftSamples[i];
+    }
 }
 
 static void Com_FrameTimesReport(void) {
@@ -2440,6 +2526,7 @@ static void Com_FrameTimesReport(void) {
                sorted[com_ftCount / 2] / 1000.0f, sorted[com_ftCount - 1 - com_ftCount / 100] / 1000.0f,
                (float)deviation / com_ftCount / 1000.0f);
     Com_Printf("  worst: frame %i, %.3f s in\n", worst, worstAt / 1000000.0f);
+    Com_FrameTimesSlow(sorted[com_ftCount / 2]);
 }
 
 static void Com_FrameTimes_f(void) {
@@ -2457,6 +2544,9 @@ static void Com_FrameTimes_f(void) {
     com_ftWanted = wanted;
     com_ftCount = 0;
     com_ftLast = 0;
+    com_ftMark = 0;
+    com_ftDeduct = 0;
+    Com_Memset(com_ftCurrent, 0, sizeof(com_ftCurrent));
     Com_Printf("frametimes: measuring %i frames...\n", wanted);
 }
 
@@ -2467,9 +2557,16 @@ static void Com_FrameTimeSample(void) {
         return;
     }
     now = Sys_Microseconds();
+    if (com_ftMark) {
+        com_ftCurrent[COM_FT_WAIT] += (int)(now - com_ftMark - com_ftDeduct);
+    }
+    com_ftDeduct = 0;
+    com_ftMark = now;
     if (com_ftLast) {
+        Com_Memcpy(com_ftParts[com_ftCount], com_ftCurrent, sizeof(com_ftCurrent));
         com_ftSamples[com_ftCount++] = now - com_ftLast;
     }
+    Com_Memset(com_ftCurrent, 0, sizeof(com_ftCurrent));
     com_ftLast = now;
     if (com_ftCount >= com_ftWanted) {
         Com_FrameTimesReport();
@@ -2652,17 +2749,21 @@ static void Com_IdleExit(void) {
 
 void Com_Frame(void) {
     static int serviceTime;
+    Com_FrameTimePart(COM_FT_OTHER);
     int serviceNow = Sys_Milliseconds();
 
     com_serviceFrame = (qboolean)(com_dedicated->integer || serviceNow - serviceTime >= COM_SERVICE_MSEC ||
                                   serviceNow < serviceTime);
     if (com_serviceFrame) {
         serviceTime = serviceNow;
+        Com_FrameTimePart(COM_FT_OTHER);
         Steam_Frame();
+        Com_FrameTimePart(COM_FT_STEAM);
         Com_IdleExit();
         SV_VoiceFrame();
         ZMQ_Frame();
     }
+    Com_FrameTimePart(COM_FT_SERVICES);
     int msec, minMsec;
     int timeVal, timeValSV;
     int capUs;
@@ -2687,6 +2788,7 @@ void Com_Frame(void) {
     timeAfter = 0;
 
     Com_WriteConfiguration();
+    Com_FrameTimePart(COM_FT_CONFIG);
 
     if (com_speeds->integer) {
         timeBeforeFirstEvents = Sys_Milliseconds();
@@ -2791,10 +2893,13 @@ void Com_Frame(void) {
 
     if (!com_dedicated->integer) {
         CL_LowLatencyWait();
+        Com_FrameTimePart(COM_FT_LATENCY);
         CL_DemoWindowWait();
     }
+    Com_FrameTimePart(COM_FT_WAIT);
 
     IN_Frame();
+    Com_FrameTimePart(COM_FT_INPUT);
 
     lastTime = com_frameTime;
     com_frameTime = Com_EventLoop();
@@ -2802,6 +2907,7 @@ void Com_Frame(void) {
     msec = com_frameTime - lastTime;
 
     Cbuf_Execute();
+    Com_FrameTimePart(COM_FT_EVENTS);
 
     msec = Com_ModifyMsec(msec);
 
@@ -2822,17 +2928,20 @@ void Com_Frame(void) {
         }
     }
 
+    Com_FrameTimePart(COM_FT_SERVER);
     if (com_speeds->integer) {
         timeBeforeEvents = Sys_Milliseconds();
     }
     Com_EventLoop();
     Cbuf_Execute();
+    Com_FrameTimePart(COM_FT_EVENTS);
 
     if (com_speeds->integer) {
         timeBeforeClient = Sys_Milliseconds();
     }
 
     CL_Frame(msec);
+    Com_FrameTimePart(COM_FT_GAME);
 
     if (com_speeds->integer) {
         timeAfter = Sys_Milliseconds();

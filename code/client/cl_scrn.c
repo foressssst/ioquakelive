@@ -427,11 +427,14 @@ void SCR_UpdateScreen(void) {
             SCR_DrawScreenField(STEREO_CENTER);
         }
 
+        int64_t renderStart = Sys_Microseconds();
+
         if (com_speeds->integer) {
             re.EndFrame(&time_frontend, &time_backend);
         } else {
             re.EndFrame(NULL, NULL);
         }
+        Com_FrameTimeRender(Sys_Microseconds() - renderStart);
     }
 
     if (scr_noConsoleFrames > 0) {
