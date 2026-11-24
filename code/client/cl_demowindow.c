@@ -27,15 +27,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DW_MAX_H 1200
 #define DW_RING 1024
 #define DW_HANDLE 15
-#define DW_SCREEN 0.90f
-#define DW_BAR 40.0f
+#define DW_STRIP 31.5f
+#define DW_STRIP_PAD 3.75f
+#define DW_STRIP_LINE 24.0f
+#define DW_STRIP_SIZE 18.0f
+#define DW_STRIP_TEXT "You are watching a demo during a match. Click here or press ESC to return to your match."
+#define DW_SANS_EM (2789.0f / 2048.0f)
+#define DW_SANS_BASE (794.5f / 2048.0f)
 #define DW_PARENT_SILENCE 20000
 #define DW_CLOSE_WAIT 3000
 #define DW_CHILD_WAIT 100
 #define DW_FRAME_WAIT 50
 #define DW_LOAD_PACE 25
 #define DW_TEXT_LITERAL 0x40000000
-#define DW_ICON_CLOSE "\xef\x80\x8d"
 
 enum { DW_EV_KEY, DW_EV_CHAR, DW_EV_MOUSE };
 
@@ -70,11 +74,7 @@ typedef struct {
 } dwRect_t;
 
 static const vec4_t dwRaised = {15 / 255.0f, 15 / 255.0f, 15 / 255.0f, 1.0f};
-static const vec4_t dwBorder = {51 / 255.0f, 51 / 255.0f, 51 / 255.0f, 1.0f};
-static const vec4_t dwKey = {34 / 255.0f, 34 / 255.0f, 34 / 255.0f, 1.0f};
 static const vec4_t dwText = {221 / 255.0f, 221 / 255.0f, 221 / 255.0f, 1.0f};
-static const vec4_t dwSoft = {204 / 255.0f, 204 / 255.0f, 204 / 255.0f, 1.0f};
-static const vec4_t dwMuted = {153 / 255.0f, 153 / 255.0f, 153 / 255.0f, 1.0f};
 static const vec4_t dwDanger = {204 / 255.0f, 51 / 255.0f, 51 / 255.0f, 1.0f};
 
 static dwShared_t* dw;
@@ -87,14 +87,11 @@ static int dwCloseTime;
 static int dwLastSeq;
 static int dwMouseX;
 static int dwMouseY;
-static qboolean dwOverClose;
+static qboolean dwOverStrip;
 static qboolean dwHandleReady;
 static qboolean dwAssets;
 static qhandle_t dwBackdrop;
 static int dwFontSans;
-static int dwFontBold;
-static int dwFontIcons;
-static char dwTitle[MAX_QPATH * 2];
 static char dwHome[MAX_OSPATH];
 static char dwBase[MAX_OSPATH];
 
@@ -127,11 +124,11 @@ static void CL_DemoWindowRect(dwRect_t* r) {
     int sw = cls.glconfig.vidWidth;
     int sh = cls.glconfig.vidHeight;
 
-    r->bar = (int)(DW_BAR * sh / 1080.0f);
-    r->w = (int)(sw * DW_SCREEN);
-    r->h = (int)(sh * DW_SCREEN) - r->bar;
-    r->x = (sw - r->w) / 2;
-    r->y = (sh - r->h + r->bar) / 2;
+    r->bar = (int)floorf(DW_STRIP * sh / 1080.0f + 0.5f);
+    r->x = 0;
+    r->y = 0;
+    r->w = sw;
+    r->h = sh - r->bar;
 }
 
 static void CL_DemoWindowFinish(void) {
@@ -230,16 +227,6 @@ static qboolean CL_DemoWindowLaunch(const char* name) {
     return qtrue;
 }
 
-static void CL_DemoWindowNames(const char* name) {
-    char* ext;
-
-    Q_strncpyz(dwTitle, name, sizeof(dwTitle));
-    ext = strrchr(dwTitle, '.');
-    if (ext && !Q_stricmpn(ext + 1, DEMOEXT, strlen(DEMOEXT))) {
-        *ext = '\0';
-    }
-}
-
 static void CL_DemoWindowPlay(const char* name) {
     fileHandle_t f;
 
@@ -261,7 +248,6 @@ static void CL_DemoWindowPlay(const char* name) {
         return;
     }
 
-    CL_DemoWindowNames(name);
     dwAssets = qfalse;
     if (uivm && (Key_GetCatcher() & KEYCATCH_UI)) {
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
@@ -339,7 +325,7 @@ qboolean CL_DemoWindowKey(int key, qboolean down) {
         }
         return qtrue;
     }
-    if (key == K_MOUSE1 && dwOverClose) {
+    if (key == K_MOUSE1 && dwOverStrip) {
         if (down) {
             CL_DemoWindowClose();
         }
@@ -369,7 +355,7 @@ qboolean CL_DemoWindowMouse(int x, int y) {
         return qfalse;
     }
     CL_DemoWindowRect(&r);
-    dwOverClose = (x >= r.x + r.w - r.bar && x < r.x + r.w && y >= r.y - r.bar && y < r.y) ? qtrue : qfalse;
+    dwOverStrip = y >= r.y + r.h ? qtrue : qfalse;
     if ((x != dwMouseX || y != dwMouseY) && x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h && dw->width) {
         CL_DemoWindowPush(DW_EV_MOUSE, (x - r.x) * dw->width / r.w, (y - r.y) * dw->height / r.h);
     }
@@ -407,8 +393,6 @@ static void CL_DemoWindowAssets(void) {
     }
     dwAssets = qtrue;
     dwFontSans = CL_DemoWindowFont("webui/fonts/NotoSans-Regular.ttf", 1);
-    dwFontBold = CL_DemoWindowFont("webui/fonts/NotoSans-Bold.ttf", dwFontSans);
-    dwFontIcons = re.Font_Register("webui/fonts/fontawesome-webfont.ttf");
     dwBackdrop = re.RegisterShaderNoMip("ui/assets/backscreen_smoke");
 }
 
@@ -435,57 +419,23 @@ static void CL_DemoWindowDrawLoading(const dwRect_t* r) {
     }
 }
 
-static void CL_DemoWindowDrawBar(const dwRect_t* r, float s) {
-    char title[sizeof(dwTitle) + 4];
-    float top = (float)(r->y - r->bar);
-    float mid = top + r->bar * 0.5f;
-    float x = r->x + 16.0f * s;
-    float close = (float)(r->x + r->w - r->bar);
-    float hint = 13.0f * s;
-    float keySize = 11.0f * s;
-    float right, w, keyW;
-    int len;
+static void CL_DemoWindowDrawStrip(const dwRect_t* r, float s) {
+    float px = floorf(DW_STRIP_SIZE * s + 0.5f);
+    int ascent = (int)floorf((DW_SANS_EM * 0.5f + DW_SANS_BASE) * px + 0.5f);
+    int descent = (int)floorf((DW_SANS_EM * 0.5f - DW_SANS_BASE) * px + 0.5f);
+    int line = (int)floorf(DW_STRIP_LINE * s + 0.5f);
+    int top = r->y + r->h + (int)floorf(DW_STRIP_PAD * s + 0.5f);
+    float w = CL_DemoWindowTextWidth(DW_STRIP_TEXT, dwFontSans, px);
 
-    CL_DemoWindowFill(r->x, top, r->w, r->bar, dwRaised);
-    CL_DemoWindowFill(r->x, r->y - 1, r->w, 1, dwBorder);
-
-    if (dwOverClose) {
-        CL_DemoWindowFill(close, top, r->bar, r->bar, dwDanger);
-    }
-    if (dwFontIcons >= 0) {
-        w = CL_DemoWindowTextWidth(DW_ICON_CLOSE, dwFontIcons, 16.0f * s);
-        CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 6.0f * s, DW_ICON_CLOSE, dwFontIcons, 16.0f * s,
-                          dwOverClose ? dwText : dwMuted);
-    } else {
-        w = CL_DemoWindowTextWidth("X", dwFontBold, 15.0f * s);
-        CL_DemoWindowText(close + (r->bar - w) * 0.5f, mid + 5.5f * s, "X", dwFontBold, 15.0f * s,
-                          dwOverClose ? dwText : dwMuted);
-    }
-
-    right = close - 16.0f * s;
-    w = CL_DemoWindowTextWidth("to close", dwFontSans, hint);
-    right -= w;
-    CL_DemoWindowText(right, mid + 4.5f * s, "to close", dwFontSans, hint, dwMuted);
-    keyW = CL_DemoWindowTextWidth("ESC", dwFontBold, keySize) + 12.0f * s;
-    right -= 8.0f * s + keyW;
-    CL_DemoWindowFill(right, mid - 10.0f * s, keyW, 20.0f * s, dwBorder);
-    CL_DemoWindowFill(right + 1, mid - 10.0f * s + 1, keyW - 2, 20.0f * s - 2, dwKey);
-    CL_DemoWindowText(right + 6.0f * s, mid + 4.0f * s, "ESC", dwFontBold, keySize, dwSoft);
-
-    Q_strncpyz(title, dwTitle, sizeof(title));
-    len = (int)strlen(title);
-    while (len > 0 && CL_DemoWindowTextWidth(title, dwFontBold, 15.0f * s) > right - 24.0f * s - x) {
-        len--;
-        Com_sprintf(title + len, sizeof(title) - len, "...");
-    }
-    CL_DemoWindowText(x, mid + 5.5f * s, title, dwFontBold, 15.0f * s, dwText);
+    CL_DemoWindowFill(0, (float)(r->y + r->h), (float)cls.glconfig.vidWidth, (float)r->bar, dwDanger);
+    CL_DemoWindowText((cls.glconfig.vidWidth - w) * 0.5f, (float)(top + (line - ascent - descent) / 2 + ascent),
+                      DW_STRIP_TEXT, dwFontSans, px, dwText);
 }
 
 void CL_DemoWindowDraw(void) {
     static byte blank[16 * 16 * 4];
     dwRect_t r;
     float s;
-    int i;
 
     if (com_demoWindowParent) {
         if (dw && dwChildLoad == dw->load && clc.state >= CA_LOADING) {
@@ -500,13 +450,6 @@ void CL_DemoWindowDraw(void) {
     CL_DemoWindowRect(&r);
     s = cls.glconfig.vidHeight / 1080.0f;
 
-    for (i = 3; i > 0; i--) {
-        float pad = (i * i + 1) * s;
-        vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.12f * (4 - i)};
-
-        CL_DemoWindowFill(r.x - pad, r.y - r.bar - pad, r.w + pad * 2, r.h + r.bar + pad * 2, shadow);
-    }
-    CL_DemoWindowFill(r.x - 1, r.y - r.bar - 1, r.w + 2, r.h + r.bar + 2, dwBorder);
     if (dw->playing == dw->load && dw->seq) {
         int seq, slot;
 
@@ -523,7 +466,7 @@ void CL_DemoWindowDraw(void) {
     } else {
         CL_DemoWindowDrawLoading(&r);
     }
-    CL_DemoWindowDrawBar(&r, s);
+    CL_DemoWindowDrawStrip(&r, s);
     re.SetColor(NULL);
 }
 
