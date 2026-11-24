@@ -1224,7 +1224,7 @@ static void VarInfo( void )
 	}
 
 	ri.Printf( PRINT_ALL, "texturemode: %s\n", r_textureMode->string );
-	ri.Printf( PRINT_ALL, "texture bits: %d\n", r_texturebits->integer ? r_texturebits->integer : 32 );
+	ri.Printf( PRINT_ALL, "texture bits: %d\n", r_texturebits->integer > 16 ? r_texturebits->integer : 32 );
 	ri.Printf( PRINT_ALL, "picmip: %d%s\n", r_picmip->integer, r_nomip->integer ? ", worldspawn only" : "" );
 
 #ifdef USE_VULKAN

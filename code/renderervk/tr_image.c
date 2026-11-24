@@ -692,7 +692,7 @@ static void upload_vk_image( image_t *image, byte *pic ) {
 	w = upload_data.base_level_width;
 	h = upload_data.base_level_height;
 
-	if ( r_texturebits->integer > 16 || r_texturebits->integer == 0 || ( image->flags & ( IMGFLAG_LIGHTMAP | IMGFLAG_UI ) ) ) {
+	if ( r_texturebits->integer >= 16 || r_texturebits->integer == 0 || ( image->flags & ( IMGFLAG_LIGHTMAP | IMGFLAG_UI ) ) ) {
 		image->internalFormat = VK_FORMAT_R8G8B8A8_UNORM;
 	} else {
 		qboolean has_alpha = RawImage_HasAlpha( upload_data.buffer, w * h );
@@ -719,11 +719,7 @@ static GLint RawImage_GetInternalFormat( const byte *scan, int numPixels, qboole
 
 	if ( RawImage_HasAlpha( scan, numPixels ) )
 	{
-		if ( r_texturebits->integer == 16 )
-		{
-			internalFormat = GL_RGBA4;
-		}
-		else if ( r_texturebits->integer == 32 )
+		if ( r_texturebits->integer == 16 || r_texturebits->integer == 32 )
 		{
 			internalFormat = GL_RGBA8;
 		}
@@ -742,11 +738,7 @@ static GLint RawImage_GetInternalFormat( const byte *scan, int numPixels, qboole
 		{
 			internalFormat = GL_RGB4_S3TC;
 		}
-		else if ( r_texturebits->integer == 16 )
-		{
-			internalFormat = GL_RGB5;
-		}
-		else if ( r_texturebits->integer == 32 )
+		else if ( r_texturebits->integer == 16 || r_texturebits->integer == 32 )
 		{
 			internalFormat = GL_RGB8;
 		}
