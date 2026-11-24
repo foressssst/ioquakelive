@@ -788,6 +788,24 @@ static void CG_PointOfInterest(centity_t* cent) {
     if (cg_debugEvents.integer) { \
         CG_Printf(x "\n");        \
     }
+
+static int jumpSoundTime[MAX_CLIENTS];
+static int jumpPadSoundTime[MAX_CLIENTS];
+
+static qboolean CG_SoundRepeated(int* times, int clientNum) {
+    int last;
+
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        return qfalse;
+    }
+    last = times[clientNum];
+    if (last > 0 && last <= cg.time && cg.time - last < 100) {
+        return qtrue;
+    }
+    times[clientNum] = cg.time;
+    return qfalse;
+}
+
 void CG_EntityEvent(centity_t* cent, vec3_t position) {
     entityState_t* es;
     int event;
@@ -891,12 +909,20 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                              cgs.media.smokePuffShader);
             }
 
+            if (CG_SoundRepeated(jumpPadSoundTime, es->number)) {
+                break;
+            }
             trap_S_StartSound(cent->lerpOrigin, ENTITYNUM_WORLD, CHAN_AUTO, cgs.media.jumpPadSound);
-            trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*jump1.wav"));
+            if (!CG_SoundRepeated(jumpSoundTime, es->number)) {
+                trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*jump1.wav"));
+            }
             break;
 
         case EV_JUMP:
             DEBUGNAME("EV_JUMP");
+            if (es->number >= 0 && es->number < MAX_CLIENTS) {
+                jumpSoundTime[es->number] = cg.time;
+            }
             trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*jump1.wav"));
             break;
         case EV_TAUNT:
