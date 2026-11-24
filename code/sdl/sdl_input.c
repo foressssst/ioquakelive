@@ -928,6 +928,17 @@ static void IN_InputRate_f(void) {
     Com_Printf("input: measuring %i frames...\n", wanted);
 }
 
+static void IN_ClearDeadKey(void) {
+#ifdef _WIN32
+    BYTE state[256];
+    WCHAR out[8];
+
+    memset(state, 0, sizeof(state));
+    ToUnicodeEx(VK_SPACE, MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC), state, out, ARRAY_LEN(out), 0, GetKeyboardLayout(0));
+#endif
+    SDL_ClearComposition(SDL_window);
+}
+
 static void IN_ProcessEvents(void) {
     SDL_Event e;
     keyNum_t key = 0;
@@ -950,6 +961,9 @@ static void IN_ProcessEvents(void) {
 
                 if ((key = IN_TranslateSDLToQ3Key(&e.key, qtrue)))
                     Com_QueueEvent(in_eventTime, SE_KEY, key, qtrue, 0, NULL);
+
+                if (key == K_CONSOLE)
+                    IN_ClearDeadKey();
 
                 if (key == K_BACKSPACE)
                     Com_QueueEvent(in_eventTime, SE_CHAR, CTRL('h'), 0, 0, NULL);
