@@ -239,6 +239,8 @@ void vk_shutdown( refShutdownCode_t code );
 void vk_release_resources( void );
 
 void vk_wait_idle( void );
+void vk_flush_upload_batch( void );
+void vk_set_upload_batch( qboolean enable );
 void vk_queue_wait_idle( void );
 
 void vk_create_image( image_t *image, int width, int height, int mip_levels );

@@ -807,6 +807,9 @@ void RE_BeginRegistration( glconfig_t *glconfigOut ) {
 	RE_ClearScene();
 
 	tr.registered = qtrue;
+#ifdef USE_VULKAN
+	vk_set_upload_batch( qtrue );
+#endif
 }
 
 void R_ModelInit( void ) {

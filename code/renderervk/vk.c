@@ -421,7 +421,44 @@ static const char *vk_result_string( VkResult code ) {
 	} \
 }
 
+static VkCommandBuffer upload_batch_cmd;
+static VkDeviceSize upload_batch_used;
+static qboolean upload_batching;
+
+static void end_command_buffer( VkCommandBuffer command_buffer, const char *location );
+
+static VkCommandBuffer begin_command_buffer_now( void );
+
+void vk_flush_upload_batch( void )
+{
+	VkCommandBuffer command_buffer;
+
+	if ( upload_batch_cmd == VK_NULL_HANDLE ) {
+		return;
+	}
+
+	command_buffer = upload_batch_cmd;
+	upload_batch_cmd = VK_NULL_HANDLE;
+	upload_batch_used = 0;
+
+	end_command_buffer( command_buffer, __func__ );
+}
+
+void vk_set_upload_batch( qboolean enable )
+{
+	if ( !enable ) {
+		vk_flush_upload_batch();
+	}
+	upload_batching = enable;
+}
+
 static VkCommandBuffer begin_command_buffer( void )
+{
+	vk_flush_upload_batch();
+	return begin_command_buffer_now();
+}
+
+static VkCommandBuffer begin_command_buffer_now( void )
 {
 	VkCommandBufferBeginInfo begin_info;
 	VkCommandBufferAllocateInfo alloc_info;
@@ -1191,6 +1228,8 @@ static void allocate_and_bind_image_memory(VkImage image) {
 
 static void vk_clean_staging_buffer( void )
 {
+	vk_flush_upload_batch();
+
 	if ( vk.staging_buffer.handle != VK_NULL_HANDLE ) {
 		qvkDestroyBuffer( vk.device, vk.staging_buffer.handle, NULL );
 		vk.staging_buffer.handle = VK_NULL_HANDLE;
@@ -1289,6 +1328,8 @@ static void vk_alloc_staging_buffer( VkDeviceSize size )
 	VkMemoryAllocateInfo alloc_info;
 	uint32_t memory_type;
 	void *data;
+
+	vk_flush_upload_batch();
 
 	vk_clean_staging_buffer();
 
@@ -2953,6 +2994,7 @@ qboolean vk_alloc_vbo( const byte *vbo_data, int vbo_size )
 #ifdef USE_UPLOAD_QUEUE
 	vk_flush_staging_buffer( qfalse );
 #endif
+	vk_flush_upload_batch();
 	uploadDone = 0;
 	while ( uploadDone < vbo_size ) {
 		VkDeviceSize uploadSize = vk.staging_buffer.size;
@@ -4890,6 +4932,9 @@ __cleanup:
 
 void vk_wait_idle( void )
 {
+	if ( vk.device != VK_NULL_HANDLE ) {
+		vk_flush_upload_batch();
+	}
 	if ( qvkDeviceWaitIdle == NULL || vk.device == VK_NULL_HANDLE ) {
 		return;
 	}
@@ -5209,13 +5254,31 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 
 	record_image_layout_transition( command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
 #else
-	if ( vk.staging_buffer.size < buffer_size ) {
-		vk_alloc_staging_buffer( buffer_size );
+	if ( upload_batching && vk.frame_count == 0 && !glConfig.smpActive && (VkDeviceSize)buffer_size <= vk.staging_buffer.size ) {
+		if ( upload_batch_cmd != VK_NULL_HANDLE && vk.staging_buffer.size - upload_batch_used < (VkDeviceSize)buffer_size ) {
+			vk_flush_upload_batch();
+		}
+		if ( upload_batch_cmd == VK_NULL_HANDLE ) {
+			upload_batch_cmd = begin_command_buffer_now();
+			upload_batch_used = 0;
+		}
+		for ( n = 0; n < num_regions; n++ ) {
+			regions[n].bufferOffset += upload_batch_used;
+		}
+		Com_Memcpy( vk.staging_buffer.ptr + upload_batch_used, buf, buffer_size );
+		upload_batch_used += PAD( buffer_size, 16 );
+		if ( upload_batch_used > vk.staging_buffer.size ) {
+			upload_batch_used = vk.staging_buffer.size;
+		}
+		command_buffer = upload_batch_cmd;
+	} else {
+		vk_flush_upload_batch();
+		if ( vk.staging_buffer.size < buffer_size ) {
+			vk_alloc_staging_buffer( buffer_size );
+		}
+		Com_Memcpy( vk.staging_buffer.ptr, buf, buffer_size );
+		command_buffer = begin_command_buffer_now();
 	}
-
-	Com_Memcpy( vk.staging_buffer.ptr, buf, buffer_size );
-
-	command_buffer = begin_command_buffer();
 	if ( update ) {
 		record_image_layout_transition( command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, 0 );
 	} else {
@@ -5223,7 +5286,9 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 	}
 	qvkCmdCopyBufferToImage( command_buffer, vk.staging_buffer.handle, image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, num_regions, regions );
 	record_image_layout_transition( command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
-	end_command_buffer( command_buffer, __func__ );
+	if ( command_buffer != upload_batch_cmd ) {
+		end_command_buffer( command_buffer, __func__ );
+	}
 #endif
 
 	if ( buf != pixels ) {
@@ -5274,6 +5339,8 @@ void vk_update_descriptor_set( image_t *image, qboolean mipmap ) {
 
 void vk_destroy_image_resources( VkImage *image, VkImageView *imageView )
 {
+	vk_flush_upload_batch();
+
 	if ( image != NULL ) {
 		if ( *image != VK_NULL_HANDLE ) {
 			qvkDestroyImage( vk.device, *image, NULL );
@@ -7541,6 +7608,8 @@ void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;
 	VkResult res;
+
+	vk_flush_upload_batch();
 
 	if ( vk.frame_count++ )
 		return;

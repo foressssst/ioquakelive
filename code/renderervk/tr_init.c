@@ -1907,6 +1907,7 @@ static void RE_EndRegistration( void ) {
 	R_PrefetchFinish();
 	R_ImageLoadStatsReport();
 #ifdef USE_VULKAN
+	vk_set_upload_batch( qfalse );
 	vk_wait_idle();
 #else
 	R_IssuePendingRenderCommands();
