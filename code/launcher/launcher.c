@@ -735,6 +735,7 @@ typedef struct {
     int fail;
     char dir[1024];
     char zip[1024];
+    char have[32];
 } install_t;
 
 typedef struct {
@@ -4957,6 +4958,32 @@ static int Zip_Extract(const char* zip, const char* root, char* version, size_t 
     return fail;
 }
 
+static void Zip_Note(const char* zip, char* out, size_t size) {
+    char note[64];
+    unsigned count = 0, dirSize = 0;
+    SDL_IOStream* io = SDL_IOFromFile(zip, "rb");
+    unsigned char* dir = io ? Zip_Dir(io, &count, &dirSize, note, sizeof(note)) : NULL;
+    const char* v = note + strlen(PACKAGE_NOTE);
+    size_t n = 0;
+
+    out[0] = '\0';
+    if (dir && !strncmp(note, PACKAGE_NOTE, strlen(PACKAGE_NOTE))) {
+        while (n < size - 1 && ((v[n] >= '0' && v[n] <= '9') || (v[n] >= 'a' && v[n] <= 'z') || v[n] == '.' || v[n] == '-')) {
+            out[n] = v[n];
+            n++;
+        }
+        out[n] = '\0';
+    }
+    free(dir);
+    if (io) {
+        SDL_CloseIO(io);
+    }
+}
+
+static bool Local_Fresh(void) {
+    return install.local && (SDL_GetAtomicInt(&checkState) != CHECK_DONE || (install.have[0] && Version_Compare(install.have, latestVersion) >= 0));
+}
+
 static void Install_Refresh(void) {
     char path[1200];
 
@@ -4970,7 +4997,7 @@ static int Install_Work(bool update) {
     const char* source = install.zip;
     const char* desktop = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
     pack_t* pack = update ? &packLatest : &packJob;
-    bool fetched = false, local = !update && install.local;
+    bool fetched = false, listed = false, local = !update && install.local;
     int fail;
 #ifdef LAUNCHER_SHOT
     const char* option = SDL_getenv("LAUNCHER_ZIP");
@@ -4997,8 +5024,19 @@ static int Install_Work(bool update) {
         SDL_strlcpy(jobVersion, "0", sizeof(jobVersion));
     }
     if (update || !install.adopt) {
+        if (local && !update) {
+            char have[32];
+
+            Zip_Note(source, have, sizeof(have));
+            SDL_strlcpy(jobVersion, have[0] ? have : "0", sizeof(jobVersion));
+            if (Release_Fetch(jobText, sizeof(jobText)) && Package_Find(jobText, pack) && (!have[0] || Version_Compare(pack->version, have) > 0)) {
+                local = false;
+                listed = true;
+                SDL_SetAtomicInt(&jobPhase, PHASE_DOWNLOAD);
+            }
+        }
         if (!local) {
-            if (!update && (!Release_Fetch(jobText, sizeof(jobText)) || !Package_Find(jobText, pack))) {
+            if (!update && !listed && (!Release_Fetch(jobText, sizeof(jobText)) || !Package_Find(jobText, pack))) {
                 return FAIL_NET;
             }
             if (jobKind == JOB_REPAIR) {
@@ -5103,7 +5141,7 @@ static void Job_Start(int kind, Sint64 bytes) {
     SDL_SetAtomicInt(&jobTotal, (int)(bytes >> 10));
     SDL_SetAtomicInt(&jobKb, 0);
     SDL_SetAtomicInt(&jobFail, FAIL_NONE);
-    SDL_SetAtomicInt(&jobPhase, kind == JOB_INSTALL && (install.local || install.adopt) ? PHASE_INSTALL : PHASE_DOWNLOAD);
+    SDL_SetAtomicInt(&jobPhase, kind == JOB_INSTALL && (Local_Fresh() || install.adopt) ? PHASE_INSTALL : PHASE_DOWNLOAD);
     SDL_SetAtomicInt(&jobRun, RUN_BUSY);
     jobThread = SDL_CreateThread(Job_Thread, "job", NULL);
     if (!jobThread) {
@@ -7690,6 +7728,7 @@ static void Install_Init(void) {
     }
 #endif
     install.local = Path_IsFile(install.zip);
+    Zip_Note(install.zip, install.have, sizeof(install.have));
     Install_Refresh();
 }
 
