@@ -361,6 +361,7 @@ vmCvar_t roundtimelimit;
 vmCvar_t g_roundWarmupDelay;
 vmCvar_t roundlimit;
 vmCvar_t g_lastManStandingWarning;
+vmCvar_t g_damageReport;
 vmCvar_t g_roundDrawLivingCount;
 vmCvar_t g_roundDrawHealthCount;
 vmCvar_t g_spawnArmor;
@@ -819,6 +820,7 @@ static cvarTable_t gameCvarTable[] = {
     {&g_roundWarmupDelay, "g_roundWarmupDelay", "10000", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&roundlimit, "roundlimit", "10", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_lastManStandingWarning, "g_lastManStandingWarning", "1", 0, 0, NULL},
+    {&g_damageReport, "g_damageReport", "0", 0, 0, NULL},
     {&g_roundDrawLivingCount, "g_roundDrawLivingCount", "1", CVAR_GAMERULE, 0, NULL},
     {&g_roundDrawHealthCount, "g_roundDrawHealthCount", "1", CVAR_GAMERULE, 0, NULL},
     {&g_spawnArmor, "g_spawnArmor", "0", CVAR_GAMERULE, 0, NULL},

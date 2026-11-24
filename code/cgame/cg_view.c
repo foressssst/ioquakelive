@@ -1137,6 +1137,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     CG_UpdateFloatingEffects();
 
     CG_ProcessSnapshots();
+    CG_FlushDamageReport();
 
     if (!cg.snap || (cg.snap->snapFlags & SNAPFLAG_NOT_ACTIVE)) {
         CG_DrawInformation();

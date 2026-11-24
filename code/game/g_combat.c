@@ -1580,6 +1580,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         targ->client && attacker->client && targ != attacker) {
         attacker->client->ps.persistant[PERS_ATTACKEE_ARMOR]++;
     }
+    CA_RecordDamage(targ, attacker, take + asave);
     targ->health -= take;
     if (targ->client) {
         targ->s.health = targ->health;

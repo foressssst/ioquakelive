@@ -1643,6 +1643,7 @@ void ClientDisconnect(int clientNum) {
     }
 
     G_RemoveQueuedBotBegin(clientNum);
+    CA_ClearDamage(clientNum);
 
     if (!ent->client || ent->client->pers.connected == CON_DISCONNECTED) {
         return;

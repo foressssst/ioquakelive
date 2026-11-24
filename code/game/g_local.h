@@ -900,6 +900,8 @@ qboolean CA_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int 
 qboolean AD_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int *asave);
 qboolean RR_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int *asave);
 void CA_PlayerKilled(int team);
+void CA_RecordDamage(gentity_t *targ, gentity_t *attacker, int damage);
+void CA_ClearDamage(int clientNum);
 void G_RegisterCvars(void);
 void G_UpdateCustomSettings(void);
 
@@ -1212,6 +1214,7 @@ extern vmCvar_t roundtimelimit;
 extern vmCvar_t g_roundWarmupDelay;
 extern vmCvar_t roundlimit;
 extern vmCvar_t g_lastManStandingWarning;
+extern vmCvar_t g_damageReport;
 extern vmCvar_t g_roundDrawLivingCount;
 extern vmCvar_t g_roundDrawHealthCount;
 extern vmCvar_t g_spawnArmor;

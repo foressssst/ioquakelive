@@ -1825,6 +1825,7 @@ extern vmCvar_t cg_zoomToggle;
 
 extern vmCvar_t cg_allowTaunt;
 extern vmCvar_t cg_announcerLastStanding;
+extern vmCvar_t cg_damageReport;
 
 const char* CG_ConfigString(int index);
 const char* CG_Argv(int arg);
@@ -2174,6 +2175,7 @@ void CG_DrawChat(float x, float y, float w, float h, float scale);
 void CG_InitColorWheel(void);
 
 void CG_ExecuteNewServerCommands(int latestSequence);
+void CG_FlushDamageReport(void);
 void CG_ParseServerinfo(void);
 void CG_SetConfigValues(void);
 void CG_ParsePmoveParams(void);

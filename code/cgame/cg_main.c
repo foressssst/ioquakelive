@@ -553,6 +553,7 @@ vmCvar_t cg_loadout;
 vmCvar_t cg_spectating;
 
 vmCvar_t cg_announcerLastStanding;
+vmCvar_t cg_damageReport;
 
 typedef struct {
     vmCvar_t* vmCvar;
@@ -953,6 +954,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_spectating, "cg_spectating", "0", CVAR_ROM},
 
     {&cg_announcerLastStanding, "cg_announcerLastStanding", "1", CVAR_ARCHIVE},
+    {&cg_damageReport, "cg_damageReport", "1", CVAR_ARCHIVE},
 };
 
 static int cvarTableSize = ARRAY_LEN(cvarTable);

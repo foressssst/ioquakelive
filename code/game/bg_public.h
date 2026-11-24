@@ -836,6 +836,7 @@ void BG_TouchJumpPad(playerState_t* ps, entityState_t* jumppad);
 void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean snap);
 
 #define IOQL_STEPS_VERSION 10007
+#define IOQL_CADMG_VERSION 20106
 
 int BG_IoqlVersion(const char* s);
 

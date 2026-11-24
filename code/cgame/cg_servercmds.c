@@ -1570,6 +1570,90 @@ void CG_InitScores(void) {
     cg.teamScores[1] = atoi(CG_Argv(22));
 }
 
+static void CG_DamageText(char* out, int size, const char* label, int damage, int hits) {
+    if (damage) {
+        Com_sprintf(out, size, "%s %i in %i %s", label, damage, hits, hits == 1 ? "hit" : "hits");
+    } else {
+        Com_sprintf(out, size, "%s 0", label);
+    }
+}
+
+static char damageLines[MAX_CLIENTS + 1][256];
+static int damageLineCount;
+
+void CG_FlushDamageReport(void) {
+    int i;
+
+    for (i = 0; i < damageLineCount; i++) {
+        CG_Printf("[skipnotify]%s\n", damageLines[i]);
+    }
+    damageLineCount = 0;
+}
+
+static void CG_ParseDamageReport(void) {
+    static char cols[MAX_CLIENTS][4][96];
+    struct {
+        int client, given, givenHits, taken, takenHits, health, armor;
+    } rows[MAX_CLIENTS], swap;
+    int width[4] = {0, 0, 0, 0};
+    int i, j, k, count = 0, args = trap_Argc();
+
+    if (!cg_damageReport.integer) {
+        return;
+    }
+    for (i = 3; i + 6 < args && count < MAX_CLIENTS; i += 7) {
+        rows[count].client = atoi(CG_Argv(i));
+        rows[count].given = atoi(CG_Argv(i + 1));
+        rows[count].givenHits = atoi(CG_Argv(i + 2));
+        rows[count].taken = atoi(CG_Argv(i + 3));
+        rows[count].takenHits = atoi(CG_Argv(i + 4));
+        rows[count].health = atoi(CG_Argv(i + 5));
+        rows[count].armor = atoi(CG_Argv(i + 6));
+        if (rows[count].client >= 0 && rows[count].client < MAX_CLIENTS && cgs.clientinfo[rows[count].client].infoValid) {
+            count++;
+        }
+    }
+    if (!count) {
+        return;
+    }
+    for (i = 1; i < count; i++) {
+        for (j = i; j > 0 && (rows[j].given > rows[j - 1].given ||
+                              (rows[j].given == rows[j - 1].given && rows[j].taken > rows[j - 1].taken)); j--) {
+            swap = rows[j];
+            rows[j] = rows[j - 1];
+            rows[j - 1] = swap;
+        }
+    }
+    for (i = 0; i < count; i++) {
+        Com_sprintf(cols[i][0], sizeof(cols[i][0]), "%s^7", cgs.clientinfo[rows[i].client].name);
+        CG_DamageText(cols[i][1], sizeof(cols[i][1]), "given", rows[i].given, rows[i].givenHits);
+        CG_DamageText(cols[i][2], sizeof(cols[i][2]), "taken", rows[i].taken, rows[i].takenHits);
+        if (rows[i].health > 0) {
+            Com_sprintf(cols[i][3], sizeof(cols[i][3]), "%i hp, %i armor remaining", rows[i].health, rows[i].armor);
+        } else {
+            Q_strncpyz(cols[i][3], rows[i].health ? "" : "killed", sizeof(cols[i][3]));
+        }
+        for (k = 0; k < 3; k++) {
+            width[k] = MAX(width[k], Q_PrintStrlen(cols[i][k]));
+        }
+    }
+    if (atoi(CG_Argv(2)) && damageLineCount < MAX_CLIENTS + 1) {
+        Com_sprintf(damageLines[damageLineCount++], sizeof(damageLines[0]), "Round %i damage:", atoi(CG_Argv(1)));
+    }
+    for (i = 0; i < count && damageLineCount < MAX_CLIENTS + 1; i++) {
+        char* line = damageLines[damageLineCount++];
+
+        Q_strncpyz(line, "  ", sizeof(damageLines[0]));
+        for (k = 0; k < 3; k++) {
+            Q_strcat(line, sizeof(damageLines[0]), cols[i][k]);
+            for (j = Q_PrintStrlen(cols[i][k]); j < width[k] + 3; j++) {
+                Q_strcat(line, sizeof(damageLines[0]), " ");
+            }
+        }
+        Q_strcat(line, sizeof(damageLines[0]), cols[i][3]);
+    }
+}
+
 static void CG_ServerCommand(void) {
     const char* cmd;
     char text[MAX_SAY_TEXT];
@@ -1769,6 +1853,10 @@ static void CG_ServerCommand(void) {
     }
     if (!strcmp(cmd, "castats")) {
         CG_ParseTeamStats_CA();
+        return;
+    }
+    if (!strcmp(cmd, "cadmg")) {
+        CG_ParseDamageReport();
         return;
     }
     if (!strcmp(cmd, "ctfstats")) {

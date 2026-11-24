@@ -1,5 +1,89 @@
 #include "g_local.h"
 
+typedef struct {
+    int damage;
+    int hits;
+    int last;
+} caDamage_t;
+
+static caDamage_t caDamage[MAX_CLIENTS][MAX_CLIENTS];
+
+void CA_ClearDamage(int clientNum) {
+    int i;
+
+    if (clientNum < 0) {
+        memset(caDamage, 0, sizeof(caDamage));
+        return;
+    }
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        memset(&caDamage[clientNum][i], 0, sizeof(caDamage_t));
+        memset(&caDamage[i][clientNum], 0, sizeof(caDamage_t));
+    }
+}
+
+void CA_RecordDamage(gentity_t *targ, gentity_t *attacker, int damage) {
+    caDamage_t *d;
+
+    if (!g_damageReport.integer || g_gametype.integer != GT_CA || level.warmupTime ||
+        level.roundState.eCurrent != RS_PLAYING || damage <= 0 || !targ->client || targ->health <= 0 ||
+        !attacker->client || targ == attacker || OnSameTeam(targ, attacker)) {
+        return;
+    }
+    d = &caDamage[attacker->s.number][targ->s.number];
+    d->damage += damage;
+    if (!d->hits || d->last != level.time) {
+        d->hits++;
+        d->last = level.time;
+    }
+}
+
+static void CA_SendDamageReport(int round) {
+    char cmd[MAX_STRING_CHARS];
+    char entry[64];
+    int i, j, len, count;
+
+    if (!g_damageReport.integer || g_gametype.integer != GT_CA) {
+        return;
+    }
+    for (i = 0; i < level.maxclients; i++) {
+        gclient_t *cl = &level.clients[i];
+
+        if (cl->pers.connected != CON_CONNECTED || !cl->pers.ioqlClient || g_ioqlVersion[i] < IOQL_CADMG_VERSION ||
+            (cl->sess.sessionTeam != TEAM_RED && cl->sess.sessionTeam != TEAM_BLUE)) {
+            continue;
+        }
+        len = Com_sprintf(cmd, sizeof(cmd), "cadmg %i 1", round);
+        count = 0;
+        for (j = 0; j < level.maxclients; j++) {
+            gclient_t *other = &level.clients[j];
+            const caDamage_t *given = &caDamage[i][j];
+            const caDamage_t *taken = &caDamage[j][i];
+            int health = -1, armor = 0, n;
+
+            if (j == i || other->pers.connected != CON_CONNECTED || (!given->damage && !taken->damage)) {
+                continue;
+            }
+            if (other->sess.sessionTeam == TEAM_RED || other->sess.sessionTeam == TEAM_BLUE) {
+                health = other->ps.pm_type == PM_NORMAL && g_entities[j].health > 0 ? g_entities[j].health : 0;
+                armor = health ? other->ps.stats[STAT_ARMOR] : 0;
+            }
+            n = Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i %i %i", j, given->damage, given->hits,
+                            taken->damage, taken->hits, health, armor);
+            if (count && len + n > 1000) {
+                trap_SendServerCommand(i, cmd);
+                len = Com_sprintf(cmd, sizeof(cmd), "cadmg %i 0", round);
+                count = 0;
+            }
+            Q_strcat(cmd, sizeof(cmd), entry);
+            len += n;
+            count++;
+        }
+        if (count) {
+            trap_SendServerCommand(i, cmd);
+        }
+    }
+}
+
 static void TeamCount_Health(int *healthTotals) {
     int i;
     healthTotals[TEAM_FREE] = 0;
@@ -82,6 +166,7 @@ void CA_RoundStateTransition(void) {
         return;
 
     case RS_PLAYING:
+        CA_ClearDamage(-1);
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             if (cl->pers.connected == CON_CONNECTED) {
@@ -108,6 +193,7 @@ void CA_RoundStateTransition(void) {
     {
         int aliveCounts[4] = {0};
         int healthTotals[4] = {0};
+        int played = level.roundState.round;
 
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
@@ -205,6 +291,7 @@ void CA_RoundStateTransition(void) {
             }
         }
 
+        CA_SendDamageReport(played);
         STAT_AddRoundOverStat(level.roundState.round - 1, winTeam, winTeam == 0);
 
         if (level.teamScores[TEAM_RED] != level.teamScores[TEAM_BLUE]) {
