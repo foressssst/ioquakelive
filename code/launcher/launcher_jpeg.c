@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #define JPEG_INTERNALS
-#include "../jpeg-8c/jpeglib.h"
+#include "../libjpeg-turbo/src/jpeglib.h"
 
 typedef struct {
     struct jpeg_error_mgr pub;

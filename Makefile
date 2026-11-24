@@ -214,7 +214,7 @@ CGDIR=$(MOUNT_DIR)/cgame
 BLIBDIR=$(MOUNT_DIR)/botlib
 NDIR=$(MOUNT_DIR)/null
 UIDIR=$(MOUNT_DIR)/ui
-JPDIR=$(MOUNT_DIR)/jpeg-8c
+TURBODIR=$(MOUNT_DIR)/libjpeg-turbo
 OGGDIR=$(MOUNT_DIR)/libogg
 VORBISDIR=$(MOUNT_DIR)/libvorbis
 OPUSDIR=$(MOUNT_DIR)/opus
@@ -1025,7 +1025,7 @@ LIBS += $(ZLIB_LIBS)
 
 ifeq ($(USE_INTERNAL_JPEG),1)
   BASE_CFLAGS += -DUSE_INTERNAL_JPEG
-  BASE_CFLAGS += -I$(JPDIR)
+  BASE_CFLAGS += -I$(TURBODIR) -I$(TURBODIR)/src
 else
   JPEG_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags libjpeg || true)
   JPEG_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs libjpeg || echo -ljpeg)
@@ -1088,6 +1088,16 @@ endef
 define DO_REF_CC
 $(echo_cmd) "REF_CC $<"
 $(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -o $@ -c $<
+endef
+
+define DO_TURBO_CC
+$(echo_cmd) "TURBO_CC $<"
+$(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(OPTIMIZE) $(TURBO_CFLAGS) -w -o $@ -c $<
+endef
+
+define DO_TURBO_AS
+$(echo_cmd) "NASM $<"
+$(Q)$(NASM) $(TURBO_NASMFLAGS) -I$(TURBODIR)/simd/nasm/ -I$(TURBODIR)/simd/x86_64/ -o $@ $<
 endef
 
 define DO_REF1_CC
@@ -1261,6 +1271,7 @@ makedirs:
 	@$(MKDIR) $(B)/client/opus
 	@$(MKDIR) $(B)/client/vorbis
 	@$(MKDIR) $(B)/renderergl2
+	@$(MKDIR) $(B)/libjpeg
 	@$(MKDIR) $(B)/renderergl2/glsl
 	@$(MKDIR) $(B)/renderergl1
 	@$(MKDIR) $(B)/renderervk
@@ -1606,52 +1617,174 @@ endif
 
 ifneq ($(USE_INTERNAL_JPEG),0)
   JPGOBJ = \
-    $(B)/renderergl2/jaricom.o \
-    $(B)/renderergl2/jcapimin.o \
-    $(B)/renderergl2/jcapistd.o \
-    $(B)/renderergl2/jcarith.o \
-    $(B)/renderergl2/jccoefct.o  \
-    $(B)/renderergl2/jccolor.o \
-    $(B)/renderergl2/jcdctmgr.o \
-    $(B)/renderergl2/jchuff.o   \
-    $(B)/renderergl2/jcinit.o \
-    $(B)/renderergl2/jcmainct.o \
-    $(B)/renderergl2/jcmarker.o \
-    $(B)/renderergl2/jcmaster.o \
-    $(B)/renderergl2/jcomapi.o \
-    $(B)/renderergl2/jcparam.o \
-    $(B)/renderergl2/jcprepct.o \
-    $(B)/renderergl2/jcsample.o \
-    $(B)/renderergl2/jctrans.o \
-    $(B)/renderergl2/jdapimin.o \
-    $(B)/renderergl2/jdapistd.o \
-    $(B)/renderergl2/jdarith.o \
-    $(B)/renderergl2/jdatadst.o \
-    $(B)/renderergl2/jdatasrc.o \
-    $(B)/renderergl2/jdcoefct.o \
-    $(B)/renderergl2/jdcolor.o \
-    $(B)/renderergl2/jddctmgr.o \
-    $(B)/renderergl2/jdhuff.o \
-    $(B)/renderergl2/jdinput.o \
-    $(B)/renderergl2/jdmainct.o \
-    $(B)/renderergl2/jdmarker.o \
-    $(B)/renderergl2/jdmaster.o \
-    $(B)/renderergl2/jdmerge.o \
-    $(B)/renderergl2/jdpostct.o \
-    $(B)/renderergl2/jdsample.o \
-    $(B)/renderergl2/jdtrans.o \
-    $(B)/renderergl2/jerror.o \
-    $(B)/renderergl2/jfdctflt.o \
-    $(B)/renderergl2/jfdctfst.o \
-    $(B)/renderergl2/jfdctint.o \
-    $(B)/renderergl2/jidctflt.o \
-    $(B)/renderergl2/jidctfst.o \
-    $(B)/renderergl2/jidctint.o \
-    $(B)/renderergl2/jmemmgr.o \
-    $(B)/renderergl2/jmemnobs.o \
-    $(B)/renderergl2/jquant1.o \
-    $(B)/renderergl2/jquant2.o \
-    $(B)/renderergl2/jutils.o
+    $(B)/libjpeg/jaricom.o \
+    $(B)/libjpeg/jcapimin.o \
+    $(B)/libjpeg/jcarith.o \
+    $(B)/libjpeg/jchuff.o \
+    $(B)/libjpeg/jcicc.o \
+    $(B)/libjpeg/jcinit.o \
+    $(B)/libjpeg/jclhuff.o \
+    $(B)/libjpeg/jcmarker.o \
+    $(B)/libjpeg/jcmaster.o \
+    $(B)/libjpeg/jcomapi.o \
+    $(B)/libjpeg/jcparam.o \
+    $(B)/libjpeg/jcphuff.o \
+    $(B)/libjpeg/jctrans.o \
+    $(B)/libjpeg/jdapimin.o \
+    $(B)/libjpeg/jdarith.o \
+    $(B)/libjpeg/jdatadst.o \
+    $(B)/libjpeg/jdatasrc.o \
+    $(B)/libjpeg/jdhuff.o \
+    $(B)/libjpeg/jdicc.o \
+    $(B)/libjpeg/jdinput.o \
+    $(B)/libjpeg/jdlhuff.o \
+    $(B)/libjpeg/jdmarker.o \
+    $(B)/libjpeg/jdmaster.o \
+    $(B)/libjpeg/jdphuff.o \
+    $(B)/libjpeg/jdtrans.o \
+    $(B)/libjpeg/jerror.o \
+    $(B)/libjpeg/jfdctflt.o \
+    $(B)/libjpeg/jmemmgr.o \
+    $(B)/libjpeg/jmemnobs.o \
+    $(B)/libjpeg/jpeg_nbits.o \
+    $(B)/libjpeg/jcapistd-12.o \
+    $(B)/libjpeg/jcapistd-16.o \
+    $(B)/libjpeg/jcapistd-8.o \
+    $(B)/libjpeg/jccoefct-12.o \
+    $(B)/libjpeg/jccoefct-8.o \
+    $(B)/libjpeg/jccolor-12.o \
+    $(B)/libjpeg/jccolor-16.o \
+    $(B)/libjpeg/jccolor-8.o \
+    $(B)/libjpeg/jcdctmgr-12.o \
+    $(B)/libjpeg/jcdctmgr-8.o \
+    $(B)/libjpeg/jcdiffct-12.o \
+    $(B)/libjpeg/jcdiffct-16.o \
+    $(B)/libjpeg/jcdiffct-8.o \
+    $(B)/libjpeg/jclossls-12.o \
+    $(B)/libjpeg/jclossls-16.o \
+    $(B)/libjpeg/jclossls-8.o \
+    $(B)/libjpeg/jcmainct-12.o \
+    $(B)/libjpeg/jcmainct-16.o \
+    $(B)/libjpeg/jcmainct-8.o \
+    $(B)/libjpeg/jcprepct-12.o \
+    $(B)/libjpeg/jcprepct-16.o \
+    $(B)/libjpeg/jcprepct-8.o \
+    $(B)/libjpeg/jcsample-12.o \
+    $(B)/libjpeg/jcsample-16.o \
+    $(B)/libjpeg/jcsample-8.o \
+    $(B)/libjpeg/jdapistd-12.o \
+    $(B)/libjpeg/jdapistd-16.o \
+    $(B)/libjpeg/jdapistd-8.o \
+    $(B)/libjpeg/jdcoefct-12.o \
+    $(B)/libjpeg/jdcoefct-8.o \
+    $(B)/libjpeg/jdcolor-12.o \
+    $(B)/libjpeg/jdcolor-16.o \
+    $(B)/libjpeg/jdcolor-8.o \
+    $(B)/libjpeg/jddctmgr-12.o \
+    $(B)/libjpeg/jddctmgr-8.o \
+    $(B)/libjpeg/jddiffct-12.o \
+    $(B)/libjpeg/jddiffct-16.o \
+    $(B)/libjpeg/jddiffct-8.o \
+    $(B)/libjpeg/jdlossls-12.o \
+    $(B)/libjpeg/jdlossls-16.o \
+    $(B)/libjpeg/jdlossls-8.o \
+    $(B)/libjpeg/jdmainct-12.o \
+    $(B)/libjpeg/jdmainct-16.o \
+    $(B)/libjpeg/jdmainct-8.o \
+    $(B)/libjpeg/jdmerge-12.o \
+    $(B)/libjpeg/jdmerge-8.o \
+    $(B)/libjpeg/jdpostct-12.o \
+    $(B)/libjpeg/jdpostct-16.o \
+    $(B)/libjpeg/jdpostct-8.o \
+    $(B)/libjpeg/jdsample-12.o \
+    $(B)/libjpeg/jdsample-16.o \
+    $(B)/libjpeg/jdsample-8.o \
+    $(B)/libjpeg/jfdctfst-12.o \
+    $(B)/libjpeg/jfdctfst-8.o \
+    $(B)/libjpeg/jfdctint-12.o \
+    $(B)/libjpeg/jfdctint-8.o \
+    $(B)/libjpeg/jidctflt-12.o \
+    $(B)/libjpeg/jidctflt-8.o \
+    $(B)/libjpeg/jidctfst-12.o \
+    $(B)/libjpeg/jidctfst-8.o \
+    $(B)/libjpeg/jidctint-12.o \
+    $(B)/libjpeg/jidctint-8.o \
+    $(B)/libjpeg/jidctred-12.o \
+    $(B)/libjpeg/jidctred-8.o \
+    $(B)/libjpeg/jquant1-12.o \
+    $(B)/libjpeg/jquant1-8.o \
+    $(B)/libjpeg/jquant2-12.o \
+    $(B)/libjpeg/jquant2-8.o \
+    $(B)/libjpeg/jutils-12.o \
+    $(B)/libjpeg/jutils-16.o \
+    $(B)/libjpeg/jutils-8.o
+
+  TURBO_CFLAGS = -I$(TURBODIR) -I$(TURBODIR)/src
+  TURBO_SIMD =
+  ifeq ($(ARCH),arm64)
+    TURBO_SIMD = arm
+  endif
+  ifeq ($(ARCH),x86_64)
+    NASM ?= $(shell command -v nasm 2>/dev/null)
+    ifneq ($(strip $(NASM)),)
+      TURBO_SIMD = x86
+      ifeq ($(PLATFORM),darwin)
+        TURBO_NASMFLAGS = -fmacho64 -DMACHO -D__x86_64__
+      else
+        TURBO_NASMFLAGS = -felf64 -DELF -D__x86_64__ -DPIC
+      endif
+    endif
+  endif
+  ifeq ($(TURBO_SIMD),arm)
+    TURBO_CFLAGS += -DTURBO_SIMD -I$(TURBODIR)/simd/arm
+    JPGOBJ += $(B)/libjpeg/jsimd.o \
+    $(B)/libjpeg/jccolor-neon.o \
+    $(B)/libjpeg/jcgray-neon.o \
+    $(B)/libjpeg/jcphuff-neon.o \
+    $(B)/libjpeg/jcsample-neon.o \
+    $(B)/libjpeg/jdcolor-neon.o \
+    $(B)/libjpeg/jdmerge-neon.o \
+    $(B)/libjpeg/jdsample-neon.o \
+    $(B)/libjpeg/jfdctfst-neon.o \
+    $(B)/libjpeg/jfdctint-neon.o \
+    $(B)/libjpeg/jidctfst-neon.o \
+    $(B)/libjpeg/jidctint-neon.o \
+    $(B)/libjpeg/jidctred-neon.o \
+    $(B)/libjpeg/jquanti-neon.o \
+    $(B)/libjpeg/jchuff-neon.o \
+    $(B)/libjpeg/jsimdcpu.o
+  endif
+  ifeq ($(TURBO_SIMD),x86)
+    TURBO_CFLAGS += -DTURBO_SIMD
+    JPGOBJ += $(B)/libjpeg/jsimd.o \
+    $(B)/libjpeg/jsimdcpu.o \
+    $(B)/libjpeg/jfdctflt-sse.o \
+    $(B)/libjpeg/jccolor-sse2.o \
+    $(B)/libjpeg/jcgray-sse2.o \
+    $(B)/libjpeg/jchuff-sse2.o \
+    $(B)/libjpeg/jcphuff-sse2.o \
+    $(B)/libjpeg/jcsample-sse2.o \
+    $(B)/libjpeg/jdcolor-sse2.o \
+    $(B)/libjpeg/jdmerge-sse2.o \
+    $(B)/libjpeg/jdsample-sse2.o \
+    $(B)/libjpeg/jfdctfst-sse2.o \
+    $(B)/libjpeg/jfdctint-sse2.o \
+    $(B)/libjpeg/jidctflt-sse2.o \
+    $(B)/libjpeg/jidctfst-sse2.o \
+    $(B)/libjpeg/jidctint-sse2.o \
+    $(B)/libjpeg/jidctred-sse2.o \
+    $(B)/libjpeg/jquantf-sse2.o \
+    $(B)/libjpeg/jquanti-sse2.o \
+    $(B)/libjpeg/jccolor-avx2.o \
+    $(B)/libjpeg/jcgray-avx2.o \
+    $(B)/libjpeg/jcsample-avx2.o \
+    $(B)/libjpeg/jdcolor-avx2.o \
+    $(B)/libjpeg/jdmerge-avx2.o \
+    $(B)/libjpeg/jdsample-avx2.o \
+    $(B)/libjpeg/jfdctint-avx2.o \
+    $(B)/libjpeg/jidctint-avx2.o \
+    $(B)/libjpeg/jquanti-avx2.o
+  endif
 endif
 
 ifeq ($(NEED_OPUS),1)
@@ -2121,8 +2254,27 @@ $(B)/renderergl2/%.o: $(CMDIR)/%.c
 $(B)/renderergl2/%.o: $(SDLDIR)/%.c
 	$(DO_REF_CC)
 
-$(B)/renderergl2/%.o: $(JPDIR)/%.c
-	$(DO_REF_CC)
+$(B)/libjpeg/%.o: $(TURBODIR)/src/%.c
+	$(DO_TURBO_CC)
+
+$(B)/libjpeg/%.o: $(TURBODIR)/src/wrapper/%.c
+	$(DO_TURBO_CC)
+
+$(B)/libjpeg/jsimd.o: $(TURBODIR)/simd/jsimd.c
+	$(DO_TURBO_CC)
+
+ifeq ($(TURBO_SIMD),arm)
+$(B)/libjpeg/%.o: $(TURBODIR)/simd/arm/%.c
+	$(DO_TURBO_CC)
+
+$(B)/libjpeg/%.o: $(TURBODIR)/simd/arm/aarch64/%.c
+	$(DO_TURBO_CC)
+endif
+
+ifeq ($(TURBO_SIMD),x86)
+$(B)/libjpeg/%.o: $(TURBODIR)/simd/x86_64/%.asm
+	$(DO_TURBO_AS)
+endif
 
 $(B)/renderergl2/%.o: $(RCOMMONDIR)/%.c
 	$(DO_REF_CC)

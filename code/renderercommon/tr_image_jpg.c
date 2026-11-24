@@ -80,12 +80,14 @@ void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* heigh
                  void* (*allocator)(size_t), qboolean silent) {
     struct jpeg_decompress_struct cinfo = {NULL};
     q_jpeg_error_mgr_t jerr;
+#ifndef JCS_EXTENSIONS
     JSAMPARRAY buffer;
+    unsigned int sindex, dindex;
+    byte* buf;
+#endif
     unsigned int row_stride;
     unsigned int pixelcount, memcount;
-    unsigned int sindex, dindex;
     byte* out;
-    byte* buf;
 
     *pic = NULL;
 
@@ -103,7 +105,11 @@ void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* heigh
     jpeg_mem_src(&cinfo, fileData, fileLen);
     (void)jpeg_read_header(&cinfo, TRUE);
 
+#ifdef JCS_EXTENSIONS
+    cinfo.out_color_space = JCS_EXT_RGBA;
+#else
     cinfo.out_color_space = JCS_RGB;
+#endif
 
     (void)jpeg_start_decompress(&cinfo);
 
@@ -111,7 +117,11 @@ void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* heigh
 
     if (!cinfo.output_width || !cinfo.output_height ||
         ((pixelcount * 4) / cinfo.output_width) / 4 != cinfo.output_height ||
+#ifdef JCS_EXTENSIONS
+        pixelcount > 0x1FFFFFFF || cinfo.output_components != 4) {
+#else
         pixelcount > 0x1FFFFFFF || cinfo.output_components != 3) {
+#endif
         jpeg_destroy_decompress(&cinfo);
         return;
     }
@@ -128,6 +138,21 @@ void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* heigh
     *width = cinfo.output_width;
     *height = cinfo.output_height;
 
+#ifdef JCS_EXTENSIONS
+    while (cinfo.output_scanline < cinfo.output_height) {
+        JSAMPROW rows[32];
+        unsigned int n, i;
+
+        n = cinfo.output_height - cinfo.output_scanline;
+        if (n > 32) {
+            n = 32;
+        }
+        for (i = 0; i < n; i++) {
+            rows[i] = out + row_stride * (cinfo.output_scanline + i);
+        }
+        (void)jpeg_read_scanlines(&cinfo, rows, n);
+    }
+#else
     while (cinfo.output_scanline < cinfo.output_height) {
         buf = ((out + (row_stride * cinfo.output_scanline)));
         buffer = &buf;
@@ -145,6 +170,7 @@ void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* heigh
         buf[--dindex] = buf[--sindex];
         buf[--dindex] = buf[--sindex];
     } while (sindex);
+#endif
 
     *pic = out;
 

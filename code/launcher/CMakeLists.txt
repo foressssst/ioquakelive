@@ -42,11 +42,20 @@ set(SOURCES
 foreach(name inflate inffast inftrees adler32 crc32 zutil)
   list(APPEND SOURCES ${CODE}/zlib/${name}.c)
 endforeach()
-foreach(name jaricom jcapimin jcapistd jcarith jccoefct jccolor jcdctmgr jchuff jcinit jcmainct jcmarker jcmaster jcomapi jcparam
-             jcprepct jcsample jctrans jdapimin jdapistd jdarith jdatadst jdatasrc jdcoefct jdcolor jddctmgr jdhuff jdinput
-             jdmainct jdmarker jdmaster jdmerge jdpostct jdsample jdtrans jerror jfdctflt jfdctfst jfdctint jidctflt jidctfst
-             jidctint jmemmgr jmemnobs jquant1 jquant2 jutils)
-  list(APPEND SOURCES ${CODE}/jpeg-8c/${name}.c)
+foreach(name jaricom jcapimin jcarith jchuff jcicc jcinit jclhuff jcmarker jcmaster jcomapi jcparam jcphuff jctrans
+             jdapimin jdarith jdatadst jdatasrc jdhuff jdicc jdinput jdlhuff jdmarker jdmaster jdphuff jdtrans jerror
+             jfdctflt jmemmgr jmemnobs jpeg_nbits)
+  list(APPEND SOURCES ${CODE}/libjpeg-turbo/src/${name}.c)
+endforeach()
+foreach(name jcapistd-12 jcapistd-16 jcapistd-8 jccoefct-12 jccoefct-8 jccolor-12 jccolor-16 jccolor-8 jcdctmgr-12
+             jcdctmgr-8 jcdiffct-12 jcdiffct-16 jcdiffct-8 jclossls-12 jclossls-16 jclossls-8 jcmainct-12 jcmainct-16
+             jcmainct-8 jcprepct-12 jcprepct-16 jcprepct-8 jcsample-12 jcsample-16 jcsample-8 jdapistd-12 jdapistd-16
+             jdapistd-8 jdcoefct-12 jdcoefct-8 jdcolor-12 jdcolor-16 jdcolor-8 jddctmgr-12 jddctmgr-8 jddiffct-12
+             jddiffct-16 jddiffct-8 jdlossls-12 jdlossls-16 jdlossls-8 jdmainct-12 jdmainct-16 jdmainct-8 jdmerge-12
+             jdmerge-8 jdpostct-12 jdpostct-16 jdpostct-8 jdsample-12 jdsample-16 jdsample-8 jfdctfst-12 jfdctfst-8
+             jfdctint-12 jfdctint-8 jidctflt-12 jidctflt-8 jidctfst-12 jidctfst-8 jidctint-12 jidctint-8 jidctred-12
+             jidctred-8 jquant1-12 jquant1-8 jquant2-12 jquant2-8 jutils-12 jutils-16 jutils-8)
+  list(APPEND SOURCES ${CODE}/libjpeg-turbo/src/wrapper/${name}.c)
 endforeach()
 
 function(launcher_target TARGET SHOT)
@@ -95,7 +104,7 @@ function(launcher_target TARGET SHOT)
     target_compile_definitions(${TARGET} PRIVATE LAUNCHER_SHOT)
   endif()
   target_compile_definitions(${TARGET} PRIVATE NO_GZIP PRODUCT_VERSION="${PRODUCT_VERSION}")
-  target_include_directories(${TARGET} PRIVATE ${CODE}/zlib)
+  target_include_directories(${TARGET} PRIVATE ${CODE}/zlib ${CODE}/libjpeg-turbo ${CODE}/libjpeg-turbo/src)
   target_link_libraries(${TARGET} PRIVATE SDL3::SDL3-static)
 endfunction()
 

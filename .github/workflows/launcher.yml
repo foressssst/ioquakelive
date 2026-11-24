@@ -6,7 +6,7 @@ on:
     paths:
     - 'code/launcher/**'
     - 'code/zlib/**'
-    - 'code/jpeg-8c/**'
+    - 'code/libjpeg-turbo/**'
     - 'code/SDL3'
     - 'code/tools/test_launcher.py'
     - '.github/workflows/launcher.yml'
@@ -15,7 +15,7 @@ on:
     paths:
     - 'code/launcher/**'
     - 'code/zlib/**'
-    - 'code/jpeg-8c/**'
+    - 'code/libjpeg-turbo/**'
     - 'code/SDL3'
     - 'code/tools/test_launcher.py'
     - '.github/workflows/launcher.yml'

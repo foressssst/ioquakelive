@@ -147,7 +147,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -204,7 +204,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />
@@ -260,7 +260,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -314,7 +314,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -367,7 +367,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />
@@ -420,7 +420,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\libjpeg-turbo;..\..\code\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />

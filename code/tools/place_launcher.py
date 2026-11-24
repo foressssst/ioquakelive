@@ -12,7 +12,7 @@ import zipfile
 SOURCES = [
     'code/launcher',
     'code/zlib',
-    'code/jpeg-8c',
+    'code/libjpeg-turbo',
     'code/renderercommon/tr_stbtt.c',
     'code/renderercommon/tr_stbtt.h',
     'code/sys/win_resource.rc',

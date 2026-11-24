@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64"><Configuration>Debug</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64"><Configuration>Release</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{5E2C7A41-9B3D-4F6A-8C17-2D4B6E8F0A93}</ProjectGuid>
+    <RootNamespace>libjpegturbo</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><PlatformToolset>v145</PlatformToolset><CharacterSet>MultiByte</CharacterSet></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Condition="'$(Platform)'=='Win32'">
+    <OutDir>$(SolutionDir)..\..\code\libs\win32\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='x64'">
+    <OutDir>$(SolutionDir)..\..\code\libs\win64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='ARM64'">
+    <OutDir>$(SolutionDir)..\..\code\libs\winarm64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IntDir>$(SolutionDir)..\..\build\deps\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <TurboDir>$(MSBuildThisFileDirectory)..\..\code\libjpeg-turbo\</TurboDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='x64' and '$(TurboNasm)'==''">
+    <TurboNasm Condition="'$(NASM)'!='' and Exists('$(NASM)')">$(NASM)</TurboNasm>
+    <TurboNasm Condition="'$(TurboNasm)'=='' and Exists('$(ProgramFiles)\NASM\nasm.exe')">$(ProgramFiles)\NASM\nasm.exe</TurboNasm>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TurboSimd Condition="'$(Platform)'=='ARM64'">true</TurboSimd>
+    <TurboSimd Condition="'$(Platform)'=='x64' and '$(TurboNasm)'!=''">true</TurboSimd>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(TurboDir);$(TurboDir)src;$(TurboDir)simd\arm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(TurboSimd)'=='true'">TURBO_SIMD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <CustomBuild>
+      <Command>"$(TurboNasm)" -fwin64 -DWIN64 -D__x86_64__ -I"$(TurboDir)simd\nasm\\" -I"$(TurboDir)simd\x86_64\\" -o "$(IntDir)%(Filename).obj" "%(FullPath)"</Command>
+      <Outputs>$(IntDir)%(Filename).obj</Outputs>
+      <Message>nasm %(Filename)%(Extension)</Message>
+      <AdditionalInputs>$(TurboDir)simd\nasm\jsimdext.inc;$(TurboDir)simd\nasm\jsimdcfg.inc;$(TurboDir)simd\nasm\jdct.inc;$(TurboDir)simd\nasm\jcolsamp.inc</AdditionalInputs>
+    </CustomBuild>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jaricom.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcapimin.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcarith.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jchuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcicc.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcinit.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jclhuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcmarker.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcmaster.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcomapi.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcparam.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jcphuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jctrans.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdapimin.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdarith.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdatadst.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdatasrc.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdhuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdicc.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdinput.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdlhuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdmarker.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdmaster.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdphuff.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jdtrans.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jerror.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jfdctflt.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jmemmgr.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jmemnobs.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\jpeg_nbits.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcapistd-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcapistd-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcapistd-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jccoefct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jccoefct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jccolor-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jccolor-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jccolor-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcdctmgr-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcdctmgr-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcdiffct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcdiffct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcdiffct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jclossls-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jclossls-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jclossls-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcmainct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcmainct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcmainct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcprepct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcprepct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcprepct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcsample-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcsample-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jcsample-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdapistd-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdapistd-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdapistd-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdcoefct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdcoefct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdcolor-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdcolor-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdcolor-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jddctmgr-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jddctmgr-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jddiffct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jddiffct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jddiffct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdlossls-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdlossls-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdlossls-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdmainct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdmainct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdmainct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdmerge-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdmerge-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdpostct-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdpostct-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdpostct-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdsample-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdsample-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jdsample-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jfdctfst-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jfdctfst-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jfdctint-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jfdctint-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctflt-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctflt-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctfst-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctfst-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctint-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctint-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctred-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jidctred-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jquant1-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jquant1-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jquant2-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jquant2-8.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jutils-12.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jutils-16.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\src\wrapper\jutils-8.c" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TurboSimd)'=='true'">
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\jsimd.c" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Platform)'=='ARM64'">
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jccolor-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jcgray-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jcphuff-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jcsample-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jdcolor-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jdmerge-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jdsample-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jfdctfst-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jfdctint-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jidctfst-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jidctint-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jidctred-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\jquanti-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\aarch64\jchuff-neon.c" />
+    <ClCompile Include="..\..\code\libjpeg-turbo\simd\arm\aarch64\jsimdcpu.c" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Platform)'=='x64' and '$(TurboSimd)'=='true'">
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jsimdcpu.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jfdctflt-sse.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jccolor-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jcgray-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jchuff-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jcphuff-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jcsample-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdcolor-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdmerge-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdsample-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jfdctfst-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jfdctint-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jidctflt-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jidctfst-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jidctint-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jidctred-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jquantf-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jquanti-sse2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jccolor-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jcgray-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jcsample-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdcolor-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdmerge-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jdsample-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jfdctint-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jidctint-avx2.asm" />
+    <CustomBuild Include="..\..\code\libjpeg-turbo\simd\x86_64\jquanti-avx2.asm" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
