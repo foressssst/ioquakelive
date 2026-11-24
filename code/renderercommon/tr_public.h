@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 14
+#define REF_API_VERSION 15
 
 typedef struct {
     void (*Shutdown)(qboolean destroyWindow);
@@ -172,6 +172,7 @@ typedef struct {
     void (*Sys_GLimpInit)(void);
     qboolean (*Sys_LowPhysicalMemory)(void);
     qboolean (*SleepMicroseconds)(int64_t usec);
+    int (*Inflate)(void* dest, uint32_t* destLen, const void* src, uint32_t srcLen);
 } refimport_t;
 
 #ifdef USE_RENDERER_DLOPEN

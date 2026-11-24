@@ -3288,6 +3288,24 @@ int CL_ScaledMilliseconds(void) {
     return Sys_Milliseconds() * com_timescale->value;
 }
 
+static int CL_RefInflate(void* dest, uint32_t* destLen, const void* src, uint32_t srcLen) {
+    z_stream stream;
+    int result;
+
+    Com_Memset(&stream, 0, sizeof(stream));
+    if (inflateInit2(&stream, -MAX_WBITS) != Z_OK) {
+        return -1;
+    }
+    stream.next_in = (Bytef*)src;
+    stream.avail_in = srcLen;
+    stream.next_out = (Bytef*)dest;
+    stream.avail_out = *destLen;
+    result = inflate(&stream, Z_FINISH);
+    *destLen = stream.total_out;
+    inflateEnd(&stream);
+    return result == Z_STREAM_END ? 0 : -1;
+}
+
 void CL_InitRef(void) {
     refimport_t ri;
     refexport_t* ret;
@@ -3360,6 +3378,7 @@ void CL_InitRef(void) {
     ri.Milliseconds = CL_ScaledMilliseconds;
     ri.Microseconds = Sys_Microseconds;
     ri.SleepMicroseconds = Sys_SleepMicroseconds;
+    ri.Inflate = CL_RefInflate;
     ri.JobsSubmit = Com_JobsSubmit;
     ri.JobWorkers = Com_JobWorkers;
     ri.Sleep = Sys_Sleep;
