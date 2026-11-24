@@ -530,14 +530,24 @@ jobs:
         python code/tools/build_release_zips.py \
           --shared shared \
           --engines engines \
-          --output release \
+          --output files \
           --version "$VERSION"
-        ls -la release/
+        (cd files && for f in *.zip; do echo "$f $(stat -c%s "$f") $(sha256sum "$f" | cut -d' ' -f1)"; done > files.txt)
+        case "$VERSION" in
+          3.0.0|3.0.0-*) cp files/*.zip release/ ;;
+        esac
+        ls -la release/ files/
+        cat files/files.txt
         sha256sum release/*
     - uses: actions/upload-artifact@v4
       with:
         name: release-zips
         path: release/
+        retention-days: 2
+    - uses: actions/upload-artifact@v4
+      with:
+        name: game-files
+        path: files/
         retention-days: 2
 
   package-windows:
@@ -610,6 +620,25 @@ jobs:
         fi
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+    - uses: actions/download-artifact@v4
+      with:
+        name: game-files
+        path: game-files
+    - name: Upload the game files
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        AWS_DEFAULT_REGION: auto
+        AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+        AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+          echo "::error::the R2 secrets are missing"
+          exit 1
+        fi
+        aws s3 cp game-files/ "s3://ioquakelive/v${VERSION}/" --recursive --endpoint-url "$R2_ENDPOINT" --only-show-errors
     - name: Create tag
       run: |
         git tag "${{ steps.version.outputs.tag }}"
@@ -653,6 +682,25 @@ jobs:
         fi
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+    - uses: actions/download-artifact@v4
+      with:
+        name: game-files
+        path: game-files
+    - name: Upload the game files
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        AWS_DEFAULT_REGION: auto
+        AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+        AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+          echo "::error::the R2 secrets are missing"
+          exit 1
+        fi
+        aws s3 cp game-files/ "s3://ioquakelive/v${VERSION}/" --recursive --endpoint-url "$R2_ENDPOINT" --only-show-errors
     - name: Create tag
       run: |
         git tag "${{ steps.version.outputs.tag }}"

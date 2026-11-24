@@ -123,7 +123,7 @@ def main():
     check(runnable(game), f'game is in place and runnable: {args.game}', failures)
     check(runnable(launcher), f'launcher copied itself and is runnable: {args.self_name}', failures)
     check(config_version(root) == latest, f'launcher.cfg records {latest} (found {config_version(root)})', failures)
-    check(os.path.lexists(os.path.join(desktop, args.link)), f'desktop shortcut {args.link}', failures)
+    check(not os.path.lexists(os.path.join(desktop, args.link)), f'no desktop shortcut {args.link} before the last step', failures)
     check(not leftovers(root), 'no .new, .part or .old files left', failures)
     check(os.path.isfile(os.path.join(work, 'install.png')), 'install screenshot saved', failures)
     if sys.platform == 'darwin':

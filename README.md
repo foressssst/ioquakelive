@@ -19,11 +19,18 @@ El proyecto toma como punto de partida el trabajo de [Thomas Jones](https://gith
 
 Necesitarás una copia legítima de [Quake Live](https://store.steampowered.com/app/282440/Quake_Live/), ya que ioquakelive no incluye los archivos originales del juego, por lo que utiliza los de tu propia instalación.
 
-1. Descarga la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases).
-2. Extrae los archivos en la carpeta que prefieras.
-3. Ejecuta `ioquakelive.x86_64.exe` para utilizar la versión OpenGL o `ioquakelive-vulkan.x86_64.exe` si prefieres Vulkan.
+1. Descarga el instalador correspondiente a tu sistema desde [Releases](https://github.com/foressssst/ioquakelive/releases):
+   - Windows: `ioquakelive-setup-windows-x64.exe`
+   - Linux: `ioquakelive-setup-linux-x86_64.tar.gz`
+   - macOS: `ioquakelive-setup-macos.zip`
 
-En Windows, el juego detecta automáticamente tu instalación de Quake Live y copia el archivo `pak00.pk3`. Si la detección automática no funciona, puedes copiarlo manualmente a la carpeta `baseq3`.
+   Para Windows y Linux en ARM también están disponibles las versiones `arm64`.
+2. Abre el instalador, elige otra carpeta si lo deseas y pulsa Instalar.
+3. Sigue los pasos. El launcher buscará tu instalación de Quake Live de Steam y te permitirá importar tu configuración, HUD y demos. Al finalizar, también podrás crear un acceso directo en el escritorio.
+
+Después, abre siempre el juego desde el launcher. Este se encarga de mantenerlo actualizado y permite elegir entre OpenGL y Vulkan.
+
+Si no encuentra tu instalación de Quake Live, puedes seleccionar manualmente el archivo `pak00.pk3`.
 
 ## Si el antivirus lo bloquea
 

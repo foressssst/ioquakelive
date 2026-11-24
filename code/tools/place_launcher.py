@@ -22,11 +22,11 @@ SOURCES = [
 ]
 
 ASSETS = {
-    'windows-x64':  'ioquakelive-launcher.exe',
-    'windows-arm64': 'ioquakelive-launcher-arm64.exe',
-    'linux-x86_64': 'ioquakelive-launcher-linux-x86_64.tar.gz',
-    'linux-arm64':  'ioquakelive-launcher-linux-arm64.tar.gz',
-    'macos-arm64':  'ioquakelive-launcher-macos.zip',
+    'windows-x64':  'ioquakelive-setup-windows-x64.exe',
+    'windows-arm64': 'ioquakelive-setup-windows-arm64.exe',
+    'linux-x86_64': 'ioquakelive-setup-linux-x86_64.tar.gz',
+    'linux-arm64':  'ioquakelive-setup-linux-arm64.tar.gz',
+    'macos-arm64':  'ioquakelive-setup-macos.zip',
 }
 
 LICENSE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'launcher', 'OFL.txt')

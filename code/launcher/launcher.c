@@ -10,6 +10,7 @@
 #define VK_NO_PROTOTYPES
 #include "../renderercommon/vulkan/vulkan_core.h"
 #include "launcher_steam.h"
+#include "launcher_art.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -241,6 +242,19 @@
 #endif
 #define VULKAN_NAME "ioquakelive-vulkan." GAME_ARCH GAME_EXT
 #define BIN_DIR "bin/"
+#define GUIDE_ROW 56.0f
+#define GUIDE_STEPS 4
+#define MARK_HEAD 24.0f
+#define FIELD_H 44.0f
+#define PAK_BOX_H 168.0f
+#ifdef _WIN32
+#define PAK_EXAMPLE "C:/Program Files (x86)/Steam/steamapps/common/Quake Live/baseq3"
+#elif defined(__APPLE__)
+#define PAK_EXAMPLE "Steam/steamapps/common/Quake Live/baseq3"
+#else
+#define PAK_EXAMPLE "~/.local/share/Steam/steamapps/common/Quake Live/baseq3"
+#endif
+#define FILES_ROOT "https://pub-ad23407a3c15497799842a38688c8ab4.r2.dev/"
 #define FOLDER_NAME "ioquakelive"
 #define ZIP_TAIL (65536 + 22)
 #define ZIP_BLOCK 0x10000
@@ -345,6 +359,7 @@ enum {
     BTN_BACK,
     BTN_OPT_A,
     BTN_OPT_B,
+    BTN_OPT_C,
     BTN_ME,
     BTN_DISCORD,
     BTN_OPTS,
@@ -389,7 +404,6 @@ enum {
     BTN_COUNT
 };
 enum { STEP_NONE, STEP_FILES, STEP_SETTINGS, STEP_DEMOS, STEP_PREFS };
-#define SETUP_STEPS 4
 enum { KIND_CONFIG, KIND_HUD, KIND_DEMOS, KIND_COUNT };
 enum { JOB_SCAN, JOB_FILES, JOB_SETTINGS, JOB_DEMOS, JOB_INSTALL, JOB_UPDATE, JOB_REPAIR };
 enum { RUN_IDLE, RUN_BUSY, RUN_OK, RUN_FAIL };
@@ -408,7 +422,16 @@ enum {
     TXT_INSTALL_WHERE,
     TXT_CHANGE_FOLDER,
     TXT_SHORTCUT,
-    TXT_FROM_GITHUB,
+    TXT_GUIDE_GET,
+    TXT_GUIDE_GET_DETAIL,
+    TXT_GUIDE_FIND,
+    TXT_GUIDE_FIND_DETAIL,
+    TXT_GUIDE_BRING,
+    TXT_GUIDE_BRING_DETAIL,
+    TXT_GUIDE_PLAY,
+    TXT_GUIDE_PLAY_DETAIL,
+    TXT_PAK_EXAMPLE,
+    TXT_PAK_STEAM,
     TXT_FROM_FILE,
     TXT_ADOPT,
     TXT_FAIL_FOLDER,
@@ -418,7 +441,6 @@ enum {
     TXT_PLAY_STEAM,
     TXT_STEAM_OPENING,
     TXT_NO_VULKAN,
-    TXT_SETUP_STEP,
     TXT_TITLE_FILES,
     TXT_TITLE_SETTINGS,
     TXT_TITLE_DEMOS,
@@ -426,10 +448,12 @@ enum {
     TXT_SCANNING,
     TXT_FILES_FOUND,
     TXT_NO_SPACE,
+    TXT_FILES_SAFE,
     TXT_PAK_COPY,
     TXT_INSTALL,
     TXT_CHOOSE_OTHER,
     TXT_FILES_MISSING,
+    TXT_FILES_HOW,
     TXT_FIND_PAK,
     TXT_SEARCH_AGAIN,
     TXT_WRONG_FILE,
@@ -455,9 +479,7 @@ enum {
     TXT_BACK,
     TXT_PREFS_INTRO,
     TXT_STARTUP,
-    TXT_STARTUP_DETAIL,
     TXT_BETA,
-    TXT_BETA_DETAIL,
     TXT_OPEN_FOLDER,
     TXT_RUN_SETUP,
     TXT_REPAIR,
@@ -735,7 +757,7 @@ typedef struct {
 } walk_t;
 
 typedef struct {
-    bool active, local, adopt, shortcut, done;
+    bool active, local, adopt, done;
     int fail;
     char dir[1024];
     char zip[1024];
@@ -858,10 +880,11 @@ static Uint64 pressAt[BTN_COUNT], shakeAt[BTN_COUNT];
 static int animIndex[ANIM_MAX], animCount;
 static bool runePlain;
 static int stepDir, stepFrom;
+static float setupBodyEnd;
 static Uint64 stepStart;
 static float panelTop = PANEL_LOW;
 static bool slideClip;
-static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta, checkPending;
+static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta, prefShortcut, checkPending;
 static float optsHeat;
 static char connectTo[64], demoTo[128], joinNow[64];
 static SDL_Thread* checkThread;
@@ -1020,11 +1043,20 @@ static const char* const texts[TXT_COUNT] = {
     [TXT_DOWNLOADING] = "Descargando: %d%%",
     [TXT_INSTALLING] = "Instalando...",
     [TXT_WHATS_NEW] = "Novedades de la versión %s",
-    [TXT_INSTALL_TITLE] = "Instalar ioquakelive",
-    [TXT_INSTALL_WHERE] = "Se instalará en:",
+    [TXT_INSTALL_TITLE] = "Bienvenido a ioquakelive",
+    [TXT_INSTALL_WHERE] = "El juego se instalará aquí:",
     [TXT_CHANGE_FOLDER] = "Cambiar carpeta",
     [TXT_SHORTCUT] = "Crear un acceso directo en el escritorio",
-    [TXT_FROM_GITHUB] = "ioquakelive se descargará desde GitHub.",
+    [TXT_GUIDE_GET] = "Instalación",
+    [TXT_GUIDE_GET_DETAIL] = "La última versión, en pocos minutos.",
+    [TXT_GUIDE_FIND] = "Archivos del juego",
+    [TXT_GUIDE_FIND_DETAIL] = "Los de tu Quake Live de Steam, sin modificarlos.",
+    [TXT_GUIDE_BRING] = "Configuración, HUD y demos",
+    [TXT_GUIDE_BRING_DETAIL] = "Trae lo tuyo de Quake Live, si quieres.",
+    [TXT_GUIDE_PLAY] = "Opciones adicionales",
+    [TXT_GUIDE_PLAY_DETAIL] = "Y listo para jugar.",
+    [TXT_PAK_EXAMPLE] = "Normalmente está en esta carpeta:",
+    [TXT_PAK_STEAM] = "En Steam: clic derecho en Quake Live, Administrar y Explorar archivos locales.",
     [TXT_FROM_FILE] = "ioquakelive se instalará desde el archivo ZIP ubicado junto al launcher.",
     [TXT_ADOPT] = "Se detectó una instalación de ioquakelive. Solo se agregará el launcher.",
     [TXT_FAIL_FOLDER] = "No se puede utilizar esta carpeta. Elige otra.",
@@ -1034,19 +1066,21 @@ static const char* const texts[TXT_COUNT] = {
     [TXT_PLAY_STEAM] = "Abrir Steam y jugar",
     [TXT_STEAM_OPENING] = "Abriendo Steam...",
     [TXT_NO_VULKAN] = "Tu equipo no es compatible con Vulkan, así que por ahora jugarás con OpenGL. Actualizar los drivers de tu tarjeta de video puede solucionarlo.",
-    [TXT_SETUP_STEP] = "Configuración inicial · Paso %d de %d",
     [TXT_TITLE_FILES] = "Archivos del juego",
     [TXT_TITLE_SETTINGS] = "Configuración y HUD",
     [TXT_TITLE_DEMOS] = "Demos",
     [TXT_SCANNING] = "Buscando Quake Live...",
-    [TXT_FILES_FOUND] = "ioquakelive utiliza los archivos de tu instalación original de Quake Live. Se encontraron en:",
+    [TXT_FILES_FOUND] = "Necesitarás los archivos de tu Quake Live original.\nSe detectó tu instalación aquí:",
     [TXT_NO_SPACE] = "No ocupará espacio adicional en el disco.",
-    [TXT_PAK_COPY] = "Se copiará pak00.pk3 (917 MB).",
+    [TXT_FILES_SAFE] = "No se modificará tu instalación de Steam ni ocupará espacio adicional.",
+    [TXT_PAK_COPY] = "Se copiará pak00.pk3 (917 MB). Tu instalación de Steam no se modificará.",
     [TXT_INSTALL] = "Instalar",
-    [TXT_CHOOSE_OTHER] = "Seleccionar manualmente",
-    [TXT_FILES_MISSING] = "Para utilizar ioquakelive necesitas una copia legítima de Quake Live en Steam. Instálalo desde "
-                          "tu biblioteca de Steam o selecciona manualmente el archivo pak00.pk3.",
-    [TXT_FIND_PAK] = "Buscar pak00.pk3",
+    [TXT_CHOOSE_OTHER] = "Buscar manualmente",
+    [TXT_FILES_MISSING] = "Necesitarás los archivos de tu Quake Live original de Steam, pero la detección automática "
+                          "no lo encontró en este equipo.",
+    [TXT_FILES_HOW] = "Si ya lo tienes instalado, pulsa Buscar manualmente y elige el archivo pak00.pk3 de la carpeta "
+                      "baseq3. Si todavía no lo tienes, instálalo desde tu biblioteca de Steam y luego pulsa Buscar de nuevo.",
+    [TXT_FIND_PAK] = "Buscar manualmente",
     [TXT_SEARCH_AGAIN] = "Buscar de nuevo",
     [TXT_WRONG_FILE] = "El archivo seleccionado no corresponde al pak00.pk3 de Quake Live.",
     [TXT_PAK_FAILED] = "No se pudo instalar pak00.pk3. Comprueba que haya suficiente espacio en disco.",
@@ -1069,12 +1103,12 @@ static const char* const texts[TXT_COUNT] = {
     [TXT_NO_DEMOS] = "No se encontraron demos en tu instalación de Quake Live.",
     [TXT_WORKING] = "Copiando: %d%%",
     [TXT_BACK] = "Atrás",
-    [TXT_TITLE_PREFS] = "Preferencias",
-    [TXT_PREFS_INTRO] = "Puedes cambiarlas cuando quieras desde las opciones.",
+    [TXT_TITLE_PREFS] = "Opciones adicionales",
+    [TXT_PREFS_INTRO] = "Si el launcher se abre al iniciar el equipo, mantiene ioquakelive actualizado sin que hagas nada. Las "
+                        "versiones experimentales traen lo nuevo antes, pero aún están en prueba. Puedes cambiar esto desde el "
+                        "menú del launcher.",
     [TXT_STARTUP] = "Abrir al iniciar el equipo",
-    [TXT_STARTUP_DETAIL] = "Minimizado, para actualizarse solo",
     [TXT_BETA] = "Versiones experimentales",
-    [TXT_BETA_DETAIL] = "Lo nuevo antes, aún en prueba",
     [TXT_OPEN_FOLDER] = "Abrir la carpeta del juego",
     [TXT_RUN_SETUP] = "Configuración inicial",
     [TXT_REPAIR] = "Reparar la instalación",
@@ -2058,6 +2092,10 @@ static void Image_LoadHero(void) {
             Image_FromJpeg(&hero, file, size, artBox[0]);
             free(file);
         }
+    }
+    if (!hero.tex) {
+        Image_FromJpeg(&hero, launcherArt, sizeof(launcherArt), artBox[1]);
+        heroCustom = hero.tex != NULL;
     }
 }
 
@@ -4130,16 +4168,61 @@ static bool Release_Tag(const char* json, char* tag, int size) {
     return n && p[n] == '"' && Version_Parts(tag[0] == 'v' ? tag + 1 : tag, parts);
 }
 
+static bool Files_Find(pack_t* pack) {
+    char url[256], text[2048];
+    const char* p = text;
+    char* end;
+    size_t n = strlen(PACKAGE);
+    int i;
+
+    if (!FILES_ROOT[0]) {
+        return false;
+    }
+    SDL_snprintf(url, sizeof(url), FILES_ROOT "v%s/files.txt", pack->version);
+    if (!Http_Get(url, text, sizeof(text))) {
+        return false;
+    }
+    while (p && *p) {
+        if (!strncmp(p, PACKAGE, n) && p[n] == ' ') {
+            pack->size = (Sint64)SDL_strtoll(p + n + 1, &end, 10);
+            while (*end == ' ') {
+                end++;
+            }
+            for (i = 0; i < 64 && SDL_isxdigit((unsigned char)end[i]); i++) {
+                pack->hash[i] = (char)SDL_tolower((unsigned char)end[i]);
+            }
+            pack->hash[i] = '\0';
+            if (i != 64 || pack->size <= 0) {
+                pack->hash[0] = '\0';
+                return false;
+            }
+            SDL_snprintf(pack->url, sizeof(pack->url), FILES_ROOT "v%s/" PACKAGE, pack->version);
+            return true;
+        }
+        p = strchr(p, '\n');
+        if (p) {
+            p++;
+        }
+    }
+    return false;
+}
+
 static bool Package_Find(const char* json, pack_t* pack) {
     char tag[32], digest[80];
     const char* p = strstr(json, "\"" PACKAGE "\"");
     const char* v;
 
     memset(pack, 0, sizeof(*pack));
-    if (!p || !Release_Tag(json, tag, sizeof(tag))) {
+    if (!Release_Tag(json, tag, sizeof(tag))) {
         return false;
     }
     SDL_strlcpy(pack->version, tag[0] == 'v' ? tag + 1 : tag, sizeof(pack->version));
+    if (Files_Find(pack)) {
+        return true;
+    }
+    if (!p) {
+        return false;
+    }
     v = Json_Value(p, "\"size\"");
     pack->size = v ? (Sint64)SDL_strtoll(v, NULL, 10) : 0;
     Json_Text(Json_Value(p, "\"digest\""), digest, sizeof(digest));
@@ -5094,7 +5177,6 @@ static void Install_Refresh(void) {
 static int Install_Work(bool update) {
     char root[1100], path[1200], exe[1200], hash[65], found[32];
     const char* source = install.zip;
-    const char* desktop = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
     pack_t* pack = update ? &packLatest : &packJob;
     bool fetched = false, listed = false, hasBin, local = !update && install.local;
     int fail;
@@ -5180,19 +5262,10 @@ static int Install_Work(bool update) {
     }
     if (!update) {
         SDL_snprintf(exe, sizeof(exe), "%s" SELF_NAME, root);
-        if ((install.adopt || !Path_IsFile(exe)) && !Path_Same(exe, selfPath) && !Self_Copy(root, exe)) {
+        if ((install.adopt || !Path_IsFile(exe) || Version_Compare(PRODUCT_VERSION, jobVersion) > 0) && !Path_Same(exe, selfPath) && !Self_Copy(root, exe)) {
             return FAIL_FILE;
         }
         File_Exec(exe);
-        if (install.shortcut) {
-#ifdef LAUNCHER_SHOT
-            option = SDL_getenv("LAUNCHER_DESKTOP");
-            if (option && option[0]) {
-                desktop = option;
-            }
-#endif
-            Shortcut_Make(exe, install.dir, desktop);
-        }
     }
     return FAIL_NONE;
 }
@@ -5260,6 +5333,17 @@ static void Job_Start(int kind, Sint64 bytes) {
     }
 }
 
+static const char* Desktop_Folder(void) {
+#ifdef LAUNCHER_SHOT
+    const char* option = SDL_getenv("LAUNCHER_DESKTOP");
+
+    if (option && option[0]) {
+        return option;
+    }
+#endif
+    return SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
+}
+
 static void Setup_Enter(int step) {
     if (step != STEP_NONE && setup.step != STEP_NONE && step != setup.step) {
         stepDir = step > setup.step ? 1 : -1;
@@ -5268,6 +5352,7 @@ static void Setup_Enter(int step) {
         stepStart = SDL_GetTicksNS();
     }
     if (step == STEP_PREFS) {
+        prefShortcut = true;
         prefStartup = Autostart_On();
         prefBeta = betaChannel;
     }
@@ -7817,7 +7902,6 @@ static void Install_Init(void) {
 #endif
 
     install.active = true;
-    install.shortcut = true;
     SDL_snprintf(install.zip, sizeof(install.zip), "%s" PACKAGE, basePath);
 #ifdef _WIN32
     if (QL_Find() && setup.pak[1] == ':') {
@@ -7936,6 +8020,9 @@ static void Setup_Primary(void) {
             }
             break;
         case STEP_PREFS:
+            if (prefShortcut) {
+                Shortcut_Make(selfPath, basePath, Desktop_Folder());
+            }
             Autostart_Set(prefStartup);
             Beta_Set(prefBeta);
             Setup_Next();
@@ -8567,7 +8654,7 @@ static void Draw_Top(void) {
     int i;
 
     Draw_Image(&logo, LOGO_X, TOP_MID - LOGO * 0.5f, LOGO, LOGO, 1.0f);
-    Draw_Caps(FONT_BRAND, LOGO_X + LOGO + 14.0f, TOP_MID, COL_WHITE, "ioquakelive", TRACK_CAPS);
+    Draw_Caps(FONT_BRAND, LOGO_X + LOGO + 14.0f, TOP_MID, COL_WHITE, install.active ? "ioquakelive installer" : "ioquakelive", TRACK_CAPS);
     Draw_Nav();
 
     Button_Set(BTN_FRIENDS, UI_W - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
@@ -8604,15 +8691,6 @@ static void Draw_Top(void) {
     b = &buttons[BTN_CLOSE];
     Draw_Spin(&iconSlash, b->x + (b->w - CLOSE_ICON) * 0.5f, b->y + (b->h - CLOSE_ICON) * 0.5f, 0.0f, COL_WHITE);
     Draw_Spin(&iconSlash, b->x + (b->w - CLOSE_ICON) * 0.5f, b->y + (b->h - CLOSE_ICON) * 0.5f, 90.0f, COL_WHITE);
-}
-
-static void Draw_Link(int index, float x, float mid, const char* text) {
-    float w = Text_Width(FONT_TEXT, text, -1);
-    Uint32 color = Col_Mix(COL_WHITE, COL_PURE, heat[index]);
-
-    Button_Set(index, x - 6.0f, mid - 16.0f, w + 12.0f, 32.0f, true);
-    Draw_Text(FONT_TEXT, x, Text_Mid(FONT_TEXT, mid), color, text, -1);
-    Draw_Rect(x, mid + 10.0f, w, 1.0f, color);
 }
 
 static void Draw_Feed(float alpha) {
@@ -9013,14 +9091,78 @@ static void Slide_End(void) {
     slideFade = 1.0f;
 }
 
+static int Step_Index(int step) {
+    return step == STEP_NONE ? 0 : step == STEP_FILES ? 1 : step == STEP_PREFS ? 3 : 2;
+}
+
+static void Draw_StepMark(float x, float y, float size, int number, int at) {
+    char num[4];
+    float r = size * 0.5f;
+
+    if (number == at) {
+        Draw_Round(x, y, size, size, r, COL_WHITE);
+    } else {
+        Draw_Round(x, y, size, size, r, COL_P1);
+        Draw_RoundLine(x, y, size, size, r, number < at ? COL_WHITE : COL_W40);
+    }
+    if (number < at) {
+        Draw_Spin(&iconCheck, x + r - CHECK_ICON * 0.5f, y + r - CHECK_ICON * 0.5f, 0.0f, COL_WHITE);
+        return;
+    }
+    SDL_snprintf(num, sizeof(num), "%d", number + 1);
+    Draw_Text(FONT_HEAD, x + (size - Text_Width(FONT_HEAD, num, -1)) * 0.5f, Text_Mid(FONT_HEAD, y + r), number == at ? COL_INK : COL_W85, num, -1);
+}
+
+static void Draw_Guide(float x, float y, float w, int active) {
+    int i;
+
+    for (i = 0; i < GUIDE_STEPS; i++, y += GUIDE_ROW) {
+        Draw_StepMark(x, y + 4.0f, 28.0f, i, active);
+        Draw_Text(FONT_HEAD, x + 44.0f, Text_Mid(FONT_HEAD, y + 9.0f), COL_WHITE, T(TXT_GUIDE_GET + i * 2), -1);
+        Draw_Text(FONT_BODY, x + 44.0f, Text_Mid(FONT_BODY, y + 32.0f), COL_W70, Text_Fit(FONT_BODY, T(TXT_GUIDE_GET_DETAIL + i * 2), w - 44.0f), -1);
+    }
+}
+
+static void Draw_PakExample(float x, float bottom, float w) {
+    float y = bottom - PAK_BOX_H;
+
+    Draw_Text(FONT_BODY, x, Text_Mid(FONT_BODY, y + 10.0f), COL_W70, T(TXT_PAK_EXAMPLE), -1);
+    y += 28.0f;
+    Draw_Round(x, y, w, 76.0f, ROW_R, COL_P3);
+    Draw_Path(x + 14.0f, y + 12.0f, w - 28.0f, COL_W70, PAK_EXAMPLE);
+    Draw_Round(x + 16.0f, y + 44.0f, 14.0f, 18.0f, 3.0f, COL_W85);
+    Draw_Text(FONT_HEAD, x + 40.0f, Text_Mid(FONT_HEAD, y + 53.0f), COL_WHITE, "pak00.pk3", -1);
+    Draw_Para(FONT_BODY, x, y + 88.0f, w, 25.0f, COL_W70, T(TXT_PAK_STEAM));
+}
+
+static float Second_Width(const char* text) {
+    return Caps_Width(FONT_BOXBTN, text, TRACK_BUTTON) + 48.0f;
+}
+
+static void Draw_Second(int index, float x, float y, float h, const char* text, bool ready) {
+    float w = Second_Width(text), hot = ready ? heat[index] : 0.0f;
+
+    Button_Set(index, x, y, w, h, ready);
+    Draw_Round(x, y, w, h, BUTTON_R, Col_Mix(COL_P3, COL_P4, hot));
+    Draw_Caps(FONT_BOXBTN, x + 24.0f, y + h * 0.5f, ready ? Col_Mix(COL_W85, COL_WHITE, hot) : COL_W40, text, TRACK_BUTTON);
+}
+
+static float Draw_PathRow(int index, float x, float y, float w, const char* path, const char* button, bool ready) {
+    float bw = Second_Width(button), fw = w - bw - 10.0f;
+
+    Draw_Round(x, y, fw, FIELD_H, ROW_R, COL_P2);
+    Draw_Path(x + 14.0f, Text_Mid(FONT_BODY, y + FIELD_H * 0.5f), fw - 28.0f, COL_WHITE, path);
+    Draw_Second(index, x + w - bw, y, FIELD_H, button, ready);
+    return y + FIELD_H;
+}
+
 static bool Setup_Body(int step, bool scanning, const char** next, const char** alt, const char** note) {
     char line[256], size[32];
     float x = IN_X, w = TEXT_W, y;
     int i;
 
     *next = *alt = *note = NULL;
-    SDL_snprintf(line, sizeof(line), T(TXT_SETUP_STEP), step, SETUP_STEPS);
-    y = Draw_Title(line, T(TXT_TITLE_FILES + step - 1));
+    y = Draw_Title(NULL, T(TXT_TITLE_FILES + step - 1));
     if (scanning) {
         Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_SCANNING));
         return false;
@@ -9029,12 +9171,13 @@ static bool Setup_Body(int step, bool scanning, const char** next, const char** 
         case STEP_FILES:
             if (setup.found) {
                 y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_FILES_FOUND));
-                Draw_Path(x, y + 8.0f, w, COL_W70, setup.pak);
-                *note = T(setup.canLink ? TXT_NO_SPACE : TXT_PAK_COPY);
-                *next = T(TXT_INSTALL);
-                *alt = T(TXT_CHOOSE_OTHER);
+                y = Draw_PathRow(BTN_ALT, x, y + 12.0f, w, setup.pak, T(TXT_CHOOSE_OTHER), SDL_GetAtomicInt(&jobRun) != RUN_BUSY);
+                *note = T(setup.canLink ? TXT_FILES_SAFE : TXT_PAK_COPY);
+                *next = T(TXT_NEXT);
             } else {
-                Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_FILES_MISSING));
+                y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_FILES_MISSING));
+                y = Draw_Para(FONT_TEXT, x, y + 12.0f, w, 28.0f, COL_W70, T(TXT_FILES_HOW));
+                Draw_PakExample(SIDE_X, BODY_TOP + 30.0f + PAK_BOX_H, SIDE_W);
                 *next = T(TXT_FIND_PAK);
                 *alt = T(TXT_SEARCH_AGAIN);
             }
@@ -9047,7 +9190,7 @@ static bool Setup_Body(int step, bool scanning, const char** next, const char** 
             break;
         case STEP_SETTINGS:
             if (!setup.count[KIND_CONFIG] && !setup.count[KIND_HUD]) {
-                Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_NO_SETTINGS));
+                y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_NO_SETTINGS));
                 *next = T(TXT_NEXT);
                 break;
             }
@@ -9069,30 +9212,33 @@ static bool Setup_Body(int step, bool scanning, const char** next, const char** 
             break;
         case STEP_PREFS:
             y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_PREFS_INTRO)) + 12.0f;
-            Draw_Check(BTN_OPT_A, x - 12.0f, y, w + 24.0f, prefStartup, T(TXT_STARTUP), T(TXT_STARTUP_DETAIL));
-            Draw_Check(BTN_OPT_B, x - 12.0f, y + 48.0f, w + 24.0f, prefBeta, T(TXT_BETA), T(TXT_BETA_DETAIL));
+            Draw_Check(BTN_OPT_A, x - 12.0f, y, w + 24.0f, prefShortcut, T(TXT_SHORTCUT), "");
+            Draw_Check(BTN_OPT_B, x - 12.0f, y + 48.0f, w + 24.0f, prefStartup, T(TXT_STARTUP), "");
+            Draw_Check(BTN_OPT_C, x - 12.0f, y + 96.0f, w + 24.0f, prefBeta, T(TXT_BETA), "");
+            y += 144.0f;
             *next = T(TXT_FINISH);
             break;
         default:
             if (!setup.count[KIND_DEMOS]) {
-                Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_NO_DEMOS));
+                y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_NO_DEMOS));
                 *next = T(TXT_NEXT);
                 break;
             }
             Size_Text(setup.bytes[KIND_DEMOS], size, sizeof(size));
             SDL_snprintf(line, sizeof(line), T(setup.count[KIND_DEMOS] == 1 ? TXT_DEMO_ONE : TXT_DEMO_MANY), setup.count[KIND_DEMOS], size);
-            Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, line);
+            y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, line);
             *note = T(setup.failed ? TXT_DEMOS_FAILED : setup.canLink ? TXT_NO_SPACE : TXT_DEMOS_COPY);
             *next = T(TXT_IMPORT);
             *alt = T(TXT_SKIP);
             break;
     }
+    setupBodyEnd = y;
     return true;
 }
 
 static void Setup_Note(const char* note) {
     if (note) {
-        Draw_Para(FONT_BODY, SIDE_X, BODY_TOP + 26.0f, SIDE_W, 25.0f, setup.failed || setup.wrongFile ? COL_WHITE : COL_W70, note);
+        Draw_Para(FONT_BODY, IN_X, setupBodyEnd + 18.0f, TEXT_W, 25.0f, setup.failed || setup.wrongFile ? COL_WHITE : COL_W70, note);
     }
 }
 
@@ -9101,23 +9247,30 @@ static void Draw_Setup(void) {
     int run = SDL_GetAtomicInt(&jobRun);
     bool scanning = run == RUN_BUSY && jobKind == JOB_SCAN;
     bool working = run == RUN_BUSY && !scanning;
-    float seg = (SIDE_W - 8.0f * (SETUP_STEPS - 1)) / SETUP_STEPS, ease = Step_Ease(), fade = SDL_min(1.0f, stepHeat * 5.0f);
+    float gap = (SIDE_W - MARK_HEAD * GUIDE_STEPS) / (GUIDE_STEPS - 1), by = PANEL_Y + (HEAD_H - MARK_HEAD) * 0.5f;
+    float ease = Step_Ease(), fade = SDL_min(1.0f, stepHeat * 5.0f);
+    int at = Step_Index(setup.step), from = Step_Index(stepFrom);
     const char* next;
     const char* alt;
     const char* note;
     int i;
 
-    Buttons_Hide(BTN_PLAY, BTN_OPT_B);
-    for (i = 0; i < SETUP_STEPS; i++) {
-        float bx = SIDE_X + (seg + 8.0f) * (float)i, by = PANEL_Y + HEAD_H * 0.5f - 2.0f, fill = i < setup.step ? 1.0f : 0.0f;
+    Buttons_Hide(BTN_PLAY, BTN_OPT_C);
+    for (i = 0; i < GUIDE_STEPS; i++) {
+        float bx = SIDE_X + (MARK_HEAD + gap) * (float)i;
 
-        if (stepHeat < 1.0f && i == (stepDir > 0 ? setup.step - 1 : setup.step)) {
-            fill = stepDir > 0 ? ease : 1.0f - ease;
+        if (i < GUIDE_STEPS - 1) {
+            float lx = bx + MARK_HEAD + 8.0f, lw = gap - 16.0f, fill = i < at ? 1.0f : 0.0f;
+
+            if (stepHeat < 1.0f && stepDir && from != at && i == (stepDir > 0 ? at - 1 : at)) {
+                fill = stepDir > 0 ? ease : 1.0f - ease;
+            }
+            Draw_Rect(lx, by + MARK_HEAD * 0.5f - 1.0f, lw, 2.0f, COL_DOT);
+            if (fill > 0.0f) {
+                Draw_Rect(lx, by + MARK_HEAD * 0.5f - 1.0f, lw * fill, 2.0f, COL_WHITE);
+            }
         }
-        Draw_Round(bx, by, seg, 4.0f, 2.0f, COL_DOT);
-        if (fill > 0.0f) {
-            Draw_Round(bx, by, seg * fill, 4.0f, 2.0f, COL_WHITE);
-        }
+        Draw_StepMark(bx, by, MARK_HEAD, i, at);
     }
     if (stepHeat < 1.0f && fade < 1.0f && stepDir && stepFrom != STEP_NONE && stepFrom != setup.step) {
         button_t keep[BTN_COUNT];
@@ -9137,31 +9290,35 @@ static void Draw_Setup(void) {
         Slide_End();
         SDL_snprintf(work, sizeof(work), T(TXT_WORKING), (int)(Job_Done() * 100.0f));
         Draw_Big(BTN_NEXT, next, false, Job_Done(), work, NULL);
-        Buttons_Hide(BTN_NEXT, BTN_OPT_B);
+        Buttons_Hide(BTN_NEXT, BTN_OPT_C);
         return;
     }
     Setup_Note(note);
     Slide_End();
     Draw_Big(BTN_NEXT, next, true, 0.0f, NULL, NULL);
     if (alt) {
-        Draw_Link(BTN_ALT, SIDE_X, PLAY_Y - 30.0f, alt);
+        Draw_Second(BTN_ALT, SIDE_X - 12.0f - Second_Width(alt), PLAY_Y, PLAY_H, alt, true);
     }
     if (setup.step > STEP_FILES) {
-        Draw_Link(BTN_BACK, IN_X, PLAY_Y + PLAY_H * 0.5f, T(TXT_BACK));
+        Draw_Second(BTN_BACK, IN_X, PLAY_Y, PLAY_H, T(TXT_BACK), true);
     }
 }
 
 static void Draw_Install(void) {
     char line[128];
     float x = IN_X, w = TEXT_W, y;
+    bool busy = SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done;
     const char* note;
 
-    Buttons_Hide(BTN_PLAY, BTN_OPT_B);
+    Buttons_Hide(BTN_PLAY, BTN_OPT_C);
+    note = install.fail != FAIL_NONE ? T(TXT_FAIL_FOLDER + install.fail - 1) : install.adopt ? T(TXT_ADOPT) : Local_Fresh() ? T(TXT_FROM_FILE) : NULL;
     y = Draw_Title(NULL, T(TXT_INSTALL_TITLE));
+    if (!install.adopt) {
+        Draw_Guide(SIDE_X, BODY_TOP + 30.0f, SIDE_W, 0);
+    }
     y = Draw_Para(FONT_TEXT, x, y, w, 28.0f, COL_W85, T(TXT_INSTALL_WHERE));
-    Draw_Path(x, y + 6.0f, w, COL_WHITE, install.dir);
-    y += 44.0f;
-    if (SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done) {
+    y = Draw_PathRow(BTN_ALT, x, y + 12.0f, w, install.dir, T(TXT_CHANGE_FOLDER), !busy);
+    if (busy) {
         float done = install.done ? 1.0f : Job_Done();
 
         if (!install.done && SDL_GetAtomicInt(&jobPhase) == PHASE_DOWNLOAD) {
@@ -9172,10 +9329,9 @@ static void Draw_Install(void) {
         Draw_Big(BTN_NEXT, T(TXT_INSTALL), false, done, line, NULL);
         return;
     }
-    Draw_Link(BTN_ALT, x, y + 16.0f, T(TXT_CHANGE_FOLDER));
-    Draw_Check(BTN_OPT_A, x - 12.0f, y + 46.0f, w + 24.0f, install.shortcut, T(TXT_SHORTCUT), "");
-    note = install.fail != FAIL_NONE ? T(TXT_FAIL_FOLDER + install.fail - 1) : T(install.adopt ? TXT_ADOPT : install.local ? TXT_FROM_FILE : TXT_FROM_GITHUB);
-    Draw_Para(FONT_BODY, SIDE_X, BODY_TOP + 26.0f, SIDE_W, 25.0f, install.fail != FAIL_NONE ? COL_WHITE : COL_W70, note);
+    if (note) {
+        Draw_Para(FONT_BODY, x, y + 18.0f, w, 25.0f, install.fail != FAIL_NONE ? COL_WHITE : COL_W70, note);
+    }
     Draw_Big(BTN_NEXT, T(TXT_INSTALL), true, 0.0f, NULL, NULL);
 }
 
@@ -11742,7 +11898,7 @@ static void Hub_Wheel(float amount) {
 }
 
 static void Draw_Content(void) {
-    Buttons_Hide(BTN_NEXT, BTN_OPT_B);
+    Buttons_Hide(BTN_NEXT, BTN_OPT_C);
     Draw_Feed(notesHeat);
     Draw_Card();
 }
@@ -12742,7 +12898,7 @@ static void Draw_Frame(void) {
         }
     }
     if (hubHeat > 0.0f) {
-        Buttons_Hide(BTN_PLAY, BTN_OPT_B);
+        Buttons_Hide(BTN_PLAY, BTN_OPT_C);
         Buttons_Hide(BTN_SIDE_0, BTN_SIDE_LAST);
     }
     Hub_Draw();
@@ -13201,15 +13357,19 @@ static bool Button_Press(int index) {
             break;
         case BTN_OPT_A:
         case BTN_OPT_B:
+        case BTN_OPT_C:
             if (install.active) {
-                install.shortcut = !install.shortcut;
-            } else if (setup.step == STEP_PREFS) {
+                break;
+            }
+            if (setup.step == STEP_PREFS) {
                 if (index == BTN_OPT_A) {
+                    prefShortcut = !prefShortcut;
+                } else if (index == BTN_OPT_B) {
                     prefStartup = !prefStartup;
                 } else {
                     prefBeta = !prefBeta;
                 }
-            } else {
+            } else if (index != BTN_OPT_C) {
                 setup.want[index - BTN_OPT_A] = !setup.want[index - BTN_OPT_A];
             }
             break;
@@ -13612,6 +13772,7 @@ int main(int argc, char** argv) {
 
         SDL_snprintf(pak, sizeof(pak), "%s" PAK_GAME, basePath);
         setup.step = Pak_Valid(pak) ? setupSaved : STEP_FILES;
+        prefShortcut = true;
         prefStartup = startupOn;
         prefBeta = betaChannel;
         if (setup.step != STEP_NONE) {
@@ -13619,7 +13780,7 @@ int main(int argc, char** argv) {
         }
     }
 #ifndef LAUNCHER_SHOT
-    if (gameFound && firstRun) {
+    if (gameFound && firstRun && setup.step == STEP_NONE) {
         Shortcut_Make(selfPath, basePath, SDL_GetUserFolder(SDL_FOLDER_DESKTOP));
         Settings_Save();
     }
