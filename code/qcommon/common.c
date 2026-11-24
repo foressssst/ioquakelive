@@ -1953,6 +1953,8 @@ void Com_ExecuteCfg(void) {
             Cbuf_ExecuteText(EXEC_NOW, "exec server.cfg\n");
             Cbuf_Execute();
         } else {
+            Cbuf_ExecuteText(EXEC_NOW, "exec ioquakelive_default.cfg\n");
+            Cbuf_Execute();
             if (!safe) {
                 readConfig = (qboolean)(FS_ReadFile(QZCONFIG_CFG, NULL) > 0);
                 Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
