@@ -138,14 +138,58 @@ static void R_SmpRaise( void ) {
 	smpError( level, "%s", smpErrorText );
 }
 
+static volatile int64_t smpWakeTime;
+static volatile int64_t smpDoneTime;
+static volatile float smpWorkAvg;
+static int64_t smpInputTime;
+static float smpFrontAvg;
+static float smpFrontDev;
+
 static void RB_RenderThread( void ) {
 	const backEndData_t *data;
+	int64_t start;
 
 	setjmp( smpAbort );
 
 	while ( ( data = GLimp_RendererSleep() ) != NULL ) {
+		start = ri.Microseconds();
 		RB_ExecuteRenderCommands( data );
+		smpDoneTime = ri.Microseconds();
+		smpWorkAvg += ( (float)( smpDoneTime - start ) - smpWorkAvg ) * 0.125f;
 	}
+}
+
+void R_SmpInputWait( void ) {
+	int64_t wake, end, now;
+
+	wake = smpWakeTime;
+	if ( smpDoneTime >= wake ) {
+		return;
+	}
+	end = wake + (int64_t)( smpWorkAvg - smpFrontAvg - 2.0f * smpFrontDev );
+	now = ri.Microseconds();
+	if ( end - now > 1500 && ri.SleepMicroseconds ) {
+		ri.SleepMicroseconds( end - now - 1000 );
+	}
+	while ( smpDoneTime < wake && ri.Microseconds() < end ) {
+	}
+}
+
+void R_SmpInputMark( void ) {
+	smpInputTime = glConfig.smpActive ? ri.Microseconds() : 0;
+}
+
+static void R_SmpFrontDone( void ) {
+	float front, err;
+
+	if ( !smpInputTime ) {
+		return;
+	}
+	front = (float)( ri.Microseconds() - smpInputTime );
+	smpInputTime = 0;
+	err = front - smpFrontAvg;
+	smpFrontAvg += err * 0.125f;
+	smpFrontDev += ( ( err < 0.0f ? -err : err ) - smpFrontDev ) * 0.125f;
 }
 
 void R_InitCommandBuffers( void ) {
@@ -222,6 +266,7 @@ static void R_IssueRenderCommands( void ) {
 	backEndData->frameHasWorld = tr.frameHasWorld;
 
 	if ( glConfig.smpActive ) {
+		R_SmpFrontDone();
 		if ( GLimp_FrontEndSleep() ) {
 			if ( r_showSmp->integer ) {
 				ri.Printf( PRINT_ALL, "R" );
@@ -262,6 +307,7 @@ static void R_IssueRenderCommands( void ) {
 	if ( !r_skipBackEnd->integer ) {
 		R_Font_QueueUpload();
 		if ( glConfig.smpActive ) {
+			smpWakeTime = ri.Microseconds();
 			GLimp_WakeRenderer( backEndData );
 			if ( screenshot ) {
 				R_WaitRenderThread();

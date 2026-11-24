@@ -8153,12 +8153,17 @@ void vk_low_latency_input( void )
 			vk.latencyLive = qfalse;
 			return;
 		}
-		R_WaitRenderThread();
+		if ( vk.antiLag || vk.lowLatency2 ) {
+			R_WaitRenderThread();
+		} else {
+			R_SmpInputWait();
+		}
 	}
 
 	if ( vk_pacing_enabled() ) {
 		vk_pacing_wait();
 	}
+	R_SmpInputMark();
 
 	if ( !vk.antiLag && !vk.lowLatency2 ) {
 		return;

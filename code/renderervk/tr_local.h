@@ -1786,6 +1786,8 @@ void R_InitCommandBuffers( void );
 void R_ShutdownCommandBuffers( void );
 void R_SyncRenderThread( void );
 void R_WaitRenderThread( void );
+void R_SmpInputWait( void );
+void R_SmpInputMark( void );
 void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileName );
 void RB_TakeScreenshotJPEG( int x, int y, int width, int height, const char *fileName );
 void RB_TakeScreenshotPNG( int x, int y, int width, int height, const char *fileName );
