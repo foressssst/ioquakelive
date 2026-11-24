@@ -3607,6 +3607,31 @@ qboolean FS_VerifyPureGamecode(void) {
 	return qfalse;
 }
 
+static qboolean FS_SameOnDisk(const char* ospath, const byte* data, int len) {
+	byte chunk[16384];
+	FILE* f;
+	int done = 0;
+	qboolean same = qtrue;
+
+	f = Sys_FOpen(ospath, "rb");
+	if (!f) {
+		return qfalse;
+	}
+	while (same && done < len) {
+		int want = len - done < (int)sizeof(chunk) ? len - done : (int)sizeof(chunk);
+
+		if ((int)fread(chunk, 1, want, f) != want || memcmp(chunk, data + done, want)) {
+			same = qfalse;
+		}
+		done += want;
+	}
+	if (same && fread(chunk, 1, 1, f) != 0) {
+		same = qfalse;
+	}
+	fclose(f);
+	return same;
+}
+
 qboolean FS_ExtractGamecode(const char* module, char* outOSPath) {
 	char filename[MAX_QPATH];
 	searchpath_t* search;
@@ -3688,30 +3713,42 @@ qboolean FS_ExtractGamecode(const char* module, char* outOSPath) {
 				return qtrue;
 			}
 
-			if (FS_FileExists(filename)) {
-				char* path = FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename);
-				remove(path);
-			}
-
-			handleOut = FS_FOpenFileWrite(filename);
-			char* path = FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename);
-			Q_strncpyz(outOSPath, path, MAX_OSPATH);
-
-			if (!handleOut) {
-				Com_Error(ERR_FATAL, "FS_ExtractGamecode: failed to open %s for writing", filename);
-			}
-
 			fileLen = fileEntry->len;
 			buffer = Z_Malloc(fileLen);
 
 			if (FS_Read(buffer, fileLen, handleIn) != fileLen) {
 				Com_Error(ERR_FATAL, "FS_ExtractGamecode: short read");
 			}
+
+			char* path = FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename);
+			Q_strncpyz(outOSPath, path, MAX_OSPATH);
+
+			if (FS_SameOnDisk(outOSPath, buffer, fileLen)) {
+				Z_Free(buffer);
+				FS_FCloseFile(handleIn);
+				if (Q_stricmp(module, "ui") == 0) {
+					fs_uiBinChecksum = checksum;
+				} else if (Q_stricmp(module, "cgame") == 0) {
+					fs_cgameBinChecksum = checksum;
+				} else if (Q_stricmp(module, "qagame") == 0) {
+					fs_qagameBinChecksum = checksum;
+				}
+				return qtrue;
+			}
+
+			remove(outOSPath);
+
+			handleOut = FS_FOpenFileWrite(filename);
+
+			if (!handleOut) {
+				Com_Error(ERR_FATAL, "FS_ExtractGamecode: failed to open %s for writing", filename);
+			}
+
 			if (FS_Write(buffer, fileLen, handleOut) != fileLen) {
 				Com_Error(ERR_FATAL, "FS_ExtractGamecode: short write");
 			}
 
-			Com_DPrintf("Extracted '%s' (%d bytes) from '%s/%s.pk3' to '%s'\n", filename, fileLen, pak->pakGamename, pak->pakBasename, path);
+			Com_DPrintf("Extracted '%s' (%d bytes) from '%s/%s.pk3' to '%s'\n", filename, fileLen, pak->pakGamename, pak->pakBasename, outOSPath);
 
 			Z_Free(buffer);
 			FS_FCloseFile(handleIn);
