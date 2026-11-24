@@ -5265,12 +5265,15 @@ static bool Update_Busy(void) {
     return (jobKind == JOB_UPDATE || jobKind == JOB_REPAIR) && SDL_GetAtomicInt(&jobRun) == RUN_BUSY;
 }
 
+static SDL_Process* gameProcess;
+static bool gameStarted;
+
 static bool Play_Ready(void) {
-    return gameFound && !Update_Busy() && SDL_GetAtomicInt(&checkState) != CHECK_RUNNING;
+    return gameFound && !gameProcess && !Update_Busy() && SDL_GetAtomicInt(&checkState) != CHECK_RUNNING;
 }
 
 static void Update_Auto(void) {
-    if (autoTried || SDL_GetAtomicInt(&checkState) != CHECK_DONE || !updateAvailable || !packLatest.url[0] || !gameFound || install.active ||
+    if (gameProcess || autoTried || SDL_GetAtomicInt(&checkState) != CHECK_DONE || !updateAvailable || !packLatest.url[0] || !gameFound || install.active ||
         setup.step != STEP_NONE || install.done || SDL_GetAtomicInt(&jobRun) == RUN_BUSY) {
         return;
     }
@@ -5282,7 +5285,7 @@ static void Update_Auto(void) {
 static void Update_Start(void) {
     char url[128];
 
-    if (SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done) {
+    if (gameProcess || SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done) {
         return;
     }
     install.fail = FAIL_NONE;
@@ -5317,7 +5320,7 @@ static void Check_Again(void) {
 }
 
 static void Repair_Start(void) {
-    if (SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done || !gameFound) {
+    if (gameProcess || SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.done || !gameFound) {
         return;
     }
     install.fail = FAIL_NONE;
@@ -7988,13 +7991,32 @@ static bool Game_Start(void) {
         args[++i] = demoTo;
     }
     args[i + 1] = NULL;
-    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "IOQUAKELIVE_LAUNCHER", "return", true);
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "IOQUAKELIVE_LAUNCHER", "stay", true);
     process = SDL_CreateProcess(args, false);
     if (!process) {
         return false;
     }
-    SDL_DestroyProcess(process);
+    gameProcess = process;
+    gameStarted = true;
+    Window_ToTray();
     return true;
+}
+
+static bool Game_Stay(void) {
+    bool stay = gameStarted;
+
+    gameStarted = false;
+    return stay;
+}
+
+static void Game_Poll(void) {
+    int code;
+
+    if (gameProcess && SDL_WaitProcess(gameProcess, false, &code)) {
+        SDL_DestroyProcess(gameProcess);
+        gameProcess = NULL;
+        Window_FromTray();
+    }
 }
 
 typedef struct {
@@ -13497,7 +13519,7 @@ int main(int argc, char** argv) {
                         } else if (hit < 0 && Play_Refused(mx, my)) {
                             shakeAt[BTN_PLAY] = Anim_Now();
                         }
-                        if ((hit >= 0 || !Feed_Grab(mx, my)) && Button_Press(hit)) {
+                        if ((hit >= 0 || !Feed_Grab(mx, my)) && Button_Press(hit) && !Game_Stay()) {
                             running = false;
                         }
                         if (hit >= 0 && ((boxOpen && !boxWas) || (hubOpen && !hubWas && buttons[hit].y > TOP_MID * 2.0f))) {
@@ -13531,7 +13553,7 @@ int main(int argc, char** argv) {
                     }
                     break;
                 case SDL_EVENT_KEY_DOWN:
-                    if (Key_Press(event.key.key)) {
+                    if (Key_Press(event.key.key) && !Game_Stay()) {
                         running = false;
                     }
                     break;
@@ -13562,9 +13584,10 @@ int main(int argc, char** argv) {
         }
         lastState = SDL_GetAtomicInt(&checkState);
         Pick_Poll();
-        if (Job_Poll() || Launch_Poll()) {
+        if (Job_Poll() || (Launch_Poll() && !Game_Stay())) {
             running = false;
         }
+        Game_Poll();
         Taskbar_Update();
         Servers_Poll();
         if (!shot) {
