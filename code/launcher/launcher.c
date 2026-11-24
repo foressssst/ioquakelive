@@ -857,7 +857,7 @@ static int stepDir, stepFrom;
 static Uint64 stepStart;
 static float panelTop = PANEL_LOW;
 static bool slideClip;
-static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta;
+static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta, checkPending;
 static float optsHeat;
 static char connectTo[64], demoTo[128], joinNow[64];
 static SDL_Thread* checkThread;
@@ -4163,6 +4163,8 @@ static bool Release_Fetch(char* out, int size) {
 }
 
 static int SDLCALL Check_Thread(void* unused) {
+    int order;
+
     (void)unused;
     if (!Release_Fetch(httpText, sizeof(httpText)) || !Release_Tag(httpText, latestTag, sizeof(latestTag))) {
         SDL_SetAtomicInt(&checkState, CHECK_FAILED);
@@ -4171,7 +4173,8 @@ static int SDLCALL Check_Thread(void* unused) {
     SDL_strlcpy(latestVersion, latestTag[0] == 'v' ? latestTag + 1 : latestTag, sizeof(latestVersion));
     Json_Text(Json_Value(httpText, "\"body\""), latestNotes, sizeof(latestNotes));
     Package_Find(httpText, &packLatest);
-    updateAvailable = Version_Compare(latestVersion, installedVersion) > 0;
+    order = Version_Compare(latestVersion, installedVersion);
+    updateAvailable = order > 0 || (order < 0 && !betaChannel && strstr(installedVersion, "-preview-"));
     SDL_SetAtomicInt(&checkState, CHECK_DONE);
     return 0;
 }
@@ -4993,7 +4996,7 @@ static void Install_Refresh(void) {
 }
 
 static int Install_Work(bool update) {
-    char root[1100], path[1200], exe[1200], hash[65];
+    char root[1100], path[1200], exe[1200], hash[65], found[32];
     const char* source = install.zip;
     const char* desktop = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
     pack_t* pack = update ? &packLatest : &packJob;
@@ -5065,6 +5068,9 @@ static int Install_Work(bool update) {
         }
         if (fail != FAIL_NONE) {
             return fail;
+        }
+        if (SDL_strcmp(jobVersion, "0") && Game_Version(root, found, sizeof(found)) && Version_Compare(found, jobVersion)) {
+            return FAIL_FILE;
         }
     }
     if (!update) {
@@ -5341,9 +5347,9 @@ static void Update_Start(void) {
     SDL_OpenURL(url);
 }
 
-static void Check_Again(void) {
+static bool Check_Again(void) {
     if (SDL_GetAtomicInt(&checkState) == CHECK_RUNNING || SDL_GetAtomicInt(&jobRun) == RUN_BUSY || install.active) {
-        return;
+        return false;
     }
     if (checkThread) {
         SDL_WaitThread(checkThread, NULL);
@@ -5355,6 +5361,7 @@ static void Check_Again(void) {
     if (!checkThread) {
         SDL_SetAtomicInt(&checkState, CHECK_FAILED);
     }
+    return true;
 }
 
 static void Repair_Start(void) {
@@ -5371,7 +5378,7 @@ static void Beta_Set(bool on) {
     }
     betaChannel = on;
     Settings_Save();
-    Check_Again();
+    checkPending = !Check_Again();
 }
 
 static void Folder_Game(void) {
@@ -13631,6 +13638,9 @@ int main(int argc, char** argv) {
         Servers_Poll();
         if (!shot) {
             Update_Auto();
+        }
+        if (checkPending && Check_Again()) {
+            checkPending = false;
         }
         Steam_Poll(SDL_GetTicks());
         Friends_Poll();
