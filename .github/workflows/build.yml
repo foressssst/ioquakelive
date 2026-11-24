@@ -534,7 +534,7 @@ jobs:
           --version "$VERSION"
         (cd files && for f in *.zip; do echo "$f $(stat -c%s "$f") $(sha256sum "$f" | cut -d' ' -f1)"; done > files.txt)
         case "$VERSION" in
-          3.0.0|3.0.0-*) cp files/*.zip release/ ;;
+          3.0.0|3.0.0-*|3.0.1) cp files/*.zip release/ ;;
         esac
         ls -la release/ files/
         cat files/files.txt
