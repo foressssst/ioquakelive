@@ -302,6 +302,66 @@ static void S_PaintChannelFrom16(channel_t* ch, const sfx_t* sc, int count, int 
     S_PaintChannelFrom16_scalar(ch, sc, count, sampleOffset, bufferOffset);
 }
 
+#define LIMITER_HISTORY 16384
+#define LIMITER_PEAK (32767 * 256)
+
+typedef struct {
+    int time;
+    int hold;
+    float gain;
+} limiterState_t;
+
+static limiterState_t s_limiterHistory[LIMITER_HISTORY];
+
+static void S_LimitPaintBuffer(int start, int count) {
+    const limiterState_t* prev = &s_limiterHistory[(start - 1) & (LIMITER_HISTORY - 1)];
+    portable_samplepair_t* samp = paintbuffer;
+    const int holdSamples = dma.speed / 50;
+    const float release = 1.0f - expf(-12.5f / (float)MAX(dma.speed, 1));
+    float gain = 1.0f;
+    int hold = 0;
+    int i;
+
+    if (prev->time == start - 1 && prev->gain > 0.0f) {
+        gain = prev->gain;
+        hold = prev->hold;
+    }
+
+    for (i = 0; i < count; i++, samp++) {
+        limiterState_t* st = &s_limiterHistory[(start + i) & (LIMITER_HISTORY - 1)];
+        int peak = abs(samp->left);
+
+        if (abs(samp->right) > peak) {
+            peak = abs(samp->right);
+        }
+        if (peak > LIMITER_PEAK) {
+            const float need = (float)LIMITER_PEAK / (float)peak;
+
+            if (need < gain) {
+                gain = need;
+            }
+            if (need <= gain * 1.001f) {
+                hold = holdSamples;
+            }
+        }
+        if (gain < 1.0f) {
+            samp->left = (int)((float)samp->left * gain);
+            samp->right = (int)((float)samp->right * gain);
+        }
+        if (hold > 0) {
+            hold--;
+        } else if (gain < 1.0f) {
+            gain += (1.0f - gain) * release;
+            if (gain > 0.9999f) {
+                gain = 1.0f;
+            }
+        }
+        st->time = start + i;
+        st->hold = hold;
+        st->gain = gain;
+    }
+}
+
 void S_PaintChannels(int endtime) {
     int i;
     int end;
@@ -414,6 +474,7 @@ void S_PaintChannels(int endtime) {
             } while (ltime < end);
         }
 
+        S_LimitPaintBuffer(s_paintedtime, end - s_paintedtime);
         S_TransferPaintBuffer(end);
         s_paintedtime = end;
     }
