@@ -9,6 +9,7 @@
 #include "../renderercommon/tr_stbtt.h"
 #define VK_NO_PROTOTYPES
 #include "../renderercommon/vulkan/vulkan_core.h"
+#include "launcher_steam.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -199,6 +200,22 @@
 #define TOAST_MAX 4
 #define TOAST_H 42.0f
 #define TOAST_LIFE 4.0f
+#define FR_W 340.0f
+#define FR_X (UI_W - 12.0f - FR_W)
+#define FR_Y (CTRL_Y + CTRL_H + 6.0f)
+#define FR_H (UI_H - 12.0f - FR_Y)
+#define FR_HEAD 52.0f
+#define FR_ROW 50.0f
+#define FR_ROW_GAME 68.0f
+#define FR_SECTION 30.0f
+#define FR_GAP 6.0f
+#define FR_AVATAR 32.0f
+#define FR_ROWS 48
+#define FR_SPOTS 512
+#define FR_SPOT_EVERY 45000
+#define FR_SAMPLE_ID 76561199990000000ull
+#define BOX_INVITES 16
+#define FR_ICON 17.0f
 
 #define STABLE_API "https://api.github.com/repos/foressssst/ioquakelive/releases/latest"
 #define BETA_API "https://api.github.com/repos/foressssst/ioquakelive/releases?per_page=1"
@@ -337,8 +354,11 @@ enum {
     BTN_SIDE_LAST = BTN_SIDE_0 + SIDE_ROWS - 1,
     BTN_PLR_0,
     BTN_PLR_LAST = BTN_PLR_0 + LIVE_MAX - 1,
+    BTN_INV_0,
+    BTN_INV_LAST = BTN_INV_0 + BOX_INVITES - 1,
     BTN_CONNECT,
     BTN_SEE_SERVER,
+    BTN_INVITE,
     BTN_BOX_CLOSE,
     BTN_BOX,
     BTN_VEIL,
@@ -355,6 +375,13 @@ enum {
     BTN_HUB_DEMOS_ALL,
     BTN_HUB_ROW_0,
     BTN_HUB = BTN_HUB_ROW_0 + HUB_ROWS,
+    BTN_FRIENDS,
+    BTN_FR_CLOSE,
+    BTN_FR_STEAM,
+    BTN_FR_FOLD,
+    BTN_FR_JOIN_0,
+    BTN_FR_ROW_0 = BTN_FR_JOIN_0 + FR_ROWS,
+    BTN_FR_PANEL = BTN_FR_ROW_0 + FR_ROWS,
     BTN_COUNT
 };
 enum { STEP_NONE, STEP_FILES, STEP_SETTINGS, STEP_DEMOS, STEP_PREFS };
@@ -587,6 +614,38 @@ enum {
     TXT_HUB_CARRIER,
     TXT_HUB_LOADING,
     TXT_HUB_FAILED,
+    TXT_FR_TITLE,
+    TXT_FR_ONLINE,
+    TXT_FR_SEC_QL,
+    TXT_FR_SEC_ONLINE,
+    TXT_FR_SEC_OFFLINE,
+    TXT_FR_MATCH,
+    TXT_FR_MATCH_MAP,
+    TXT_FR_MODE_MAP,
+    TXT_FR_IN_MATCH,
+    TXT_FR_JOINING,
+    TXT_FR_DEMO,
+    TXT_FR_MENU,
+    TXT_FR_LAUNCHER,
+    TXT_FR_QL,
+    TXT_FR_OTHER,
+    TXT_FR_AVAILABLE,
+    TXT_FR_AWAY,
+    TXT_FR_BUSY,
+    TXT_FR_OFFLINE,
+    TXT_FR_MINUTES,
+    TXT_FR_HOURS,
+    TXT_FR_JOIN,
+    TXT_INVITE,
+    TXT_INVITED,
+    TXT_INVITE_NONE,
+    TXT_INVITE_FAILED,
+    TXT_FR_STEAM_CLOSED,
+    TXT_FR_OPEN_STEAM,
+    TXT_FR_CONNECTING,
+    TXT_FR_STEAM_FAILED,
+    TXT_FR_NO_STEAM,
+    TXT_FR_NONE,
     TXT_COUNT
 };
 
@@ -704,7 +763,7 @@ extern const unsigned char launcherFlags[];
 
 static SDL_Window* window;
 static SDL_Renderer* renderer;
-static image_t hero, heroSoft, shade, logo, iconMore, iconCheck, iconSlash, iconGear, iconSteam, iconDiscord;
+static image_t hero, heroSoft, shade, logo, iconMore, iconCheck, iconSlash, iconGear, iconSteam, iconDiscord, iconPeople;
 static float artX, artY, artMidX, artMidY, artGoalX, artGoalY;
 static float uiScale = 1.0f;
 static const float artBox[2][4] = {{-24.0f, -40.0f, UI_W * 1.06f, UI_H * 1.06f}, {-12.0f, -26.0f, UI_W + 24.0f, UI_H + 24.0f}};
@@ -802,7 +861,7 @@ static float optsHeat;
 static char connectTo[64], demoTo[128], joinNow[64];
 static SDL_Thread* checkThread;
 typedef struct {
-    char name[96], map[32], mode[16], addr[48];
+    char name[96], map[32], mode[64], addr[48];
     int players, max;
 } server_t;
 typedef struct {
@@ -854,7 +913,9 @@ static Uint64 serversWhen;
 static bool serversLoaded, serversFailed;
 static char serversText[65536];
 static server_t boxServer;
-static bool boxOpen, liveLoaded, liveFailed, liveAgain;
+static bool boxOpen, boxForeign, boxInvite, liveLoaded, liveFailed, liveAgain;
+static Uint64 boxInviteId[BOX_INVITES], boxInvited[64];
+static int boxInvitedCount;
 static float boxHeat, boxGoal, boxView, boxMost, boxPull;
 static player_t livePlayers[LIVE_MAX], liveNext[LIVE_MAX];
 static int liveCount, liveNextCount, liveScore[2], liveNextScore[2], boxWant;
@@ -907,8 +968,43 @@ static char appRoot[1024];
 #endif
 static char pickPath[1024];
 static Sint64 userWhen;
-static bool steamMissing;
+static bool steamMissing, steamSignedIn;
 static Uint64 steamChecked, steamLaunch, steamReady;
+
+enum { FRG_QL, FRG_ONLINE, FRG_OFFLINE, FRG_COUNT };
+
+typedef struct {
+    Uint64 id;
+    image_t img;
+    float heat;
+} frAvatar_t;
+
+typedef struct {
+    Uint64 id;
+    char addr[48];
+} frSpot_t;
+
+static steamFriend_t frList[STEAMF_MAX];
+static char frPlain[STEAMF_MAX][96];
+static int frCount, frOrder[STEAMF_MAX], frVersion = -1, frOnline, frState, frAvatarCount, frGroupSize[FRG_COUNT];
+static frAvatar_t frAvatars[STEAMF_MAX];
+static frSpot_t frSpots[FR_SPOTS], frSpotsNext[FR_SPOTS];
+static char frSpotAddrs[SRV_MAX][48];
+static char frSpotText[65536];
+static int frSpotCount, frSpotsNextCount, frSpotAddrCount;
+static bool frSpotted[STEAMF_MAX];
+static SDL_AtomicInt frSpotState;
+static SDL_Thread* frSpotThread;
+static Uint64 frSpotWhen, frCardWant, frRowId[FR_ROWS];
+static bool frOpen, frFold = true, frSample, frForce, frCardInvite;
+static Uint64 frProbeUntil;
+static float frHeat, frListGoal, frListView, frListPull, frListMost;
+static bool Friends_Over(float x, float y);
+static bool Fr_IsFriend(const char* steamId);
+static bool Fr_CanInvite(void);
+static float Box_Invite(float x, float y, float w, bool draw);
+static float Box_Friends(float x, float y, float w, bool draw);
+static void Fr_Enrich(void);
 
 static const char* const texts[TXT_COUNT] = {
     [TXT_PLAY] = "Jugar",
@@ -1134,6 +1230,38 @@ static const char* const texts[TXT_COUNT] = {
     [TXT_HUB_CARRIER] = "Bajas al portador",
     [TXT_HUB_LOADING] = "Cargando...",
     [TXT_HUB_FAILED] = "No se pudo cargar.",
+    [TXT_FR_TITLE] = "Amigos",
+    [TXT_FR_ONLINE] = "%d en línea",
+    [TXT_FR_SEC_QL] = "En Quake Live",
+    [TXT_FR_SEC_ONLINE] = "En línea",
+    [TXT_FR_SEC_OFFLINE] = "Desconectados",
+    [TXT_FR_MATCH] = "En partida: %s en %s",
+    [TXT_FR_MATCH_MAP] = "En partida en %s",
+    [TXT_FR_MODE_MAP] = "%s en %s",
+    [TXT_FR_IN_MATCH] = "En partida",
+    [TXT_FR_JOINING] = "Entrando a una partida",
+    [TXT_FR_DEMO] = "Viendo una demo",
+    [TXT_FR_MENU] = "En el menú",
+    [TXT_FR_LAUNCHER] = "En el launcher",
+    [TXT_FR_QL] = "Jugando a Quake Live",
+    [TXT_FR_OTHER] = "Jugando a otro juego",
+    [TXT_FR_AVAILABLE] = "En línea",
+    [TXT_FR_AWAY] = "Ausente",
+    [TXT_FR_BUSY] = "Ocupado",
+    [TXT_FR_OFFLINE] = "Desconectado",
+    [TXT_FR_MINUTES] = "hace %d min",
+    [TXT_FR_HOURS] = "hace %d h",
+    [TXT_FR_JOIN] = "Unirse",
+    [TXT_INVITE] = "Invitar",
+    [TXT_INVITED] = "Invitado",
+    [TXT_INVITE_NONE] = "No hay amigos en línea para invitar.",
+    [TXT_INVITE_FAILED] = "No se pudo enviar la invitación.",
+    [TXT_FR_STEAM_CLOSED] = "Abre Steam para ver a tus amigos.",
+    [TXT_FR_OPEN_STEAM] = "Abrir Steam",
+    [TXT_FR_CONNECTING] = "Conectando con Steam...",
+    [TXT_FR_STEAM_FAILED] = "No se pudo conectar con Steam.",
+    [TXT_FR_NO_STEAM] = "No se encontró Steam en tu equipo.",
+    [TXT_FR_NONE] = "Todavía no tienes amigos en Steam.",
 };
 
 #define T(id) texts[id]
@@ -2048,6 +2176,48 @@ static void Icon_Gear(image_t* image, float size) {
     free(rgba);
 }
 
+static bool People_Front(float x, float y, float grow) {
+    float hx = x - 0.38f, hy = y - 0.33f, bx = (x - 0.38f) / (0.30f + grow), by = (y - 0.95f) / (0.33f + grow);
+
+    return hx * hx + hy * hy <= (0.16f + grow) * (0.16f + grow) || (bx * bx + by * by <= 1.0f && y <= 0.88f + grow);
+}
+
+static bool People_Back(float x, float y) {
+    float hx = x - 0.69f, hy = y - 0.29f, bx = (x - 0.70f) / 0.25f, by = (y - 0.86f) / 0.29f;
+
+    return hx * hx + hy * hy <= 0.13f * 0.13f || (bx * bx + by * by <= 1.0f && y <= 0.80f);
+}
+
+static void Icon_People(image_t* image, float size) {
+    int n = (int)(size * uiScale + 0.5f), x, y, sx, sy;
+    unsigned char* rgba = n > 0 ? malloc((size_t)n * n * 4) : NULL;
+
+    if (!rgba) {
+        return;
+    }
+    for (y = 0; y < n; y++) {
+        for (x = 0; x < n; x++) {
+            int hits = 0;
+
+            for (sy = 0; sy < 4; sy++) {
+                for (sx = 0; sx < 4; sx++) {
+                    float px = (x + (sx + 0.5f) * 0.25f) / (float)n, py = (y + (sy + 0.5f) * 0.25f) / (float)n;
+
+                    if (People_Front(px, py, 0.0f) || (People_Back(px, py) && !People_Front(px, py, 0.075f))) {
+                        hits++;
+                    }
+                }
+            }
+            rgba[(y * n + x) * 4 + 0] = 255;
+            rgba[(y * n + x) * 4 + 1] = 255;
+            rgba[(y * n + x) * 4 + 2] = 255;
+            rgba[(y * n + x) * 4 + 3] = (unsigned char)(hits * 255 / 16);
+        }
+    }
+    Image_Make(image, rgba, n, n, size);
+    free(rgba);
+}
+
 static void Icons_Load(void) {
     static const float more[6] = {0.2f, 0.64f, 0.5f, 0.36f, 0.8f, 0.64f};
     static const float check[6] = {0.2f, 0.52f, 0.42f, 0.74f, 0.8f, 0.3f};
@@ -2057,6 +2227,7 @@ static void Icons_Load(void) {
     Icon_Lines(&iconCheck, CHECK_ICON, check, 3, 0.09f);
     Icon_Lines(&iconSlash, CLOSE_ICON, slash, 2, 0.05f);
     Icon_Gear(&iconGear, GEAR_ICON);
+    Icon_People(&iconPeople, FR_ICON);
 }
 
 static void Draw_Color(Uint32 rgba) {
@@ -4371,6 +4542,7 @@ static void Steam_Poll(Uint64 now) {
         steamMissing = true;
     }
 #endif
+    steamSignedIn = !steamMissing && Steam_LoggedIn();
 }
 
 static bool QL_Try(const char* library) {
@@ -5695,6 +5867,7 @@ static void Hub_Shots(void);
 static float Hub_ProDemos(float y);
 static const char* Map_Title(const char* map);
 static void Box_Open(const server_t* s);
+static void Box_Show(const server_t* s, bool foreign);
 
 static SDL_Thread* hubFontThread;
 static SDL_AtomicInt hubFontState;
@@ -6745,7 +6918,7 @@ static void Live_Poll(void) {
         }
         SDL_SetAtomicInt(&liveState, 0);
     }
-    if (boxOpen && SDL_GetAtomicInt(&liveState) == 0 && (liveAgain || SDL_GetTicks() - liveWhen > 5000)) {
+    if (boxOpen && !boxForeign && SDL_GetAtomicInt(&liveState) == 0 && (liveAgain || SDL_GetTicks() - liveWhen > 5000)) {
         liveAgain = false;
         Live_Fetch();
     }
@@ -7437,6 +7610,7 @@ static void Servers_Poll(void) {
         serverCount = serversNextCount;
         serversLoaded = true;
         serversFailed = false;
+        Fr_Enrich();
         for (i = 0; i < serverCount; i++) {
             if (boxOpen && !SDL_strcmp(servers[i].addr, boxServer.addr)) {
                 boxServer = servers[i];
@@ -7988,7 +8162,7 @@ static void Button_Set(int index, float x, float y, float w, float h, bool visib
 static int Button_At(float x, float y) {
     int i;
 
-    for (i = 0; i < BTN_COUNT; i++) {
+    for (i = Friends_Over(x, y) ? BTN_FR_CLOSE : 0; i < BTN_COUNT; i++) {
         const button_t* b = &buttons[i];
 
         if (b->visible && x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h) {
@@ -8223,18 +8397,26 @@ static void Draw_Top(void) {
     Draw_Caps(FONT_BRAND, LOGO_X + LOGO + 14.0f, TOP_MID, COL_WHITE, "ioquakelive", TRACK_CAPS);
     Draw_Nav();
 
+    Button_Set(BTN_FRIENDS, UI_W - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
     Button_Set(BTN_DISCORD, UI_W - CTRL_W * 4.0f, CTRL_Y, CTRL_W, CTRL_H, true);
     Button_Set(BTN_OPTS, UI_W - CTRL_W * 3.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
     Button_Set(BTN_MIN, UI_W - CTRL_W * 2.0f, CTRL_Y, CTRL_W, CTRL_H, true);
     Button_Set(BTN_CLOSE, UI_W - CTRL_W, CTRL_Y, CTRL_W, CTRL_H, true);
-    for (i = BTN_DISCORD; i <= BTN_CLOSE; i++) {
-        float lit = i == BTN_OPTS && optsOpen ? 1.0f : heat[i];
+    for (i = BTN_DISCORD - 1; i <= BTN_CLOSE; i++) {
+        int index = i < BTN_DISCORD ? BTN_FRIENDS : i;
+        float lit = (index == BTN_OPTS && optsOpen) || (index == BTN_FRIENDS && frOpen) ? 1.0f : heat[index];
 
-        if (lit <= 0.0f || !buttons[i].visible) {
+        if (lit <= 0.0f || !buttons[index].visible) {
             continue;
         }
-        b = &buttons[i];
+        b = &buttons[index];
         Draw_Round(b->x, b->y, b->w, b->h, ITEM_R, Col_Alpha(COL_HUSH, lit));
+    }
+    b = &buttons[BTN_FRIENDS];
+    if (b->visible) {
+        float ix = b->x + (b->w - FR_ICON) * 0.5f, iy = b->y + (b->h - FR_ICON) * 0.5f;
+
+        Draw_Icon(&iconPeople, ix, iy, FR_ICON, COL_WHITE);
     }
     b = &buttons[BTN_DISCORD];
     if (b->visible) {
@@ -8482,7 +8664,7 @@ static void Draw_Status(void) {
     char line[96];
     const char* text = line;
     int state = SDL_GetAtomicInt(&checkState);
-    float x = (buttons[BTN_ME].visible ? buttons[BTN_ME].x : UI_W - CTRL_W * 4.0f) - 14.0f;
+    float x = (buttons[BTN_ME].visible ? buttons[BTN_ME].x : UI_W - CTRL_W * (buttons[BTN_FRIENDS].visible ? 5.0f : 4.0f)) - 14.0f;
 
     Button_Set(BTN_UPDATE, 0.0f, 0.0f, 0.0f, 0.0f, false);
     if (!gameFound || install.active || setup.step != STEP_NONE) {
@@ -8959,7 +9141,12 @@ static float Box_List(float x, float y, float w, int which, bool draw) {
                 sw = Text_Width(FONT_SV_SCORE, num, -1) + 12.0f;
                 Draw_Text(FONT_SV_SCORE, x + w - 6.0f - sw + 12.0f, Text_Mid(FONT_SV_SCORE, mid), COL_WHITE, num, -1);
             }
-            nx = Player_Badges(pl, x + 6.0f, mid);
+            nx = x + 6.0f;
+            if (Fr_IsFriend(pl->steamId)) {
+                Draw_Round(nx, mid - 3.5f, 7.0f, 7.0f, 3.5f, COL_GOLD);
+                nx += 13.0f;
+            }
+            nx = Player_Badges(pl, nx, mid);
             Draw_NameFit(FONT_SV_NAME, nx, mid, which == 3 ? COL_W70 : COL_WHITE, pl->raw, 0.5f, x + w - 6.0f - sw - nx);
         }
         row += BOX_ROW;
@@ -8983,6 +9170,12 @@ static float Box_Body(float x, float y, float w, bool draw) {
     float top = y, half = (w - 24.0f) * 0.5f;
     int i, red = 0, blue = 0, spec = 0, play = 0;
 
+    if (boxInvite && Fr_CanInvite()) {
+        return Box_Invite(x, y, w, draw);
+    }
+    if (boxForeign) {
+        return Box_Friends(x, y, w, draw);
+    }
     if (!liveLoaded && !liveFailed) {
         if (draw) {
             for (i = 0; i < 2; i++) {
@@ -9058,7 +9251,7 @@ static void Draw_Box(void) {
     char line[160];
     const shot_t* shot = Shot_Find(boxServer.map);
     const shot_t* fallback = Shot_Find("*default");
-    float e = boxHeat * boxHeat * (3.0f - 2.0f * boxHeat), content, bodyH, h, x, y, top, fy, cw, most;
+    float e = boxHeat * boxHeat * (3.0f - 2.0f * boxHeat), content, bodyH, h, x, y, top, fy, cw, bx, most;
     SDL_Rect clip;
 
     if (e <= 0.0f) {
@@ -9081,15 +9274,21 @@ static void Draw_Box(void) {
     Draw_Rect(x, y + COVER_H, BOX_W, BOX_R, COL_P2);
     if (liveLoaded) {
         SDL_snprintf(line, sizeof(line), "%s \xc2\xb7 %d %s %d", T(Live_State(liveGame)), boxServer.players, T(TXT_OF), boxServer.max);
-    } else {
+    } else if (boxServer.max > 0) {
         SDL_snprintf(line, sizeof(line), "%d %s %d", boxServer.players, T(TXT_OF), boxServer.max);
+    } else {
+        line[0] = '\0';
     }
     Draw_Caps(FONT_SV_HEAD, x + 24.0f, y + 28.0f, COL_W85, line, 1.1f);
     if (liveLoaded && Mode_Teams(boxServer.mode) && Live_State(liveGame) == TXT_STATE_PLAYING && liveScore[0] >= 0 && liveScore[1] >= 0) {
         Box_Score(x + BOX_W * 0.5f, y + COVER_H * 0.5f);
     }
     Draw_CapsFit(FONT_BOXNAME, x + 24.0f, y + COVER_H - 46.0f, COL_WHITE, boxServer.name, TRACK_CAPS, BOX_W - 48.0f);
-    SDL_snprintf(line, sizeof(line), "%s - %s", boxServer.mode, boxServer.map);
+    if (boxServer.mode[0]) {
+        SDL_snprintf(line, sizeof(line), "%s - %s", boxServer.mode, boxServer.map);
+    } else {
+        SDL_strlcpy(line, boxServer.map, sizeof(line));
+    }
     Draw_CapsFit(FONT_SV_MAP, x + 24.0f, y + COVER_H - 22.0f, COL_W70, line, 0.72f, BOX_W - 48.0f);
     top = y + COVER_H + 18.0f;
     most = SDL_max(0.0f, content - bodyH);
@@ -9112,7 +9311,13 @@ static void Draw_Box(void) {
     }
     fy = y + h - 24.0f - BOX_BTN_H;
     cw = Draw_Button(BTN_CONNECT, x + 24.0f, fy, T(TXT_JOIN), true, boxOpen && Play_Ready());
-    Draw_Button(BTN_SEE_SERVER, x + 24.0f + cw + 10.0f, fy, T(TXT_SEE_SERVER), false, boxOpen);
+    bx = x + 24.0f + cw + 10.0f;
+    if (!boxForeign) {
+        bx += Draw_Button(BTN_SEE_SERVER, bx, fy, T(TXT_SEE_SERVER), false, boxOpen) + 10.0f;
+    }
+    if (Fr_CanInvite()) {
+        Draw_Button(BTN_INVITE, bx, fy, T(boxInvite ? TXT_COL_PLAYERS : TXT_INVITE), false, boxOpen);
+    }
     Draw_Button(BTN_BOX_CLOSE, x + BOX_W - 24.0f - Button_Width(T(TXT_CLOSE)), fy, T(TXT_CLOSE), false, boxOpen);
     Button_Set(BTN_BOX, x, y, BOX_W, h, boxOpen);
     Button_Set(BTN_VEIL, 0.0f, 0.0f, UI_W, UI_H, boxOpen);
@@ -9131,7 +9336,7 @@ static void Draw_Me(void) {
         nw = SDL_min(Runes_Width(FONT_NAV, r, Name_Runes(meProfile.raw, r, NAME_RUNES)), 150.0f);
         textTrack = 0.0f;
         w = 8.0f + 24.0f + 10.0f + nw + 12.0f;
-        x = UI_W - CTRL_W * 4.0f - 8.0f - w;
+        x = UI_W - CTRL_W * (buttons[BTN_FRIENDS].visible ? 5.0f : 4.0f) - 8.0f - w;
         Button_Set(BTN_ME, x, CTRL_Y + 4.0f, w, CTRL_H - 8.0f, true);
         if (heat[BTN_ME] > 0.0f) {
             Draw_Round(x, CTRL_Y + 4.0f, w, CTRL_H - 8.0f, 6.0f, Col_Alpha(COL_HUSH, heat[BTN_ME]));
@@ -11417,6 +11622,921 @@ static void Draw_Toasts(void) {
     slideFade = keep;
 }
 
+static Sint64 Fr_Now(void) {
+    SDL_Time t;
+
+    return SDL_GetCurrentTime(&t) ? (Sint64)(t / SDL_NS_PER_SECOND) : 0;
+}
+
+static bool Fr_Addr(const char* s) {
+    size_t n = SDL_strlen(s), i;
+
+    if (n < 3 || n >= sizeof(joinNow) || s[0] == '-') {
+        return false;
+    }
+    for (i = 0; i < n; i++) {
+        if (!SDL_isalnum((unsigned char)s[i]) && !SDL_strchr(".:-[]", s[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int Fr_Group(const steamFriend_t* f) {
+    if (f->persona == STEAMF_OFF) {
+        return FRG_OFFLINE;
+    }
+    return f->game == STEAMF_GAME_QL ? FRG_QL : FRG_ONLINE;
+}
+
+static int Fr_Rank(const steamFriend_t* f) {
+    static const char* const states[] = {"match", "connecting", "demo", "menu", "launcher"};
+    int i;
+
+    if (f->game == STEAMF_GAME_QL) {
+        for (i = 0; i < (int)SDL_arraysize(states); i++) {
+            if (!SDL_strcmp(f->state, states[i])) {
+                return i;
+            }
+        }
+        return (int)SDL_arraysize(states);
+    }
+    if (f->game == STEAMF_GAME_OTHER) {
+        return 0;
+    }
+    return f->persona == STEAMF_BUSY ? 2 : f->persona == STEAMF_AWAY || f->persona == STEAMF_SNOOZE ? 3 : 1;
+}
+
+static int SDLCALL Fr_Compare(const void* a, const void* b) {
+    int ia = *(const int*)a, ib = *(const int*)b;
+    int d = Fr_Group(&frList[ia]) - Fr_Group(&frList[ib]);
+
+    if (!d) {
+        d = Fr_Rank(&frList[ia]) - Fr_Rank(&frList[ib]);
+    }
+    if (!d) {
+        d = SDL_strcasecmp(frPlain[ia], frPlain[ib]);
+    }
+    return d ? d : ia - ib;
+}
+
+static int Fr_Find(Uint64 id) {
+    int i;
+
+    for (i = 0; i < frCount; i++) {
+        if (frList[i].id == id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static frAvatar_t* Fr_Avatar(Uint64 id) {
+    int i;
+
+    for (i = 0; i < frAvatarCount; i++) {
+        if (frAvatars[i].id == id) {
+            return &frAvatars[i];
+        }
+    }
+    return NULL;
+}
+
+static void Fr_Sort(void) {
+    int i;
+
+    frOnline = 0;
+    SDL_zeroa(frGroupSize);
+    for (i = 0; i < frCount; i++) {
+        Name_Plain(frList[i].name, frPlain[i], sizeof(frPlain[i]));
+        if (!frPlain[i][0]) {
+            SDL_strlcpy(frPlain[i], "?", sizeof(frPlain[i]));
+        }
+        frOrder[i] = i;
+        frGroupSize[Fr_Group(&frList[i])]++;
+        if (frList[i].persona != STEAMF_OFF) {
+            frOnline++;
+        }
+    }
+    SDL_qsort(frOrder, (size_t)frCount, sizeof(int), Fr_Compare);
+}
+
+static void Fr_Refresh(void) {
+    frCount = SteamF_Copy(frList, STEAMF_MAX, NULL, 0, NULL);
+    SDL_zeroa(frSpotted);
+    Fr_Sort();
+    Fr_Enrich();
+}
+
+static Uint32 Fr_Color(const steamFriend_t* f) {
+    if (f->persona == STEAMF_OFF) {
+        return COL_DOT;
+    }
+    if (f->game == STEAMF_GAME_QL) {
+        return COL_GOLD;
+    }
+    if (f->game == STEAMF_GAME_OTHER) {
+        return 0x8FB93BFF;
+    }
+    if (f->persona == STEAMF_AWAY || f->persona == STEAMF_SNOOZE || f->persona == STEAMF_BUSY) {
+        return 0x53A4C48C;
+    }
+    return 0x53A4C4FF;
+}
+
+static void Fr_StateText(const steamFriend_t* f, char* out, size_t size) {
+    int id = TXT_FR_AVAILABLE;
+
+    if (f->persona == STEAMF_OFF) {
+        id = TXT_FR_OFFLINE;
+    } else if (f->game == STEAMF_GAME_QL) {
+        if (!SDL_strcmp(f->state, "match")) {
+            if (f->mode[0] && f->map[0]) {
+                SDL_snprintf(out, size, T(TXT_FR_MATCH), f->mode, Map_Title(f->map));
+                return;
+            }
+            if (f->map[0]) {
+                SDL_snprintf(out, size, T(TXT_FR_MATCH_MAP), Map_Title(f->map));
+                return;
+            }
+            id = TXT_FR_IN_MATCH;
+        } else if (!SDL_strcmp(f->state, "connecting")) {
+            id = TXT_FR_JOINING;
+        } else if (!SDL_strcmp(f->state, "demo")) {
+            id = TXT_FR_DEMO;
+        } else if (!SDL_strcmp(f->state, "menu")) {
+            id = TXT_FR_MENU;
+        } else if (!SDL_strcmp(f->state, "launcher")) {
+            id = TXT_FR_LAUNCHER;
+        } else {
+            id = TXT_FR_QL;
+        }
+    } else if (f->game == STEAMF_GAME_OTHER) {
+        id = TXT_FR_OTHER;
+    } else if (f->persona == STEAMF_AWAY || f->persona == STEAMF_SNOOZE) {
+        id = TXT_FR_AWAY;
+    } else if (f->persona == STEAMF_BUSY) {
+        id = TXT_FR_BUSY;
+    }
+    SDL_strlcpy(out, T(id), size);
+}
+
+static bool Fr_HasTail(const steamFriend_t* f) {
+    return f->game == STEAMF_GAME_QL && !SDL_strcmp(f->state, "match") && (f->host[0] || f->players[0] || f->since > 0);
+}
+
+static void Fr_Tail(const steamFriend_t* f, char* out, size_t size) {
+    char ago[32] = "";
+    Sint64 now = Fr_Now();
+
+    if (f->since > 0 && now >= f->since) {
+        int minutes = (int)((now - f->since) / 60);
+
+        if (minutes < 60) {
+            SDL_snprintf(ago, sizeof(ago), T(TXT_FR_MINUTES), SDL_max(minutes, 1));
+        } else {
+            SDL_snprintf(ago, sizeof(ago), T(TXT_FR_HOURS), minutes / 60);
+        }
+    }
+    SDL_snprintf(out, size, "%s%s%s", f->players, f->players[0] && ago[0] ? " · " : "", ago);
+}
+
+static void Fr_Line(const steamFriend_t* f, char* out, size_t size, float width) {
+    char tail[64];
+
+    Fr_Tail(f, tail, sizeof(tail));
+    if (f->host[0]) {
+        float room = width - (tail[0] ? Text_Width(FONT_SV_OF, tail, -1) + Text_Width(FONT_SV_OF, " · ", -1) : 0.0f);
+
+        SDL_snprintf(out, size, "%s%s%s", Text_Fit(FONT_SV_OF, f->host, room), tail[0] ? " · " : "", tail);
+    } else {
+        SDL_strlcpy(out, tail, size);
+    }
+}
+
+static bool Friends_Over(float x, float y) {
+    return frOpen && !boxOpen && x >= FR_X && x < FR_X + FR_W && y >= FR_Y && y < FR_Y + FR_H;
+}
+
+static void Fr_Join(Uint64 id) {
+    int fi = Fr_Find(id);
+
+    if (fi < 0 || !Fr_Addr(frList[fi].connect) || !Play_Ready()) {
+        return;
+    }
+    SDL_strlcpy(joinNow, frList[fi].connect, sizeof(joinNow));
+    frOpen = false;
+}
+
+static const server_t* Fr_Server(const char* addr) {
+    int i;
+
+    for (i = 0; addr[0] && i < serverCount; i++) {
+        if (!SDL_strcmp(servers[i].addr, addr)) {
+            return &servers[i];
+        }
+    }
+    return NULL;
+}
+
+static void Fr_Enrich(void) {
+    int i, k;
+
+    for (i = 0; i < frCount; i++) {
+        steamFriend_t* f = &frList[i];
+        const server_t* s;
+
+        if (f->game != STEAMF_GAME_QL || SDL_strcmp(f->state, "match")) {
+            continue;
+        }
+        if (!f->connect[0] || frSpotted[i]) {
+            f->connect[0] = '\0';
+            frSpotted[i] = false;
+            for (k = 0; k < frSpotCount; k++) {
+                if (frSpots[k].id == f->id) {
+                    SDL_strlcpy(f->connect, frSpots[k].addr, sizeof(f->connect));
+                    frSpotted[i] = true;
+                    break;
+                }
+            }
+        }
+        s = Fr_Server(f->connect);
+        if (s) {
+            SDL_strlcpy(f->host, s->name, sizeof(f->host));
+            SDL_strlcpy(f->mode, s->mode, sizeof(f->mode));
+            SDL_strlcpy(f->map, s->map, sizeof(f->map));
+            if (s->max > 0) {
+                SDL_snprintf(f->players, sizeof(f->players), "%d/%d", s->players, s->max);
+            }
+        }
+    }
+}
+
+static int SDLCALL Fr_SpotThread(void* unused) {
+    char url[192], id[32];
+    const char* p;
+    int i, n = 0;
+
+    (void)unused;
+    for (i = 0; i < frSpotAddrCount && n < FR_SPOTS; i++) {
+        const char* colon = SDL_strrchr(frSpotAddrs[i], ':');
+
+        if (!colon) {
+            continue;
+        }
+        SDL_snprintf(url, sizeof(url), LIVE_API "%.*s%%3A%s", (int)(colon - frSpotAddrs[i]), frSpotAddrs[i], colon + 1);
+        if (!Http_Get(url, frSpotText, sizeof(frSpotText))) {
+            continue;
+        }
+        for (p = SDL_strstr(frSpotText, "\"steamId\""); p && n < FR_SPOTS; p = SDL_strstr(p + 9, "\"steamId\"")) {
+            Json_Text(Json_Value(p, "\"steamId\""), id, sizeof(id));
+            if (Steam_IdValid(id)) {
+                frSpotsNext[n].id = (Uint64)SDL_strtoull(id, NULL, 10);
+                SDL_strlcpy(frSpotsNext[n].addr, frSpotAddrs[i], sizeof(frSpotsNext[n].addr));
+                n++;
+            }
+        }
+    }
+    frSpotsNextCount = n;
+    SDL_SetAtomicInt(&frSpotState, 2);
+    Wake();
+    return 0;
+}
+
+static void Fr_SpotPoll(void) {
+    int state = SDL_GetAtomicInt(&frSpotState), i;
+    Uint64 now = SDL_GetTicks();
+    bool want = false;
+
+    if (state == 1) {
+        return;
+    }
+    if (state == 2) {
+        SDL_WaitThread(frSpotThread, NULL);
+        frSpotThread = NULL;
+        SDL_memcpy(frSpots, frSpotsNext, sizeof(frSpot_t) * (size_t)frSpotsNextCount);
+        frSpotCount = frSpotsNextCount;
+        frSpotWhen = now;
+        SDL_SetAtomicInt(&frSpotState, 0);
+        Fr_Enrich();
+        return;
+    }
+    if (frSample || !frOpen || frState != STEAMF_UP || !serversLoaded || (frSpotWhen && now - frSpotWhen < FR_SPOT_EVERY)) {
+        return;
+    }
+    for (i = 0; i < frCount && !want; i++) {
+        const steamFriend_t* f = &frList[i];
+
+        want = f->game == STEAMF_GAME_QL && !SDL_strcmp(f->state, "match") && (!f->connect[0] || frSpotted[i]);
+    }
+    if (!want) {
+        return;
+    }
+    frSpotAddrCount = 0;
+    for (i = 0; i < serverCount && frSpotAddrCount < SRV_MAX; i++) {
+        if (servers[i].players > 0) {
+            SDL_strlcpy(frSpotAddrs[frSpotAddrCount++], servers[i].addr, sizeof(frSpotAddrs[0]));
+        }
+    }
+    frSpotWhen = now;
+    if (!frSpotAddrCount) {
+        frSpotCount = 0;
+        Fr_Enrich();
+        return;
+    }
+    SDL_SetAtomicInt(&frSpotState, 1);
+    frSpotThread = SDL_CreateThread(Fr_SpotThread, "amigos", NULL);
+    if (!frSpotThread) {
+        SDL_SetAtomicInt(&frSpotState, 0);
+    }
+}
+
+static bool Fr_IsFriend(const char* steamId) {
+    return Steam_IdValid(steamId) && Fr_Find((Uint64)SDL_strtoull(steamId, NULL, 10)) >= 0;
+}
+
+static void Fr_Card(Uint64 id) {
+    int fi = Fr_Find(id);
+    const steamFriend_t* f;
+    const server_t* s;
+    const char* slash;
+    server_t made;
+
+    if (fi < 0 || !Fr_Addr(frList[fi].connect)) {
+        return;
+    }
+    f = &frList[fi];
+    s = Fr_Server(f->connect);
+    if (s) {
+        Box_Show(s, false);
+        return;
+    }
+    SDL_zero(made);
+    SDL_strlcpy(made.name, f->host[0] ? f->host : f->connect, sizeof(made.name));
+    SDL_strlcpy(made.map, f->map, sizeof(made.map));
+    SDL_strlcpy(made.mode, f->mode, sizeof(made.mode));
+    SDL_strlcpy(made.addr, f->connect, sizeof(made.addr));
+    made.players = SDL_atoi(f->players);
+    slash = SDL_strchr(f->players, '/');
+    made.max = slash ? SDL_atoi(slash + 1) : 0;
+    Box_Show(&made, true);
+}
+
+static bool Fr_CanInvite(void) {
+    return (frSample || frState == STEAMF_UP) && frGroupSize[FRG_QL] + frGroupSize[FRG_ONLINE] > 0 && Fr_Addr(boxServer.addr);
+}
+
+static bool Box_Invited(Uint64 id) {
+    int i;
+
+    for (i = 0; i < boxInvitedCount; i++) {
+        if (boxInvited[i] == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void Fr_InviteSend(Uint64 id) {
+    if (!id || Box_Invited(id) || boxInvitedCount >= (int)SDL_arraysize(boxInvited) || !Fr_Addr(boxServer.addr)) {
+        return;
+    }
+    if (!frSample) {
+        SteamF_Invite(id, boxServer.addr);
+    }
+    boxInvited[boxInvitedCount++] = id;
+}
+
+static void Fr_InviteFailed(Uint64 id) {
+    int i;
+
+    for (i = 0; i < boxInvitedCount; i++) {
+        if (boxInvited[i] == id) {
+            boxInvited[i] = boxInvited[--boxInvitedCount];
+            break;
+        }
+    }
+    Toast(T(TXT_INVITE_FAILED));
+}
+
+static void Fr_Close(float x, float y) {
+    Button_Set(BTN_FR_CLOSE, x, y, 32.0f, 32.0f, frOpen);
+    if (heat[BTN_FR_CLOSE] > 0.0f) {
+        Draw_Round(x, y, 32.0f, 32.0f, ITEM_R, Col_Alpha(COL_HUSH, heat[BTN_FR_CLOSE]));
+    }
+    Draw_Spin(&iconSlash, x + (32.0f - CLOSE_ICON) * 0.5f, y + (32.0f - CLOSE_ICON) * 0.5f, 0.0f, COL_W85);
+    Draw_Spin(&iconSlash, x + (32.0f - CLOSE_ICON) * 0.5f, y + (32.0f - CLOSE_ICON) * 0.5f, 90.0f, COL_W85);
+}
+
+static void Fr_Face(int index, float x, float y, float size, float radius) {
+    const steamFriend_t* f = &frList[index];
+    const frAvatar_t* av = Fr_Avatar(f->id);
+    const char* p = frPlain[index];
+    const char* q = p;
+    const char* up;
+    char first[8];
+    float level = f->persona == STEAMF_OFF ? 0.55f : 1.0f;
+    int font = size < 30.0f ? FONT_TINY : FONT_SV_COUNT;
+
+    if (av && av->img.tex) {
+        Draw_RoundImage(&av->img, x, y, size, size, radius, Col_Gray(level, av->heat));
+        return;
+    }
+    Text_Code(&q);
+    SDL_strlcpy(first, p, SDL_min(sizeof(first), (size_t)(q - p) + 1));
+    up = Text_Upper(first);
+    Draw_Round(x, y, size, size, radius, Col_Mix(COL_P2, Col_Hue(p), level));
+    Draw_Text(font, x + (size - Text_Width(font, up, -1)) * 0.5f, Text_Mid(font, y + size * 0.5f),
+              Col_Gray(0.95f * level, 1.0f), up, -1);
+}
+
+static float Fr_PillWidth(int text) {
+    return Caps_Width(FONT_SV_HEAD, T(text), 1.0f) + 24.0f;
+}
+
+static void Fr_Pill(int index, float x, float y, float top, float bottom, int text, bool live, bool muted) {
+    float w = Fr_PillWidth(text);
+
+    Button_Set(index, x, y, w, 20.0f, live && !muted && y >= top && y + 20.0f <= bottom);
+    if (muted) {
+        Draw_Round(x, y, w, 20.0f, 10.0f, COL_P3);
+        Draw_Caps(FONT_SV_HEAD, x + 12.0f, y + 10.0f, COL_W70, T(text), 1.0f);
+    } else {
+        Draw_Round(x, y, w, 20.0f, 10.0f, Col_Mix(COL_WHITE, COL_PURE, heat[index]));
+        Draw_Caps(FONT_SV_HEAD, x + 12.0f, y + 10.0f, COL_INK, T(text), 1.0f);
+    }
+}
+
+static void Fr_Row(int k, int index, float x, float y, float w, float h, float top, float bottom) {
+    const steamFriend_t* f = &frList[index];
+    char state[200], line[200];
+    float clipTop = SDL_max(y, top), clipBottom = SDL_min(y + h, bottom), right = x + w - 10.0f, ax = x + 8.0f;
+    float ay = y + (FR_ROW - FR_AVATAR) * 0.5f, hot = SDL_max(heat[BTN_FR_ROW_0 + k], heat[BTN_FR_JOIN_0 + k]), tx, limit;
+    bool card = Fr_Addr(f->connect);
+    Uint32 color = Fr_Color(f);
+
+    frRowId[k] = f->id;
+    Button_Set(BTN_FR_ROW_0 + k, x, clipTop, w, clipBottom - clipTop, frOpen && card && clipBottom > clipTop + 1.0f);
+    if (hot > 0.0f) {
+        Draw_Round(x, y, w, h, ROW_R, Col_Alpha(COL_P3, hot));
+    }
+    Fr_Face(index, ax, ay, FR_AVATAR, 6.0f);
+    if (f->persona != STEAMF_OFF) {
+        Draw_Round(ax + FR_AVATAR - 8.0f, ay + FR_AVATAR - 8.0f, 12.0f, 12.0f, 6.0f, Col_Mix(COL_P1, COL_P3, hot));
+        Draw_Round(ax + FR_AVATAR - 5.5f, ay + FR_AVATAR - 5.5f, 7.0f, 7.0f, 3.5f, Col_Mix(COL_P1, color | 0xFFu, (float)(color & 255) / 255.0f));
+    }
+    limit = right;
+    if (card) {
+        limit -= Fr_PillWidth(TXT_FR_JOIN);
+        Fr_Pill(BTN_FR_JOIN_0 + k, limit, y + 7.0f, top, bottom, TXT_FR_JOIN, frOpen, false);
+        limit -= 8.0f;
+    }
+    tx = ax + FR_AVATAR + 12.0f;
+    Draw_NameFit(FONT_SV_NAME, tx, y + 17.0f, f->persona == STEAMF_OFF ? COL_W70 : COL_WHITE, f->name, 0.5f, limit - tx);
+    Fr_StateText(f, state, sizeof(state));
+    Draw_Text(FONT_SV_OF, tx, Text_Mid(FONT_SV_OF, y + 33.0f), color, Text_Fit(FONT_SV_OF, state, right - tx), -1);
+    if (h > FR_ROW) {
+        Fr_Line(f, line, sizeof(line), right - tx);
+        Draw_Text(FONT_SV_OF, tx, Text_Mid(FONT_SV_OF, y + 50.0f), COL_W70, line, -1);
+    }
+}
+
+static void Box_InviteRow(int k, int index, float x, float y, float w) {
+    const steamFriend_t* f = &frList[index];
+    char state[200];
+    bool sent = Box_Invited(f->id);
+    int text = sent ? TXT_INVITED : TXT_INVITE;
+    float ax = x + 6.0f, ay = y + (FR_ROW - FR_AVATAR) * 0.5f, pw = Fr_PillWidth(text), px = x + w - 6.0f - pw;
+    float tx = ax + FR_AVATAR + 12.0f;
+    Uint32 color = Fr_Color(f);
+
+    Fr_Face(index, ax, ay, FR_AVATAR, 6.0f);
+    Draw_Round(ax + FR_AVATAR - 8.0f, ay + FR_AVATAR - 8.0f, 12.0f, 12.0f, 6.0f, COL_P2);
+    Draw_Round(ax + FR_AVATAR - 5.5f, ay + FR_AVATAR - 5.5f, 7.0f, 7.0f, 3.5f, Col_Mix(COL_P2, color | 0xFFu, (float)(color & 255) / 255.0f));
+    boxInviteId[k] = f->id;
+    Fr_Pill(BTN_INV_0 + k, px, y + (FR_ROW - 20.0f) * 0.5f, boxClipTop, boxClipBottom, text, boxOpen, sent);
+    Draw_NameFit(FONT_SV_NAME, tx, y + 17.0f, COL_WHITE, f->name, 0.5f, px - 8.0f - tx);
+    Fr_StateText(f, state, sizeof(state));
+    Draw_Text(FONT_SV_OF, tx, Text_Mid(FONT_SV_OF, y + 33.0f), color, Text_Fit(FONT_SV_OF, state, px - 8.0f - tx), -1);
+}
+
+static float Box_Invite(float x, float y, float w, bool draw) {
+    static const int labels[2] = {TXT_FR_SEC_QL, TXT_FR_SEC_ONLINE};
+    float top = y;
+    int g, i, k = 0, slot = 0, start = 0;
+
+    for (g = 0; g < 2; g++) {
+        int count = 0;
+
+        for (i = start; i < start + frGroupSize[g]; i++) {
+            count += SDL_strcmp(frList[frOrder[i]].connect, boxServer.addr) != 0;
+        }
+        if (count) {
+            if (draw) {
+                char n[16];
+
+                Draw_Caps(FONT_SV_HEAD, x + 6.0f, y + 12.0f, COL_W70, T(labels[g]), 1.1f);
+                SDL_snprintf(n, sizeof(n), "%d", count);
+                Draw_Text(FONT_SV_HEAD, x + w - 6.0f - Text_Width(FONT_SV_HEAD, n, -1), Text_Mid(FONT_SV_HEAD, y + 12.0f), COL_W70, n, -1);
+            }
+            y += 30.0f;
+            for (i = start; i < start + frGroupSize[g]; i++) {
+                int index = frOrder[i];
+
+                if (!SDL_strcmp(frList[index].connect, boxServer.addr)) {
+                    continue;
+                }
+                if (draw && y + FR_ROW > boxClipTop && y < boxClipBottom && slot < BOX_INVITES) {
+                    Box_InviteRow(slot++, index, x, y, w);
+                }
+                k++;
+                y += FR_ROW;
+            }
+            y += 18.0f;
+        }
+        start += frGroupSize[g];
+    }
+    if (!k) {
+        if (draw) {
+            const char* none = T(TXT_INVITE_NONE);
+
+            Draw_Text(FONT_SMALL, x + (w - Text_Width(FONT_SMALL, none, -1)) * 0.5f, Text_Mid(FONT_SMALL, y + 30.0f), COL_W70, none, -1);
+        }
+        return 56.0f;
+    }
+    return y - 18.0f - top;
+}
+
+static float Box_Friends(float x, float y, float w, bool draw) {
+    char num[16];
+    float row = y + 30.0f;
+    int i, n = 0;
+
+    for (i = 0; i < frCount && boxServer.addr[0]; i++) {
+        int index = frOrder[i];
+        float mid = row + BOX_ROW * 0.5f;
+
+        if (SDL_strcmp(frList[index].connect, boxServer.addr)) {
+            continue;
+        }
+        if (draw) {
+            Draw_Round(x + 6.0f, mid - 3.5f, 7.0f, 7.0f, 3.5f, COL_GOLD);
+            Fr_Face(index, x + 19.0f, mid - 12.0f, 24.0f, 6.0f);
+            Draw_NameFit(FONT_SV_NAME, x + 51.0f, mid, COL_WHITE, frList[index].name, 0.5f, w - 57.0f);
+        }
+        row += BOX_ROW;
+        n++;
+    }
+    if (!n) {
+        return 8.0f;
+    }
+    if (draw) {
+        Draw_Caps(FONT_SV_HEAD, x + 6.0f, y + 12.0f, COL_W70, T(TXT_FR_TITLE), 1.1f);
+        SDL_snprintf(num, sizeof(num), "%d", n);
+        Draw_Text(FONT_SV_HEAD, x + w - 6.0f - Text_Width(FONT_SV_HEAD, num, -1), Text_Mid(FONT_SV_HEAD, y + 12.0f), COL_W70, num, -1);
+    }
+    return row - y;
+}
+
+static int Fr_Notice(void) {
+    if (frSample) {
+        return frCount ? -1 : steamMissing ? TXT_FR_STEAM_CLOSED : TXT_FR_NONE;
+    }
+    if (steamMissing || !steamSignedIn) {
+        return TXT_FR_STEAM_CLOSED;
+    }
+    if (frState == STEAMF_MISSING) {
+        return TXT_FR_NO_STEAM;
+    }
+    if (frState == STEAMF_DOWN || frState == STEAMF_REFUSED) {
+        return TXT_FR_STEAM_FAILED;
+    }
+    if (frState != STEAMF_UP) {
+        return TXT_FR_CONNECTING;
+    }
+    return frCount ? -1 : TXT_FR_NONE;
+}
+
+static void Fr_Clip(float x, float y, float w, float h) {
+    SDL_Rect clip;
+
+    clip.x = (int)SDL_floorf(x * uiScale);
+    clip.y = (int)SDL_floorf(y * uiScale);
+    clip.w = (int)SDL_ceilf((x + w) * uiScale) - clip.x;
+    clip.h = (int)SDL_ceilf((y + h) * uiScale) - clip.y;
+    SDL_SetRenderClipRect(renderer, &clip);
+}
+
+static void Friends_Head(float px, float py) {
+    char line[48];
+    float cx = px + FR_W - 10.0f - 32.0f, mid = py + FR_HEAD * 0.5f;
+
+    Draw_Caps(FONT_PANEL, px + 20.0f, mid, COL_WHITE, T(TXT_FR_TITLE), TRACK_HEAD);
+    if (Fr_Notice() < 0) {
+        SDL_snprintf(line, sizeof(line), T(TXT_FR_ONLINE), frOnline);
+        Draw_Text(FONT_SV_OF, cx - 6.0f - Text_Width(FONT_SV_OF, line, -1), Text_Mid(FONT_SV_OF, mid), COL_W70, line, -1);
+    }
+    Fr_Close(cx, py + (FR_HEAD - 32.0f) * 0.5f);
+}
+
+static void Friends_List(float px, float py) {
+    static const int labels[FRG_COUNT] = {TXT_FR_SEC_QL, TXT_FR_SEC_ONLINE, TXT_FR_SEC_OFFLINE};
+    float top = py + FR_HEAD, bottom = py + FR_H - 8.0f, x = px + 8.0f, w = FR_W - 16.0f, y;
+    int notice = Fr_Notice(), g, i, k = 0, start = 0;
+
+    if (notice >= 0) {
+        const char* text = Text_Fit(FONT_SMALL, T(notice), FR_W - 40.0f);
+        float mid = py + FR_H * 0.4f;
+
+        Draw_Text(FONT_SMALL, px + (FR_W - Text_Width(FONT_SMALL, text, -1)) * 0.5f, Text_Mid(FONT_SMALL, mid), COL_W70, text, -1);
+        if (notice == TXT_FR_STEAM_CLOSED) {
+            float bw = Button_Width(T(TXT_FR_OPEN_STEAM));
+
+            Draw_Button(BTN_FR_STEAM, px + (FR_W - bw) * 0.5f, mid + 26.0f, T(TXT_FR_OPEN_STEAM), true, frOpen);
+        }
+        frListMost = 0.0f;
+        return;
+    }
+    Fr_Clip(px, top, FR_W, bottom - top);
+    y = top + 6.0f - frListView;
+    for (g = 0; g < FRG_COUNT; g++) {
+        int count = frGroupSize[g];
+        float sy = y;
+        char n[16];
+
+        if (!count) {
+            continue;
+        }
+        if (g == FRG_OFFLINE) {
+            float cTop = SDL_max(sy, top), cBottom = SDL_min(sy + FR_SECTION, bottom);
+
+            Button_Set(BTN_FR_FOLD, x, cTop, w, cBottom - cTop, frOpen && cBottom > cTop + 1.0f);
+            if (heat[BTN_FR_FOLD] > 0.0f) {
+                Draw_Round(x, sy, w, FR_SECTION, ROW_R, Col_Alpha(COL_P3, heat[BTN_FR_FOLD]));
+            }
+            Draw_Spin(&iconMore, x + w - 8.0f - MORE_ICON, sy + (FR_SECTION - MORE_ICON) * 0.5f, frFold ? 180.0f : 0.0f, COL_DOT);
+        }
+        Draw_Caps(FONT_SV_HEAD, x + 8.0f, sy + FR_SECTION * 0.5f, COL_W70, T(labels[g]), 1.1f);
+        SDL_snprintf(n, sizeof(n), "%d", count);
+        Draw_Text(FONT_SV_HEAD, x + 8.0f + Caps_Width(FONT_SV_HEAD, T(labels[g]), 1.1f) + 8.0f, Text_Mid(FONT_SV_HEAD, sy + FR_SECTION * 0.5f), COL_DOT, n,
+                  -1);
+        y += FR_SECTION;
+        if (g != FRG_OFFLINE || !frFold) {
+            for (i = start; i < start + count; i++) {
+                float h = Fr_HasTail(&frList[frOrder[i]]) ? FR_ROW_GAME : FR_ROW;
+
+                if (y + h > top && y < bottom && k < FR_ROWS) {
+                    Fr_Row(k++, frOrder[i], x, y, w, h, top, bottom);
+                }
+                y += h;
+            }
+        }
+        start += count;
+        y += FR_GAP;
+    }
+    SDL_SetRenderClipRect(renderer, NULL);
+    frListMost = SDL_max(0.0f, y + frListView - bottom);
+    if (frListMost > 0.0f) {
+        float view = bottom - top, thumb = view * view / (view + frListMost);
+        float ty = top + (view - thumb) * SDL_clamp(frListView / frListMost, 0.0f, 1.0f);
+
+        Draw_Round(px + FR_W - 6.0f, ty, 3.0f, thumb, 1.5f, COL_P4);
+    }
+}
+
+static void Friends_Draw(void) {
+    float open = frHeat * frHeat * (3.0f - 2.0f * frHeat), px = FR_X + (1.0f - open) * 24.0f, py = FR_Y, keep = slideFade;
+
+    if (!buttons[BTN_FRIENDS].visible) {
+        frOpen = false;
+    }
+    if (open <= 0.0f) {
+        return;
+    }
+    Button_Set(BTN_FR_PANEL, FR_X, FR_Y, FR_W, FR_H, frOpen);
+    slideFade = open;
+    Draw_Shadow(px, py, FR_W, FR_H, BOX_R, 1.0f);
+    Draw_Round(px - 1.0f, py - 1.0f, FR_W + 2.0f, FR_H + 2.0f, BOX_R + 1.0f, COL_RING);
+    Draw_Round(px, py, FR_W, FR_H, BOX_R, COL_P1);
+    Draw_Round(px, py, FR_W, FR_HEAD + BOX_R * 2.0f, BOX_R, COL_P3);
+    Draw_Rect(px, py + FR_HEAD, FR_W, BOX_R * 2.0f, COL_P1);
+    Friends_Head(px, py);
+    Friends_List(px, py);
+    slideFade = keep;
+}
+
+static void Fr_TakeAvatar(steamAvatar_t* a) {
+    frAvatar_t* av = Fr_Avatar(a->id);
+
+    if (!av && frAvatarCount < STEAMF_MAX) {
+        av = &frAvatars[frAvatarCount++];
+        SDL_zerop(av);
+        av->id = a->id;
+    }
+    if (av) {
+        if (av->img.tex) {
+            SDL_DestroyTexture(av->img.tex);
+            av->img.tex = NULL;
+        }
+        Image_Make(&av->img, a->rgba, a->w, a->h, FR_AVATAR);
+    }
+    SDL_free(a->rgba);
+}
+
+static void Friends_Poll(void) {
+    steamAvatar_t a;
+    bool can = gameFound && !install.active && setup.step == STEP_NONE, ok;
+    char addr[64];
+    Uint64 to;
+    int version;
+
+    if (!can) {
+        frOpen = false;
+    }
+    if (frSample) {
+        return;
+    }
+    SteamF_Want(can && !steamMissing && steamSignedIn && (frForce || !(SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN)));
+    frState = SteamF_State();
+    version = SteamF_Version();
+    if (version != frVersion) {
+        frVersion = version;
+        Fr_Refresh();
+    }
+    while (SteamF_PopAvatar(&a)) {
+        Fr_TakeAvatar(&a);
+    }
+    while (SteamF_PopJoin(addr, sizeof(addr))) {
+        if (can && Fr_Addr(addr) && Play_Ready()) {
+            SDL_strlcpy(joinNow, addr, sizeof(joinNow));
+            frOpen = false;
+        }
+    }
+    while (SteamF_PopInvite(&to, &ok)) {
+        if (!ok) {
+            Fr_InviteFailed(to);
+        }
+    }
+    Fr_SpotPoll();
+}
+
+static void Friends_Press(int index) {
+    if (index == BTN_FRIENDS) {
+        frOpen = !frOpen;
+    } else if (index == BTN_FR_CLOSE) {
+        frOpen = false;
+    } else if (index == BTN_FR_FOLD) {
+        frFold = !frFold;
+    } else if (index == BTN_FR_STEAM) {
+        SDL_OpenURL("steam://open/main");
+        steamChecked = 0;
+    } else if (index >= BTN_FR_JOIN_0 && index < BTN_FR_ROW_0) {
+        Fr_Join(frRowId[index - BTN_FR_JOIN_0]);
+    } else if (index >= BTN_FR_ROW_0 && index < BTN_FR_PANEL) {
+        Fr_Card(frRowId[index - BTN_FR_ROW_0]);
+    }
+}
+
+static bool Friends_Wheel(float x, float y, float amount) {
+    if (!Friends_Over(x, y)) {
+        return false;
+    }
+    frListGoal = Scroll_Edge(frListGoal - amount * 60.0f, frListMost, &frListPull);
+    return true;
+}
+
+static bool Friends_Key(SDL_Keycode key) {
+    float page = FR_H - 160.0f;
+
+    if (!frOpen || boxOpen) {
+        return false;
+    }
+    if (key == SDLK_ESCAPE) {
+        frOpen = false;
+    } else if (key == SDLK_UP || key == SDLK_DOWN) {
+        frListGoal = Scroll_Edge(frListGoal + (key == SDLK_DOWN ? FR_ROW : -FR_ROW), frListMost, &frListPull);
+    } else if (key == SDLK_PAGEUP || key == SDLK_PAGEDOWN) {
+        frListGoal = Scroll_Edge(frListGoal + (key == SDLK_PAGEDOWN ? page : -page), frListMost, &frListPull);
+    } else if (key == SDLK_HOME || key == SDLK_END) {
+        frListGoal = key == SDLK_HOME ? 0.0f : frListMost;
+    }
+    return true;
+}
+
+static void Friends_Shutdown(void) {
+    if (frSpotThread) {
+        SDL_DetachThread(frSpotThread);
+        frSpotThread = NULL;
+    }
+    SteamF_Shutdown();
+}
+
+#ifdef LAUNCHER_SHOT
+static void Friends_Report(void) {
+    int i, ql = 0, ioql = 0, joinable = 0, spotted = 0, faces = 0;
+
+    for (i = 0; i < frCount; i++) {
+        ql += frList[i].game == STEAMF_GAME_QL;
+        ioql += frList[i].state[0] != '\0';
+        joinable += Fr_Addr(frList[i].connect);
+        spotted += frSpotted[i];
+    }
+    for (i = 0; i < frAvatarCount; i++) {
+        faces += frAvatars[i].img.tex != NULL;
+    }
+    SDL_Log("amigos: estado %d, steam abierto %d, sesion %d, total %d, en linea %d, en QL %d, con estado %d, para unirse %d, hallados en servidores %d, "
+            "avatares %d",
+            frState, !steamMissing, steamSignedIn, frCount, frOnline, ql, ioql, joinable, spotted, faces);
+}
+
+static void Friends_Sample(const char* mode) {
+    static const struct {
+        const char* name;
+        int persona, game;
+        const char* state;
+        const char* factory;
+        const char* map;
+        const char* host;
+        const char* players;
+        const char* connect;
+        int minutes;
+    } sample[] = {
+        {"Kestrel", STEAMF_ONLINE, STEAMF_GAME_QL, "match", "Clan Arena", "campgrounds", "Quake Club CA #1", "8/16", "203.0.113.10:27960", 12},
+        {"nyx", STEAMF_ONLINE, STEAMF_GAME_QL, "match", "Duel", "bloodrun", "Quake Club Duel", "2/2", "203.0.113.11:27961", 3},
+        {"Sable", STEAMF_ONLINE, STEAMF_GAME_QL, "match", "", "", "", "", "", 0},
+        {"Marrow", STEAMF_ONLINE, STEAMF_GAME_QL, "connecting", "", "", "", "", "", 0},
+        {"tundra", STEAMF_ONLINE, STEAMF_GAME_QL, "demo", "Clan Arena", "toxicity", "", "", "", 0},
+        {"Halcyon", STEAMF_ONLINE, STEAMF_GAME_QL, "menu", "", "", "", "", "", 0},
+        {"Ondina", STEAMF_ONLINE, STEAMF_GAME_QL, "launcher", "", "", "", "", "", 0},
+        {"pixelwolf", STEAMF_ONLINE, STEAMF_GAME_OTHER, "", "", "", "", "", "", 0},
+        {"Rook", STEAMF_ONLINE, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"zeta", STEAMF_ONLINE, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"Brisa", STEAMF_AWAY, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"Copper", STEAMF_BUSY, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"Lumen", STEAMF_OFF, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"Vesper", STEAMF_OFF, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+        {"Orca", STEAMF_OFF, STEAMF_GAME_NONE, "", "", "", "", "", "", 0},
+    };
+    Sint64 now = Fr_Now();
+    int i, n = SDL_strcmp(mode, "vacio") ? (int)SDL_arraysize(sample) : 0;
+
+    frSample = true;
+    frState = STEAMF_UP;
+    frOpen = true;
+    frFold = SDL_strcmp(mode, "todos") != 0;
+    for (i = 0; i < n; i++) {
+        steamFriend_t* f = &frList[i];
+
+        SDL_zerop(f);
+        f->id = FR_SAMPLE_ID + (Uint64)i;
+        f->persona = sample[i].persona;
+        f->game = sample[i].game;
+        f->since = sample[i].minutes ? now - (Sint64)sample[i].minutes * 60 : 0;
+        SDL_strlcpy(f->name, sample[i].name, sizeof(f->name));
+        SDL_strlcpy(f->state, sample[i].state, sizeof(f->state));
+        SDL_strlcpy(f->mode, sample[i].factory, sizeof(f->mode));
+        SDL_strlcpy(f->map, sample[i].map, sizeof(f->map));
+        SDL_strlcpy(f->host, sample[i].host, sizeof(f->host));
+        SDL_strlcpy(f->players, sample[i].players, sizeof(f->players));
+        SDL_strlcpy(f->connect, sample[i].connect, sizeof(f->connect));
+    }
+    frCount = n;
+    for (i = 0; i < n; i++) {
+        steamAvatar_t a;
+        Uint32 c = Col_Hue(sample[i].name);
+        int p;
+
+        if (i % 4 == 3 || !(a.rgba = SDL_malloc(64 * 64 * 4))) {
+            continue;
+        }
+        a.id = frList[i].id;
+        a.w = a.h = 64;
+        for (p = 0; p < 64 * 64; p++) {
+            int px = p % 64 - 32, py = p / 64;
+            bool body = px * px + (py - 26) * (py - 26) < 15 * 15 || (py > 44 && px * px < (py - 30) * (py - 30));
+
+            a.rgba[p * 4 + 0] = body ? (unsigned char)(c >> 24) : 28;
+            a.rgba[p * 4 + 1] = body ? (unsigned char)(c >> 16) : 28;
+            a.rgba[p * 4 + 2] = body ? (unsigned char)(c >> 8) : 28;
+            a.rgba[p * 4 + 3] = 255;
+        }
+        Fr_TakeAvatar(&a);
+    }
+    if (n) {
+        frSpots[0].id = FR_SAMPLE_ID + 2;
+        SDL_strlcpy(frSpots[0].addr, "203.0.113.10:27960", sizeof(frSpots[0].addr));
+        frSpotCount = 1;
+    }
+    Fr_Sort();
+    Fr_Enrich();
+    if (!SDL_strcmp(mode, "tarjeta") || !SDL_strcmp(mode, "invitar") || !SDL_strcmp(mode, "afuera")) {
+        frCardWant = FR_SAMPLE_ID + (mode[0] == 'a' ? 1 : 0);
+        frCardInvite = mode[0] == 'i';
+    }
+}
+
+#endif
+
 static void Draw_Frame(void) {
     float veil = (1.0f - introHeat) * (1.0f - introHeat), fade = SDL_clamp(1.0f - hubHeat / 0.4f, 0.0f, 1.0f);
 
@@ -11456,10 +12576,12 @@ static void Draw_Frame(void) {
     Draw_Top();
     Draw_Me();
     Draw_Status();
+    Friends_Draw();
     Draw_Options();
     if (boxOpen) {
         Buttons_Hide(BTN_PLAY, BTN_OPTS);
         Buttons_Hide(BTN_MENU_0, BTN_SIDE_LAST);
+        Buttons_Hide(BTN_FRIENDS, BTN_FR_PANEL);
     }
     Draw_Box();
     Draw_Flashes();
@@ -11537,6 +12659,28 @@ static bool Hub_Update(float dt) {
     return moving;
 }
 
+static bool Friends_Update(float dt) {
+    bool moving = Ease(&frHeat, frOpen ? 1.0f : 0.0f, dt * 7.0f);
+    float d;
+    int i;
+
+    frListGoal = SDL_clamp(frListGoal, 0.0f, SDL_max(frListMost, 0.0f));
+    moving |= Pull_Decay(&frListPull, dt);
+    d = frListGoal + frListPull - frListView;
+    if (SDL_fabsf(d) < 0.5f) {
+        frListView = frListGoal + frListPull;
+    } else {
+        frListView += d * SDL_min(1.0f, dt * 16.0f);
+        moving = true;
+    }
+    for (i = 0; i < frAvatarCount; i++) {
+        if (frAvatars[i].img.tex) {
+            moving |= Ease(&frAvatars[i].heat, 1.0f, dt * 5.0f);
+        }
+    }
+    return moving;
+}
+
 static bool Heat_Update(float dt, bool notes) {
     bool moving = false;
     float d;
@@ -11545,6 +12689,7 @@ static bool Heat_Update(float dt, bool notes) {
     if (dt > 0.05f) {
         dt = 0.05f;
     }
+    moving |= Friends_Update(dt);
     for (i = 0; i < BTN_COUNT; i++) {
         moving |= Ease(&heat[i], hotButton == i ? 1.0f : 0.0f, dt * 9.0f);
     }
@@ -11604,7 +12749,7 @@ static void Hot_Set(int index) {
     }
     hotButton = index;
     if (cursorArrow && cursorHand) {
-        SDL_SetCursor(index >= 0 && index != BTN_HUB ? cursorHand : cursorArrow);
+        SDL_SetCursor(index >= 0 && index != BTN_HUB && index != BTN_FR_PANEL ? cursorHand : cursorArrow);
     }
 }
 
@@ -11711,14 +12856,24 @@ static void Option_Pick(int i) {
     }
 }
 
-static void Box_Open(const server_t* s) {
+static void Box_Show(const server_t* s, bool foreign) {
     boxServer = *s;
     boxOpen = true;
+    boxForeign = foreign;
+    boxInvite = false;
+    boxInvitedCount = 0;
     boxGoal = boxView = 0.0f;
-    liveLoaded = liveFailed = false;
+    liveLoaded = false;
+    liveFailed = foreign;
     liveCount = 0;
-    liveAgain = true;
-    Live_Poll();
+    liveAgain = !foreign;
+    if (!foreign) {
+        Live_Poll();
+    }
+}
+
+static void Box_Open(const server_t* s) {
+    Box_Show(s, false);
 }
 
 static bool Box_Connect(void) {
@@ -11767,6 +12922,10 @@ static bool Button_Press(int index) {
         Hub_Press(index);
         return false;
     }
+    if (index >= BTN_FRIENDS && index <= BTN_FR_PANEL) {
+        Friends_Press(index);
+        return false;
+    }
     if (index >= BTN_NAV_0 && index <= BTN_NAV_LAST) {
         int tab = navTabs[index - BTN_NAV_0];
 
@@ -11793,6 +12952,10 @@ static bool Button_Press(int index) {
         }
         return false;
     }
+    if (index >= BTN_INV_0 && index <= BTN_INV_LAST) {
+        Fr_InviteSend(boxInviteId[index - BTN_INV_0]);
+        return false;
+    }
     if (index >= BTN_PLR_0 && index <= BTN_PLR_LAST) {
         if (index - BTN_PLR_0 < liveCount) {
             Hub_Open(HUB_PROFILE, livePlayers[index - BTN_PLR_0].steamId);
@@ -11807,6 +12970,10 @@ static bool Button_Press(int index) {
             return Box_Connect();
         case BTN_SEE_SERVER:
             Box_See();
+            break;
+        case BTN_INVITE:
+            boxInvite = !boxInvite;
+            boxGoal = boxView = 0.0f;
             break;
         case BTN_BOX_CLOSE:
         case BTN_VEIL:
@@ -11885,6 +13052,9 @@ static bool Button_Press(int index) {
 }
 
 static bool Key_Press(SDL_Keycode key) {
+    if (Friends_Key(key)) {
+        return false;
+    }
     if (boxOpen) {
         if (key == SDLK_ESCAPE) {
             boxOpen = false;
@@ -12228,6 +13398,7 @@ int main(int argc, char** argv) {
 #endif
     cursorArrow = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
     cursorHand = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_POINTER);
+    SteamF_Init();
 
     Fonts_Load();
     Hub_FontsStart();
@@ -12247,6 +13418,15 @@ int main(int argc, char** argv) {
     option = SDL_getenv("LAUNCHER_VULKAN");
     if (option && option[0]) {
         SDL_SetAtomicInt(&vulkanState, option[0] == '1' ? VULKAN_USABLE : VULKAN_MISSING);
+    }
+    option = SDL_getenv("LAUNCHER_AMIGOS");
+    if (option && option[0]) {
+        Friends_Sample(option);
+    }
+    option = SDL_getenv("LAUNCHER_STEAMF");
+    if (option && option[0]) {
+        frForce = true;
+        frProbeUntil = SDL_GetTicks() + (Uint64)SDL_atoi(option) * 1000;
     }
 #endif
     if (vulkanFound && SDL_GetAtomicInt(&vulkanState) == VULKAN_PROBING) {
@@ -12309,6 +13489,9 @@ int main(int argc, char** argv) {
                         int hit = Button_At(mx, my);
                         bool boxWas = boxOpen, hubWas = hubOpen;
 
+                        if (frOpen && !boxOpen && !Friends_Over(mx, my) && hit != BTN_FRIENDS) {
+                            frOpen = false;
+                        }
                         if (hit >= 0 && hit != BTN_VEIL && buttons[hit].w * buttons[hit].h < 200000.0f) {
                             pressAt[hit] = Anim_Now();
                         } else if (hit < 0 && Play_Refused(mx, my)) {
@@ -12336,6 +13519,9 @@ int main(int argc, char** argv) {
                     }
                     break;
                 case SDL_EVENT_MOUSE_WHEEL:
+                    if (Friends_Wheel(event.wheel.mouse_x / uiScale, event.wheel.mouse_y / uiScale, event.wheel.y)) {
+                        break;
+                    }
                     if (boxOpen) {
                         boxGoal = Scroll_Edge(boxGoal - event.wheel.y * 48.0f, boxMost, &boxPull);
                     } else if (hubOpen) {
@@ -12385,12 +13571,17 @@ int main(int argc, char** argv) {
             Update_Auto();
         }
         Steam_Poll(SDL_GetTicks());
+        Friends_Poll();
         busy = SDL_GetAtomicInt(&jobRun) == RUN_BUSY;
         if (!shot) {
             inside = Hover_Poll();
         }
 #ifdef LAUNCHER_SHOT
         if (!Probe_Tick()) {
+            running = false;
+        }
+        if (frProbeUntil && SDL_GetTicks() >= frProbeUntil) {
+            Friends_Report();
             running = false;
         }
 #endif
@@ -12424,8 +13615,12 @@ int main(int argc, char** argv) {
             Hub_Shot_Open();
         } else if (shot && boxWant && serversLoaded && serverCount > 0 && !boxOpen) {
             Box_Open(&servers[SDL_min(boxWant - 1, serverCount - 1)]);
-        } else if (shot && !moving && lastState != CHECK_RUNNING && !busy && SDL_GetAtomicInt(&serversState) == 0 && SDL_GetAtomicInt(&shotsState) == 0 &&
-                   SDL_GetAtomicInt(&liveState) == 0 && SDL_GetAtomicInt(&picsState) == 0 && (!boxWant || liveLoaded || liveFailed) &&
+        } else if (shot && frCardWant && (serversLoaded || serversFailed) && !boxOpen) {
+            Fr_Card(frCardWant);
+            boxInvite = frCardInvite;
+            frCardWant = 0;
+        } else if (shot && !frProbeUntil && !moving && lastState != CHECK_RUNNING && !busy && SDL_GetAtomicInt(&serversState) == 0 && SDL_GetAtomicInt(&shotsState) == 0 &&
+                   SDL_GetAtomicInt(&liveState) == 0 && SDL_GetAtomicInt(&picsState) == 0 && (!(boxWant || boxOpen) || liveLoaded || liveFailed) && !frCardWant &&
                    SDL_GetAtomicInt(&meState) != 1 && !Hub_Busy() && (hubShotTab < 0 || hubShotDone)) {
             SDL_Surface* surface;
             int k;
@@ -12449,6 +13644,14 @@ int main(int argc, char** argv) {
             }
             boxHeat = boxOpen ? 1.0f : 0.0f;
             boxView = boxGoal;
+            frHeat = frOpen ? 1.0f : 0.0f;
+            frListView = frListGoal;
+#ifdef LAUNCHER_SHOT
+            option = SDL_getenv("LAUNCHER_AMIGOS_Y");
+            if (option && option[0]) {
+                frListGoal = frListView = SDL_min((float)SDL_atof(option), frListMost);
+            }
+#endif
             hubHeat = hubOpen ? 1.0f : 0.0f;
             if (hubShotY >= 0.0f) {
                 hubGoal[Hub_View()] = SDL_min(hubShotY, hubMost[Hub_View()]);
@@ -12516,6 +13719,7 @@ int main(int argc, char** argv) {
     if (checkThread) {
         SDL_WaitThread(checkThread, NULL);
     }
+    Friends_Shutdown();
     if (tray) {
         SDL_DestroyTray(tray);
     }
