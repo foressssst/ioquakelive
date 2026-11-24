@@ -1,10 +1,10 @@
 #include "tr_local.h"
 #include "vk.h"
 
-#if defined (_DEBUG)
 #if defined (_WIN32)
-#define USE_VK_VALIDATION
 #include <windows.h>
+#if defined (_DEBUG)
+#define USE_VK_VALIDATION
 #endif
 #endif
 
@@ -13,6 +13,150 @@ static int vkMaxSamples = VK_SAMPLE_COUNT_1_BIT;
 
 static VkInstance vk_instance = VK_NULL_HANDLE;
 static VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
+
+#ifdef _WIN32
+typedef struct {
+	unsigned int version;
+	WCHAR name[2048];
+	unsigned int id;
+	unsigned int type;
+	unsigned int location;
+	unsigned int isCurrentPredefined;
+	unsigned int isPredefinedValid;
+	unsigned int predefinedValue[1025];
+	unsigned int currentValue[1025];
+} nvSetting_t;
+
+typedef struct {
+	unsigned int version;
+	unsigned int isPredefined;
+	WCHAR appName[2048];
+	WCHAR userFriendlyName[2048];
+	WCHAR launcher[2048];
+	WCHAR fileInFolder[2048];
+	unsigned int flags;
+} nvApplication_t;
+
+typedef int ( __cdecl *nvCall_t )( void );
+typedef nvCall_t ( __cdecl *nvQueryInterface_t )( unsigned int id );
+typedef int ( __cdecl *nvCreateSession_t )( void **session );
+typedef int ( __cdecl *nvSession_t )( void *session );
+typedef int ( __cdecl *nvGetProfile_t )( void *session, void **profile );
+typedef int ( __cdecl *nvFindApplication_t )( void *session, WCHAR *name, void **profile, nvApplication_t *application );
+typedef int ( __cdecl *nvGetSetting_t )( void *session, void *profile, unsigned int id, nvSetting_t *setting );
+
+static nvSetting_t nvSetting;
+static nvApplication_t nvApplication;
+static WCHAR nvPath[2048];
+static HANDLE nvThread;
+static volatile LONG nvFrameCap;
+
+static int vk_nvapi_read_frame_cap( nvQueryInterface_t query )
+{
+	nvCreateSession_t createSession = (nvCreateSession_t)query( 0x0694D52E );
+	nvSession_t loadSettings = (nvSession_t)query( 0x375DBD6B );
+	nvSession_t destroySession = (nvSession_t)query( 0xDAD9CFF8 );
+	nvFindApplication_t findApplication = (nvFindApplication_t)query( 0xEEE566B2 );
+	nvGetProfile_t getGlobalProfile = (nvGetProfile_t)query( 0x617BFF9F );
+	nvGetProfile_t getBaseProfile = (nvGetProfile_t)query( 0xDA8466A0 );
+	nvGetSetting_t getSetting = (nvGetSetting_t)query( 0x73BF8338 );
+	void *session = NULL;
+	void *profile = NULL;
+	int cap = 0;
+
+	if ( !createSession || !loadSettings || !destroySession || !getSetting || createSession( &session ) != 0 ) {
+		return 0;
+	}
+
+	if ( loadSettings( session ) == 0 ) {
+		Com_Memset( &nvApplication, 0, sizeof( nvApplication ) );
+		Com_Memset( nvPath, 0, sizeof( nvPath ) );
+		nvApplication.version = sizeof( nvApplication ) | ( 3 << 16 );
+		if ( !findApplication || !GetModuleFileNameW( NULL, nvPath, ARRAY_LEN( nvPath ) - 1 ) ||
+			findApplication( session, nvPath, &profile, &nvApplication ) != 0 ) {
+			profile = NULL;
+			if ( ( !getGlobalProfile || getGlobalProfile( session, &profile ) != 0 ) &&
+				( !getBaseProfile || getBaseProfile( session, &profile ) != 0 ) ) {
+				profile = NULL;
+			}
+		}
+		if ( profile ) {
+			Com_Memset( &nvSetting, 0, sizeof( nvSetting ) );
+			nvSetting.version = sizeof( nvSetting ) | ( 1 << 16 );
+			if ( getSetting( session, profile, 0x10835002, &nvSetting ) == 0 && nvSetting.type == 0 ) {
+				cap = (int)nvSetting.currentValue[0];
+			}
+		}
+	}
+
+	destroySession( session );
+
+	return cap;
+}
+
+static DWORD WINAPI vk_nvapi_thread( LPVOID self )
+{
+#ifdef _WIN64
+	HMODULE lib = LoadLibraryExW( L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32 );
+#else
+	HMODULE lib = LoadLibraryExW( L"nvapi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32 );
+#endif
+	nvQueryInterface_t query;
+	nvCall_t initialize, unload;
+	int cap = 0;
+
+	if ( lib ) {
+		query = (nvQueryInterface_t)GetProcAddress( lib, "nvapi_QueryInterface" );
+		initialize = query ? query( 0x0150E828 ) : NULL;
+		unload = query ? query( 0xD22BDD7E ) : NULL;
+		if ( initialize && initialize() == 0 ) {
+			cap = vk_nvapi_read_frame_cap( query );
+			if ( unload ) {
+				unload();
+			}
+		}
+		FreeLibrary( lib );
+	}
+
+	InterlockedExchange( &nvFrameCap, cap > 0 ? cap : 0 );
+	FreeLibraryAndExitThread( (HMODULE)self, 0 );
+}
+
+static void vk_nvapi_start( void )
+{
+	HMODULE self = NULL;
+
+	if ( nvThread || !GetModuleHandleExW( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, nvPath, &self ) ) {
+		return;
+	}
+
+	nvThread = CreateThread( NULL, 0, vk_nvapi_thread, self, 0, NULL );
+	if ( !nvThread ) {
+		FreeLibrary( self );
+	}
+}
+
+static void vk_nvapi_stop( void )
+{
+	if ( nvThread ) {
+		WaitForSingleObject( nvThread, 2000 );
+		CloseHandle( nvThread );
+		nvThread = NULL;
+	}
+	nvFrameCap = 0;
+}
+#endif
+
+static int vk_driver_frame_interval( void )
+{
+#ifdef _WIN32
+	int cap = (int)nvFrameCap;
+
+	return cap > 0 ? ( 1000000 + cap - 1 ) / cap : 0;
+#else
+	return 0;
+#endif
+}
 
 #ifndef NDEBUG
 VkDebugReportCallbackEXT vk_debug_callback = VK_NULL_HANDLE;
@@ -4383,6 +4527,12 @@ void vk_initialize( void )
 		vk_alloc_staging_buffer( vk.defaults.staging_size );
 	}
 
+#ifdef _WIN32
+	if ( vk.lowLatency2 ) {
+		vk_nvapi_start();
+	}
+#endif
+
 	vk.active = qtrue;
 }
 
@@ -4719,6 +4869,10 @@ void vk_shutdown( refShutdownCode_t code )
 	qvkDestroyShaderModule(vk.device, vk.modules.gamma_fs, NULL);
 
 __cleanup:
+#ifdef _WIN32
+	vk_nvapi_stop();
+#endif
+
 	if ( vk.device != VK_NULL_HANDLE ) {
 		qvkDestroyDevice( vk.device, NULL );
 	}
@@ -7720,6 +7874,7 @@ static void vk_reflex_sleep( void )
 	VkLatencySleepModeInfoNV mode;
 	VkLatencySleepInfoNV sleep;
 	VkSemaphoreWaitInfo wait;
+	int64_t start;
 	int maxFps;
 
 	if ( !vk.lowLatency2 || vk.swapchain == VK_NULL_HANDLE || vk.latencySemaphore == VK_NULL_HANDLE ) {
@@ -7742,6 +7897,10 @@ static void vk_reflex_sleep( void )
 		vk.latencyMaxFps = maxFps;
 	}
 
+	if ( !r_lowLatency->integer ) {
+		return;
+	}
+
 	vk.latencyValue++;
 
 	sleep.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_INFO_NV;
@@ -7749,6 +7908,7 @@ static void vk_reflex_sleep( void )
 	sleep.signalSemaphore = vk.latencySemaphore;
 	sleep.value = vk.latencyValue;
 
+	start = ri.Microseconds();
 	if ( qvkLatencySleepNV( vk.device, vk.swapchain, &sleep ) != VK_SUCCESS ) {
 		vk.lowLatency2 = qfalse;
 		return;
@@ -7764,6 +7924,8 @@ static void vk_reflex_sleep( void )
 	if ( qvkWaitSemaphoresKHR( vk.device, &wait, 1000000000ULL ) != VK_SUCCESS ) {
 		ri.Printf( PRINT_WARNING, "...the low latency sleep timed out, turning it off\n" );
 		vk.lowLatency2 = qfalse;
+	} else if ( !maxFps && ri.Microseconds() - start > 100 ) {
+		vk.latencyHeld = qtrue;
 	}
 }
 
@@ -7780,20 +7942,24 @@ void vk_low_latency_flash( void )
 
 static qboolean vk_pacing_enabled( void )
 {
-	return ( r_lowLatency->integer > 1 || ( r_lowLatency->integer == 1 && !vk.antiLag && !vk.lowLatency2 ) ) ? qtrue : qfalse;
+	return ( r_lowLatency->integer > 1 || ( r_lowLatency->integer == 1 && !vk.antiLag ) ) ? qtrue : qfalse;
 }
 
 static void vk_pacing_wait( void )
 {
-	int64_t end;
+	int64_t now, end;
 
-	if ( vk.pacingDelay < 50.0f || RI_CL_IsMinimized() ) {
+	if ( RI_CL_IsMinimized() ) {
 		return;
 	}
 
-	end = ri.Microseconds() + (int64_t)vk.pacingDelay;
-	if ( vk.pacingDelay > 1500.0f && ri.SleepMicroseconds ) {
-		ri.SleepMicroseconds( (int64_t)vk.pacingDelay - 1000 );
+	now = ri.Microseconds();
+	end = vk.pacingDelay < 50.0f ? now : now + (int64_t)vk.pacingDelay;
+	if ( vk.pacingFloor && vk.pacingMark ) {
+		end = MAX( end, vk.pacingMark + vk.pacingFloor );
+	}
+	if ( end - now > 1500 && ri.SleepMicroseconds ) {
+		ri.SleepMicroseconds( end - now - 1000 );
 	}
 	while ( ri.Microseconds() < end ) {
 	}
@@ -7802,14 +7968,19 @@ static void vk_pacing_wait( void )
 static void vk_pacing_update( void )
 {
 	const vk_tess_t *prev;
+	qboolean held = vk.latencyHeld;
 
+	vk.latencyHeld = qfalse;
 	if ( !vk_pacing_enabled() ) {
 		vk.pacingDelay = 0.0f;
+		vk.pacingFloor = 0;
 		return;
 	}
 
+	vk.pacingFloor = vk_driver_frame_interval();
+
 	prev = &vk.tess[ ( vk.cmd_index + NUM_COMMAND_BUFFERS - 1 ) % NUM_COMMAND_BUFFERS ];
-	if ( prev->waitForFence && qvkGetFenceStatus( vk.device, prev->rendering_finished_fence ) == VK_NOT_READY ) {
+	if ( held || ( prev->waitForFence && qvkGetFenceStatus( vk.device, prev->rendering_finished_fence ) == VK_NOT_READY ) ) {
 		vk.pacingDelay = MIN( vk.pacingDelay + 30.0f, 10000.0f );
 	} else {
 		vk.pacingDelay = MAX( vk.pacingDelay - 15.0f, 0.0f );
@@ -7853,6 +8024,7 @@ void vk_low_latency_input( void )
 	vk.latencyFrame++;
 
 	vk_reflex_sleep();
+	vk.pacingMark = ri.Microseconds();
 
 	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_START_NV );
 	vk_latency_marker( VK_LATENCY_MARKER_INPUT_SAMPLE_NV );
