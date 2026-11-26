@@ -1,0 +1,259 @@
+name: macOS Intel
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        default: v3.0.1
+      publish:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+env:
+  TAG: ${{ inputs.tag }}
+  FILES_ROOT: https://pub-ad23407a3c15497799842a38688c8ab4.r2.dev
+jobs:
+  build:
+    name: macOS Intel (compile, bundle, test)
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag }}
+        submodules: recursive
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    - name: Version
+      run: |
+        set -euo pipefail
+        VERSION=$(sed -n 's/^#define PRODUCT_VERSION "\(.*\)"/\1/p' code/qcommon/q_shared.h)
+        if [ "v$VERSION" != "$TAG" ]; then
+          echo "::error::$TAG, but PRODUCT_VERSION is $VERSION"
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+    - name: Official build key
+      if: inputs.publish
+      env:
+        OFFICIAL_MASTER: ${{ secrets.IOQL_OFFICIAL_MASTER }}
+      run: |
+        if [ -n "$OFFICIAL_MASTER" ]; then
+          KEY=$(printf '%s' "$VERSION" | openssl dgst -sha256 -hmac "$OFFICIAL_MASTER" -r | cut -d' ' -f1)
+          echo "::add-mask::$KEY"
+          printf '#define IOQL_BUILD_KEY "%s"\n' "$KEY" > code/qcommon/official_key.h
+        fi
+    - name: Install Dependencies
+      run: brew install freetype libogg libvorbis nasm
+    - name: Build SDL3 from submodule
+      run: |
+        cmake -S code/SDL3 -B build/SDL3 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/sdl3-local" \
+          -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF
+        cmake --build build/SDL3 -j"$(sysctl -n hw.logicalcpu)"
+        cmake --install build/SDL3
+        install_name_tool -id @rpath/libSDL3.0.dylib \
+          "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
+        codesign -f -s - "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
+    - name: Compile
+      run: |
+        export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
+        make release USE_LOCAL_HEADERS=0 ARCH=x86_64 MACOSX_VERSION_MIN=11.0 -j$(sysctl -n hw.logicalcpu)
+    - name: Released iobin.pk3 and pak01.pk3
+      run: |
+        set -euo pipefail
+        curl -fsSL -o files.txt "$FILES_ROOT/$TAG/files.txt"
+        curl -fsSL -o arm64.zip "$FILES_ROOT/$TAG/ioquakelive-macos-arm64.zip"
+        grep '^ioquakelive-macos-arm64.zip ' files.txt | awk '{print $3 "  arm64.zip"}' | shasum -a 256 -c -
+        mkdir -p released shared iobin-stage
+        unzip -q -j arm64.zip \
+          bin/ioquakelive.app/Contents/Resources/baseq3/iobin.pk3 \
+          bin/ioquakelive.app/Contents/Resources/baseq3/pak01.pk3 -d released
+        unzip -q released/iobin.pk3 -d iobin-stage
+        cp build/release-darwin-x86_64/baseq3/cgamex86_64.dylib \
+           build/release-darwin-x86_64/baseq3/qagamex86_64.dylib \
+           build/release-darwin-x86_64/baseq3/uix86_64.dylib iobin-stage/
+        python3 code/tools/make_deterministic_pk3.py --input iobin-stage --output shared/iobin.pk3
+        unzip -l shared/iobin.pk3
+        mkdir -p build/release-darwin-x86_64/baseq3
+        cp released/pak01.pk3 build/release-darwin-x86_64/baseq3/pak01.pk3
+        shasum -a 256 released/*.pk3 shared/iobin.pk3
+    - name: Fetch MoltenVK
+      env:
+        MOLTENVK_VERSION: v1.4.2
+        MOLTENVK_SHA256: f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
+      run: |
+        set -euo pipefail
+        curl -fsSL -o MoltenVK-macos.tar \
+          "https://github.com/KhronosGroup/MoltenVK/releases/download/${MOLTENVK_VERSION}/MoltenVK-macos.tar"
+        echo "${MOLTENVK_SHA256}  MoltenVK-macos.tar" | shasum -a 256 -c -
+        tar -xf MoltenVK-macos.tar \
+          MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib MoltenVK/LICENSE
+        cp MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib build/release-darwin-x86_64/
+        cp MoltenVK/LICENSE build/release-darwin-x86_64/MoltenVK-LICENSE.txt
+    - name: Create App Bundle
+      run: |
+        set -euo pipefail
+        cp "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib" build/release-darwin-x86_64/
+        chmod +x make-macosx-app.sh
+        PREBUILT_IOBIN_PK3="$GITHUB_WORKSPACE/shared/iobin.pk3" ./make-macosx-app.sh release x86_64
+        ls -la build/release-darwin-x86_64/ioquakelive.app/Contents/*
+    - name: Launcher icon
+      run: |
+        set -euo pipefail
+        SET=build/launcher-icon/quakelive.iconset
+        mkdir -p "$SET"
+        sips -s format png misc/quakelive.ico --out "$SET/icon_512x512@2x.png" >/dev/null
+        sips -z 1024 1024 "$SET/icon_512x512@2x.png" >/dev/null
+        for SIZE in 16 32 128 256 512; do
+          sips -z "$SIZE" "$SIZE" "$SET/icon_512x512@2x.png" --out "$SET/icon_${SIZE}x${SIZE}.png" >/dev/null
+        done
+        for SIZE in 16 32 128 256; do
+          sips -z "$((SIZE * 2))" "$((SIZE * 2))" "$SET/icon_512x512@2x.png" --out "$SET/icon_${SIZE}x${SIZE}@2x.png" >/dev/null
+        done
+        iconutil -c icns "$SET" -o build/launcher-icon/quakelive.icns
+    - name: Build the launcher
+      run: |
+        set -euo pipefail
+        cmake -S code/launcher -B build/launcher -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+          "-DLAUNCHER_ICNS=$PWD/build/launcher-icon/quakelive.icns"
+        cmake --build build/launcher --config MinSizeRel --parallel 4 --target ioquakelive-launcher ioquakelive-launcher-captura
+    - name: Package
+      run: |
+        set -euo pipefail
+        mkdir -p launchers/launcher-macos-x86_64 engines/engine-macos-x86_64 out
+        COPYFILE_DISABLE=1 tar -C build/launcher/bin -cf launchers/launcher-macos-x86_64/launcher.tar ioquakelive-launcher.app
+        ditto build/release-darwin-x86_64/ioquakelive.app engines/engine-macos-x86_64/ioquakelive.app
+        python3 - <<'EOF'
+        import os
+        import sys
+        sys.path.insert(0, 'code/tools')
+        import build_release_zips
+        import place_launcher
+        place_launcher.ASSETS = {'macos-x86_64': 'ioquakelive-setup-macos-x86_64.zip'}
+        place_launcher.ENGINES = {'macos-x86_64': 'engine-macos-x86_64'}
+        place_launcher.fresh_assets('launchers', 'stage')
+        place_launcher.place('stage', 'engines')
+        os.replace('stage/ioquakelive-setup-macos-x86_64.zip', 'out/ioquakelive-setup-macos-x86_64.zip')
+        build_release_zips.build_one('engines/engine-macos-x86_64', 'shared', 'out/ioquakelive-macos-x86_64.zip', False, os.environ['VERSION'])
+        EOF
+        unzip -l out/ioquakelive-setup-macos-x86_64.zip
+        unzip -l out/ioquakelive-macos-x86_64.zip
+        shasum -a 256 out/*
+    - name: Check the binaries
+      run: |
+        set -euo pipefail
+        bad=0
+        for APP in engines/engine-macos-x86_64/ioquakelive.app engines/engine-macos-x86_64/ioquakelive-launcher.app; do
+          while IFS= read -r -d '' f; do
+            case "$(file -b "$f")" in *Mach-O*) ;; *) continue ;; esac
+            archs=$(lipo -archs "$f")
+            minos=$(otool -l "$f" | awk '/LC_BUILD_VERSION/ {b=1} b && $1 == "minos" {print $2; exit}')
+            echo "${f#engines/engine-macos-x86_64/}: $archs, macOS $minos"
+            case " $archs " in
+              *" x86_64 "*) ;;
+              *) echo "::error::$f has no x86_64 code"; bad=1 ;;
+            esac
+            for dep in $(otool -L "$f" | awk 'NR > 1 {print $1}'); do
+              case "$dep" in
+                /opt/homebrew/*|/usr/local/*)
+                  echo "::error::$f depends on $dep"; bad=1 ;;
+                @rpath/*)
+                  name=${dep#@rpath/}
+                  if [ "$name" != "$(basename "$f")" ] && [ ! -f "$APP/Contents/Frameworks/$name" ]; then
+                    echo "::error::$f needs $name, which is not in the bundle"; bad=1
+                  fi ;;
+              esac
+            done
+          done < <(find "$APP" -type f -print0)
+        done
+        IOQUAKELIVE_LAUNCHER=1 engines/engine-macos-x86_64/ioquakelive.app/Contents/MacOS/ioquakelive --version | tee game-version.txt
+        grep -q "$VERSION" game-version.txt || { echo "::error::the game does not report $VERSION"; bad=1; }
+        exit $bad
+    - name: Test install and update
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "User-Agent: ioquakelive-ci" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" -o latest.json
+        LAUNCHER_ZIP="$PWD/out/ioquakelive-macos-x86_64.zip" python3 code/tools/test_launcher.py \
+          --launcher build/launcher/bin/captura/ioquakelive-launcher.app/Contents/MacOS/ioquakelive-launcher \
+          --json latest.json --work launcher-test \
+          --game ioquakelive.app/Contents/MacOS/ioquakelive \
+          --self ioquakelive-launcher.app/Contents/MacOS/ioquakelive-launcher \
+          --link ioquakelive --version "$VERSION"
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: screens-launcher-macos-x86_64
+        path: launcher-test/*.png
+        retention-days: 7
+        if-no-files-found: ignore
+    - uses: actions/upload-artifact@v4
+      with:
+        name: macos-x86_64
+        path: out/
+        retention-days: 2
+  publish:
+    name: Add to the release
+    needs: [build]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: macos-x86_64
+        path: out
+    - name: Check the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release view "$TAG" -R "${{ github.repository }}" --json tagName,assets --jq '.tagName, .assets[].name'
+    - name: Upload the game files
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        AWS_DEFAULT_REGION: auto
+        AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+        AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      run: |
+        set -euo pipefail
+        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+          echo "::error::the R2 secrets are missing"
+          exit 1
+        fi
+        Z=ioquakelive-macos-x86_64.zip
+        DEST="s3://ioquakelive/$TAG"
+        LINE="$Z $(stat -c%s "out/$Z") $(sha256sum "out/$Z" | cut -d' ' -f1)"
+        aws s3 cp "$DEST/files.txt" files.txt --endpoint-url "$R2_ENDPOINT" --only-show-errors
+        OLD=$(grep "^$Z " files.txt || true)
+        if [ -n "$OLD" ] && [ "$OLD" != "$LINE" ]; then
+          echo "::error::files.txt already lists another $Z: $OLD"
+          exit 1
+        fi
+        aws s3 cp "out/$Z" "$DEST/$Z" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+        if [ -z "$OLD" ]; then
+          { cat files.txt; echo "$LINE"; } | LC_ALL=C sort > files.new
+          aws s3 cp files.new "$DEST/files.txt" --content-type text/plain --endpoint-url "$R2_ENDPOINT" --only-show-errors
+        fi
+        aws s3 cp "$DEST/files.txt" - --endpoint-url "$R2_ENDPOINT"
+    - uses: actions/attest-build-provenance@v4
+      with:
+        subject-path: 'out/*'
+    - name: Add the files to the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release upload "$TAG" out/ioquakelive-setup-macos-x86_64.zip out/ioquakelive-macos-x86_64.zip \
+          -R "${{ github.repository }}" --clobber
+        gh release view "$TAG" -R "${{ github.repository }}" --json assets --jq '.assets[] | "\(.name) \(.size) \(.digest)"'
