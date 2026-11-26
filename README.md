@@ -68,7 +68,7 @@ Si Microsoft Defender detecta algún archivo como una amenaza, revisa el detalle
 
 ## Cómo se publica cada versión
 
-- Todas las versiones de ioquakelive se compilan mediante [GitHub Actions](https://github.com/foressssst/ioquakelive/actions), directamente desde el código fuente de este repositorio y en entornos de compilación limpios. Los registros de cada compilación son públicos.
+- Todas las versiones de ioquakelive se compilan mediante [GitHub Actions](https://github.com/foressssst/ioquakelive/actions), directamente desde el código fuente de este repositorio y en entornos de compilación limpios.
 - Los instaladores cuentan con una certificación de procedencia de GitHub que permite verificar de qué compilación provienen. Puedes comprobarlo utilizando [GitHub CLI](https://cli.github.com/):
 
   ```bash
