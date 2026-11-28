@@ -59,6 +59,18 @@ jobs:
           -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF
         cmake --build build/SDL3
         cmake --install build/SDL3
+    - name: FFmpeg revision
+      id: ffmpeg
+      run: echo "sha=$(git rev-parse HEAD:code/ffmpeg)" >> "$GITHUB_OUTPUT"
+    - name: Cache FFmpeg
+      id: ffmpeg-cache
+      uses: actions/cache@v4
+      with:
+        path: code/libs/ffmpeg/linux-${{ matrix.arch }}
+        key: ffmpeg-linux-${{ matrix.arch }}-${{ steps.ffmpeg.outputs.sha }}-${{ hashFiles('code/tools/build-ffmpeg.sh') }}
+    - name: Build FFmpeg
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      run: JOBS=$(nproc) sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/linux-${{ matrix.arch }} --enable-pic
     - name: Compile
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
@@ -118,6 +130,18 @@ jobs:
         install_name_tool -id @rpath/libSDL3.0.dylib \
           "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
         codesign -f -s - "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
+    - name: FFmpeg revision
+      id: ffmpeg
+      run: echo "sha=$(git rev-parse HEAD:code/ffmpeg)" >> "$GITHUB_OUTPUT"
+    - name: Cache FFmpeg
+      id: ffmpeg-cache
+      uses: actions/cache@v4
+      with:
+        path: code/libs/ffmpeg/darwin-arm64
+        key: ffmpeg-darwin-arm64-${{ steps.ffmpeg.outputs.sha }}-${{ hashFiles('code/tools/build-ffmpeg.sh') }}
+    - name: Build FFmpeg
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      run: JOBS=$(sysctl -n hw.logicalcpu) sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/darwin-arm64 --extra-cflags=-mmacosx-version-min=11.0 --extra-ldflags=-mmacosx-version-min=11.0
     - name: Compile
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
@@ -433,6 +457,32 @@ jobs:
     - name: Install NASM
       if: matrix.platform == 'x64'
       run: choco install nasm -y --no-progress
+
+    - name: FFmpeg revision
+      id: ffmpeg
+      shell: bash
+      run: echo "sha=$(git rev-parse HEAD:code/ffmpeg)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache FFmpeg
+      id: ffmpeg-cache
+      uses: actions/cache@v4
+      with:
+        path: code/libs/ffmpeg/${{ matrix.platform == 'x64' && 'win64' || 'winarm64' }}
+        key: ffmpeg-windows-${{ matrix.platform }}-${{ steps.ffmpeg.outputs.sha }}-${{ hashFiles('code/tools/build-ffmpeg.sh', 'code/tools/Build-FFmpeg.ps1') }}
+
+    - name: Set up MSYS2
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      id: msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MSYS
+        update: false
+        install: make diffutils
+
+    - name: Build FFmpeg
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: ./code/tools/Build-FFmpeg.ps1 -Platform ${{ matrix.platform }} -Msys "${{ steps.msys2.outputs.msys2-location }}"
 
     - name: Build Solution
       env:

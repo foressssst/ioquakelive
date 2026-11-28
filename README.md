@@ -85,7 +85,7 @@ Si Microsoft Defender detecta algún archivo como una amenaza, revisa el detalle
 
 ## Compilar desde el código fuente
 
-El repositorio utiliza submódulos de Git para SDL3, curl, libogg, libvorbis, opus y opusfile. Para clonar el repositorio junto con sus dependencias, ejecuta:
+El repositorio utiliza submódulos de Git para SDL3, curl, libogg, libvorbis, opus, opusfile y FFmpeg. Para clonar el repositorio junto con sus dependencias, ejecuta:
 
 ```bash
 git clone --recursive https://github.com/foressssst/ioquakelive.git
@@ -104,6 +104,10 @@ Para ejecutar el juego una vez compilado necesitarás el archivo `pak00.pk3` de 
 Necesitas Visual Studio 2026 o sus Build Tools, con la carga de trabajo «Desarrollo para el escritorio con C++».
 
 La instalación de [NASM](https://www.nasm.us/) es opcional. Si se encuentra instalado en su carpeta por defecto, se optimizará la carga de imágenes JPEG.
+
+Los videos del Training Center se reproducen mediante FFmpeg. Para compilarlo necesitas MSYS2 con los paquetes `make` y `diffutils` instalados. Antes de compilar el juego, ejecuta `code\tools\Build-FFmpeg.ps1` (agrega `-Platform ARM64` si estás compilando para ARM64).
+
+Este paso es opcional. Si decides omitirlo, podrás compilar y ejecutar el juego con normalidad, pero los videos del Training Center no estarán disponibles.
 
 Desde la Developer PowerShell de Visual Studio, ejecuta:
 
@@ -135,6 +139,14 @@ sudo apt-get install -y build-essential git zip pkg-config cmake ninja-build nas
   libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev libibus-1.0-dev
 ```
 
+Antes de compilar el juego, compila FFmpeg para habilitar la reproducción de los videos del Training Center:
+
+```bash
+sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/linux-x86_64 --enable-pic
+```
+
+Si estás compilando para ARM64, reemplaza `linux-x86_64` por `linux-arm64`.
+
 Primero compila SDL3 desde su submódulo y luego el juego:
 
 ```bash
@@ -156,6 +168,12 @@ En ARM64, la carpeta de salida es `build/release-linux-arm64/`. Recuerda utiliza
 
 Necesitas las herramientas de línea de comandos de Xcode y [Homebrew](https://brew.sh/).
 
+Antes de compilar el juego, compila FFmpeg para habilitar la reproducción de los videos del Training Center:
+
+```bash
+sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/darwin-arm64 --extra-cflags=-mmacosx-version-min=11.0 --extra-ldflags=-mmacosx-version-min=11.0
+```
+
 Para equipos con Apple Silicon:
 
 ```bash
@@ -171,7 +189,7 @@ cmake --install build/SDL3
 PKG_CONFIG_PATH="$PWD/sdl3-local/lib/pkgconfig" make release USE_LOCAL_HEADERS=0 ARCH=arm64 -j"$(sysctl -n hw.logicalcpu)"
 ```
 
-Para equipos Mac con procesador Intel, reemplaza `arm64` por `x86_64` en ambos comandos y agrega `MACOSX_VERSION_MIN=11.0` al comando `make`.
+Para equipos Mac con procesador Intel, reemplaza `arm64` por `x86_64` en todos los comandos y agrega `MACOSX_VERSION_MIN=11.0` al comando `make`.
 
 Los binarios se generan en `build/release-darwin-arm64/` o `build/release-darwin-x86_64/`, dependiendo de la arquitectura.
 

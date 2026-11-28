@@ -1260,8 +1260,8 @@ static const struct {
     long size;
     const char* sha256;
 } clVideos[] = {
-    {"rocket.mpg", 42313728, "2ad767ef5d5543baa7ff4d9c4adbbe4577bd8f79de2a9f421ce47f6c93447496"},
-    {"strafe.mpg", 38694912, "5bc0254858b5502cce46f46f046637ef47e4752ba8a318fe5028affdcc9e5359"},
+    {"rocket.mp4", 9673397, "782dd3be4cb8dac82bcfb0a6b0b2570e147fce616d45f885b2539cc4e758f8b9"},
+    {"strafe.mp4", 10167637, "8a46ea39256c72f9f165c219e897203998163895cc270fb8de0b293ea1e4ec5a"},
 };
 
 static volatile long clVideoState;

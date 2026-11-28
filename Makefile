@@ -1014,6 +1014,15 @@ ifeq ($(USE_MUMBLE),1)
   CLIENT_CFLAGS += -DUSE_MUMBLE
 endif
 
+FFMPEGDIR ?= $(LIBSDIR)/ffmpeg/$(PLATFORM)-$(ARCH)
+ifneq ($(wildcard $(FFMPEGDIR)/lib/libavcodec.a),)
+  CLIENT_CFLAGS += -DUSE_FFMPEG -I$(FFMPEGDIR)/include
+  CLIENT_LIBS += $(FFMPEGDIR)/lib/libavformat.a $(FFMPEGDIR)/lib/libavcodec.a $(FFMPEGDIR)/lib/libavutil.a -lm
+  ifneq ($(PLATFORM),darwin)
+    CLIENT_LIBS += -lpthread
+  endif
+endif
+
 ifeq ($(USE_INTERNAL_ZLIB),1)
   ZLIB_CFLAGS = -DNO_GZIP -I$(ZDIR)
 else

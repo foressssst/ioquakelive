@@ -55,11 +55,11 @@ static const trCard_t trCards[] = {
     {"qzpractice2", "webui/img/training/strafe.jpg", "Accelerate", "Travelling at High Speed",
      "Practice the basics of _Strafe Jumping_, an essential skill to learning how to move faster than other arena "
      "combatants.",
-     "map qzpractice2 _sj; wait 2; team f", "strafe.mpg", 110.65f},
+     "map qzpractice2 _sj; wait 2; team f", "strafe.mp4", 110.63f},
     {"qzpractice1", "webui/img/training/rocket.jpg", "Elevate", "Reaching Great Heights",
      "Use your projectile weapons to perform _Rocket Jumps_, and access areas of the arena in entirely different "
      "ways.",
-     "map qzpractice1 _rj; wait 2; team f", "rocket.mpg", 104.83f},
+     "map qzpractice1 _rj; wait 2; team f", "rocket.mp4", 104.77f},
     {"thunderstruck", "", "Tracking", "Keeping the Beam On",
      "Keep the _Lightning Gun_ on a bot that does nothing but dodge. It never fights back and never goes "
      "down.",

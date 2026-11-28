@@ -85,7 +85,7 @@ If Microsoft Defender flags a file as a threat, check the details of the detecti
 
 ## Building from source
 
-The repository uses Git submodules for SDL3, curl, libogg, libvorbis, opus and opusfile. To clone the repository along with its dependencies, run:
+The repository uses Git submodules for SDL3, curl, libogg, libvorbis, opus, opusfile, and FFmpeg. To clone the repository along with its dependencies, run:
 
 ```bash
 git clone --recursive https://github.com/foressssst/ioquakelive.git
@@ -104,6 +104,10 @@ To run the game once it's built you need the `pak00.pk3` file from your Quake Li
 You need Visual Studio 2026 or its Build Tools, with the "Desktop development with C++" workload.
 
 Installing [NASM](https://www.nasm.us/) is optional. If it's installed in its default folder, JPEG image loading is optimized.
+
+Training Center videos are played using FFmpeg. To build it, you need MSYS2 with the `make` and `diffutils` packages installed. Before building the game, run `code\tools\Build-FFmpeg.ps1` (add `-Platform ARM64` when building for ARM64).
+
+This step is optional. If skipped, the game will still build and run normally, but Training Center videos will not be available.
 
 From the Visual Studio Developer PowerShell, run:
 
@@ -135,6 +139,14 @@ sudo apt-get install -y build-essential git zip pkg-config cmake ninja-build nas
   libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev libibus-1.0-dev
 ```
 
+Before building the game, build FFmpeg to enable Training Center video playback:
+
+```bash
+sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/linux-x86_64 --enable-pic
+```
+
+When building for ARM64, replace `linux-x86_64` with `linux-arm64`.
+
 Build SDL3 from its submodule first, then the game:
 
 ```bash
@@ -156,6 +168,12 @@ On ARM64, the output folder is `build/release-linux-arm64/`. Remember to use tha
 
 You need the Xcode command line tools and [Homebrew](https://brew.sh/).
 
+Before building the game, build FFmpeg to enable Training Center video playback:
+
+```bash
+sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/darwin-arm64 --extra-cflags=-mmacosx-version-min=11.0 --extra-ldflags=-mmacosx-version-min=11.0
+```
+
 For Apple Silicon computers:
 
 ```bash
@@ -171,7 +189,7 @@ cmake --install build/SDL3
 PKG_CONFIG_PATH="$PWD/sdl3-local/lib/pkgconfig" make release USE_LOCAL_HEADERS=0 ARCH=arm64 -j"$(sysctl -n hw.logicalcpu)"
 ```
 
-For Macs with an Intel processor, replace `arm64` with `x86_64` in both commands and add `MACOSX_VERSION_MIN=11.0` to the `make` command.
+For Macs with an Intel processor, replace `arm64` with `x86_64` in every command and add `MACOSX_VERSION_MIN=11.0` to the `make` command.
 
 The binaries are placed in `build/release-darwin-arm64/` or `build/release-darwin-x86_64/`, depending on the architecture.
 

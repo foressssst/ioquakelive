@@ -357,6 +357,24 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-BinP
 powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak01Pk3.ps1" "$(TargetDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64' And Exists('..\..\code\libs\ffmpeg\win64\lib\avcodec.lib')">
+    <ClCompile>
+      <PreprocessorDefinitions>USE_FFMPEG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\code\libs\ffmpeg\win64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>..\..\code\libs\ffmpeg\win64\lib\avformat.lib;..\..\code\libs\ffmpeg\win64\lib\avcodec.lib;..\..\code\libs\ffmpeg\win64\lib\avutil.lib;bcrypt.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64' And Exists('..\..\code\libs\ffmpeg\winarm64\lib\avcodec.lib')">
+    <ClCompile>
+      <PreprocessorDefinitions>USE_FFMPEG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\code\libs\ffmpeg\winarm64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>..\..\code\libs\ffmpeg\winarm64\lib\avformat.lib;..\..\code\libs\ffmpeg\winarm64\lib\avcodec.lib;..\..\code\libs\ffmpeg\winarm64\lib\avutil.lib;bcrypt.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>

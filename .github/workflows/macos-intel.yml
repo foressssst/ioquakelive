@@ -60,6 +60,18 @@ jobs:
         install_name_tool -id @rpath/libSDL3.0.dylib \
           "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
         codesign -f -s - "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
+    - name: FFmpeg revision
+      id: ffmpeg
+      run: echo "sha=$(git rev-parse HEAD:code/ffmpeg)" >> "$GITHUB_OUTPUT"
+    - name: Cache FFmpeg
+      id: ffmpeg-cache
+      uses: actions/cache@v4
+      with:
+        path: code/libs/ffmpeg/darwin-x86_64
+        key: ffmpeg-darwin-x86_64-${{ steps.ffmpeg.outputs.sha }}-${{ hashFiles('code/tools/build-ffmpeg.sh') }}
+    - name: Build FFmpeg
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      run: JOBS=$(sysctl -n hw.logicalcpu) sh code/tools/build-ffmpeg.sh code/libs/ffmpeg/darwin-x86_64 --extra-cflags=-mmacosx-version-min=11.0 --extra-ldflags=-mmacosx-version-min=11.0
     - name: Compile
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"

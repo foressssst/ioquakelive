@@ -229,7 +229,7 @@ static qboolean CIN_MpegName(const char* name) {
     int n = (int)strlen(name);
     int i;
 
-    if (n < 11 || Q_strncmp(name, "video/", 6) || Q_stricmp(name + n - 4, ".mpg")) {
+    if (n < 11 || Q_strncmp(name, "video/", 6) || Q_stricmp(name + n - 4, ".mp4")) {
         return qfalse;
     }
     for (i = 6; i < n - 4; i++) {
