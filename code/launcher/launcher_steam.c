@@ -21,6 +21,8 @@
 #define CB_AVATAR 334
 #define CB_PRESENCE 336
 #define CB_JOIN 337
+#define WORLD_WAIT 30000
+#define WORLD_POLL 400
 
 typedef struct {
     int user;
@@ -48,6 +50,42 @@ typedef struct {
     int handle;
 } seen_t;
 
+typedef struct {
+    char key[256];
+    char value[256];
+} keyValue_t;
+
+#pragma pack(push, 1)
+typedef struct {
+    Uint16 port;
+    Uint16 query;
+    Uint32 ip;
+    int ping;
+    Uint8 responded;
+    Uint8 still;
+    char dir[32];
+    char map[32];
+    char desc[64];
+    Uint8 pad0[2];
+    Uint32 app;
+    int players;
+    int max;
+    int bots;
+    Uint8 password;
+    Uint8 secure;
+    Uint8 pad1[2];
+    Uint32 played;
+    int version;
+    char name[64];
+    char tags[128];
+    Uint64 id;
+} serverItem_t;
+#pragma pack(pop)
+
+typedef struct {
+    void** vtable;
+} response_t;
+
 static SDL_Thread* steamThread;
 static SDL_Mutex* steamLock;
 static SDL_AtomicInt steamQuit, steamWant, steamState, steamVersion;
@@ -67,6 +105,18 @@ static void* steamLib;
 static void* steamClient;
 static void* steamFriends;
 static void* steamUtils;
+static void* steamServers;
+static SDL_AtomicInt worldAsk, worldState;
+static steamWorld_t worldShared[STEAMW_MAX], worldWork[STEAMW_MAX];
+static int worldSharedCount, worldWorkCount;
+static Sint16 worldSlot[STEAMW_MAX];
+static void* worldRequest;
+static void* worldTable[3];
+static response_t worldResponse;
+static keyValue_t worldFilter;
+static keyValue_t* worldFilters[1];
+static bool worldDone;
+static Uint64 worldUntil, worldNext;
 static int steamPipe, steamUser;
 static void* (*CreateInterface)(const char*, int*);
 static bool (*BGetCallback)(int, callbackMsg_t*, int*);
@@ -221,7 +271,141 @@ static const char* Friend_Presence(Uint64 id, const char* key) {
     return s ? s : "";
 }
 
+static void World_Responded(void* self, void* request, int index) {
+    (void)self;
+    (void)request;
+    (void)index;
+}
+
+static void World_Failed(void* self, void* request, int index) {
+    (void)self;
+    (void)request;
+    (void)index;
+}
+
+static void World_Complete(void* self, void* request, int response) {
+    (void)self;
+    (void)request;
+    (void)response;
+    worldDone = true;
+}
+
+static void World_Release(void) {
+    if (worldRequest && steamServers) {
+        ((void (*)(void*, void*))VT(steamServers, 6))(steamServers, worldRequest);
+    }
+    worldRequest = NULL;
+}
+
+static int World_Order(const void* a, const void* b) {
+    const steamWorld_t* x = (const steamWorld_t*)a;
+    const steamWorld_t* y = (const steamWorld_t*)b;
+    int hx = x->players - x->bots, hy = y->players - y->bots;
+
+    if (hx != hy) {
+        return hy - hx;
+    }
+    return x->ping - y->ping;
+}
+
+static void World_Publish(void) {
+    SDL_LockMutex(steamLock);
+    SDL_memcpy(worldShared, worldWork, sizeof(steamWorld_t) * (size_t)worldWorkCount);
+    worldSharedCount = worldWorkCount;
+    SDL_qsort(worldShared, (size_t)worldSharedCount, sizeof(steamWorld_t), World_Order);
+    SDL_UnlockMutex(steamLock);
+    Steam_Bump();
+}
+
+static void World_Poll(void) {
+    int count = ((int (*)(void*, void*))VT(steamServers, 11))(steamServers, worldRequest), i;
+    bool changed = false;
+
+    for (i = 0; i < count && i < STEAMW_MAX; i++) {
+        const serverItem_t* it = ((const serverItem_t* (*)(void*, void*, int))VT(steamServers, 7))(steamServers, worldRequest, i);
+        steamWorld_t* w;
+
+        if (!it || !it->responded || it->app != QL_APP) {
+            continue;
+        }
+        if (worldSlot[i]) {
+            w = &worldWork[worldSlot[i] - 1];
+        } else {
+            if (worldWorkCount >= STEAMW_MAX) {
+                continue;
+            }
+            worldSlot[i] = (Sint16)(worldWorkCount + 1);
+            w = &worldWork[worldWorkCount++];
+        }
+        SDL_memcpy(w->name, it->name, sizeof(w->name));
+        w->name[sizeof(w->name) - 1] = '\0';
+        SDL_memcpy(w->map, it->map, sizeof(w->map));
+        w->map[sizeof(w->map) - 1] = '\0';
+        SDL_memcpy(w->tags, it->tags, sizeof(w->tags));
+        w->tags[sizeof(w->tags) - 1] = '\0';
+        SDL_snprintf(w->addr, sizeof(w->addr), "%u.%u.%u.%u:%u", (it->ip >> 24) & 255u, (it->ip >> 16) & 255u, (it->ip >> 8) & 255u, it->ip & 255u,
+                     (unsigned)it->port);
+        w->players = it->players;
+        w->max = it->max;
+        w->bots = it->bots;
+        w->ping = it->ping;
+        w->password = it->password != 0;
+        changed = true;
+    }
+    if (changed && worldWorkCount >= worldSharedCount) {
+        World_Publish();
+    }
+}
+
+static void World_Start(Uint64 now) {
+    World_Release();
+    worldWorkCount = 0;
+    SDL_memset(worldSlot, 0, sizeof(worldSlot));
+    worldDone = false;
+    worldTable[0] = (void*)World_Responded;
+    worldTable[1] = (void*)World_Failed;
+    worldTable[2] = (void*)World_Complete;
+    worldResponse.vtable = worldTable;
+    SDL_zero(worldFilter);
+    SDL_strlcpy(worldFilter.key, "gamedir", sizeof(worldFilter.key));
+    SDL_strlcpy(worldFilter.value, "baseq3", sizeof(worldFilter.value));
+    worldFilters[0] = &worldFilter;
+    if (steamServers) {
+        worldRequest = ((void* (*)(void*, Uint32, keyValue_t**, Uint32, void*))VT(steamServers, 0))(steamServers, QL_APP, worldFilters, 1, &worldResponse);
+    }
+    SDL_SetAtomicInt(&worldState, worldRequest ? STEAMW_LOADING : STEAMW_FAILED);
+    worldUntil = now + WORLD_WAIT;
+    worldNext = now + WORLD_POLL;
+    Steam_Bump();
+}
+
+static void World_Run(Uint64 now) {
+    if (SDL_GetAtomicInt(&worldAsk)) {
+        SDL_SetAtomicInt(&worldAsk, 0);
+        World_Start(now);
+    }
+    if (!worldRequest) {
+        return;
+    }
+    ((void (*)(void*))VT(steamClient, 19))(steamClient);
+    if (now < worldNext && !worldDone) {
+        return;
+    }
+    worldNext = now + WORLD_POLL;
+    World_Poll();
+    if (worldDone || now >= worldUntil) {
+        World_Release();
+        World_Publish();
+        SDL_SetAtomicInt(&worldState, STEAMW_DONE);
+        Steam_Bump();
+    }
+}
+
 static void Steam_Disconnect(void) {
+    World_Release();
+    if (SDL_GetAtomicInt(&worldState) == STEAMW_LOADING) {
+        SDL_SetAtomicInt(&worldState, STEAMW_FAILED);
+    }
     if (steamUser) {
         ((void (*)(void*, int, int))VT(steamClient, 4))(steamClient, steamPipe, steamUser);
     }
@@ -230,7 +414,7 @@ static void Steam_Disconnect(void) {
         ((bool (*)(void*))VT(steamClient, 22))(steamClient);
     }
     steamPipe = steamUser = 0;
-    steamFriends = steamUtils = NULL;
+    steamFriends = steamUtils = steamServers = NULL;
     seenCount = presenceAskedCount = workCount = 0;
     SDL_LockMutex(steamLock);
     sharedCount = 0;
@@ -258,6 +442,7 @@ static int Steam_Connect(void) {
         steamUtils = ((void* (*)(void*, int, const char*))VT(steamClient, 9))(steamClient, steamPipe, "SteamUtils007");
         steamFriends = ((void* (*)(void*, int, int, const char*))VT(steamClient, 8))(steamClient, steamUser, steamPipe, "SteamFriends015");
         user = ((void* (*)(void*, int, int, const char*))VT(steamClient, 5))(steamClient, steamUser, steamPipe, "SteamUser018");
+        steamServers = ((void* (*)(void*, int, int, const char*))VT(steamClient, 11))(steamClient, steamUser, steamPipe, "SteamMatchMakingServers002");
     }
     if (!steamUser || !steamUtils || !steamFriends || ((Uint32(*)(void*))VT(steamUtils, 9))(steamUtils) != QL_APP) {
         bool refused = steamUser != 0;
@@ -568,6 +753,7 @@ static int SDLCALL Steam_Thread(void* data) {
             dirty = true;
         }
         Steam_Invites();
+        World_Run(now);
         if ((dirty && now >= nextBuild) || now >= nextFull) {
             Steam_Rebuild();
             dirty = false;
@@ -713,4 +899,25 @@ bool SteamF_PopInvite(Uint64* to, bool* ok) {
     }
     SDL_UnlockMutex(steamLock);
     return have;
+}
+
+void SteamW_Ask(void) {
+    SDL_SetAtomicInt(&worldAsk, 1);
+}
+
+int SteamW_State(void) {
+    return SDL_GetAtomicInt(&worldState);
+}
+
+int SteamW_Copy(steamWorld_t* out, int max) {
+    int n;
+
+    if (!steamLock) {
+        return 0;
+    }
+    SDL_LockMutex(steamLock);
+    n = SDL_min(max, worldSharedCount);
+    SDL_memcpy(out, worldShared, sizeof(steamWorld_t) * (size_t)n);
+    SDL_UnlockMutex(steamLock);
+    return n;
 }

@@ -343,5 +343,12 @@
   "TXT_COUNTRY_SA": "Saudi Arabia",
   "TXT_COUNTRY_AE": "United Arab Emirates",
   "TXT_COUNTRY_EG": "Egypt",
+  "TXT_WORLD_TITLE": "Quake Live servers",
+  "TXT_WORLD_QC": "Quake Club",
+  "TXT_WORLD_ALL": "Worldwide",
+  "TXT_WORLD_LOADING": "Searching for servers…",
+  "TXT_WORLD_STEAM": "Open Steam to browse all Quake Live servers.",
+  "TXT_WORLD_EMPTY": "No servers found.",
+  "TXT_COL_PING": "Ping",
   "TXT_LANG_NAME": "English"
 }

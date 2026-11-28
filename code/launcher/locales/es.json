@@ -343,5 +343,12 @@
   "TXT_COUNTRY_SA": "Arabia Saudita",
   "TXT_COUNTRY_AE": "Emiratos Árabes",
   "TXT_COUNTRY_EG": "Egipto",
+  "TXT_WORLD_TITLE": "Servidores de Quake Live",
+  "TXT_WORLD_QC": "Quake Club",
+  "TXT_WORLD_ALL": "Todo el mundo",
+  "TXT_WORLD_LOADING": "Buscando servidores…",
+  "TXT_WORLD_STEAM": "Abre Steam para consultar todos los servidores de Quake Live.",
+  "TXT_WORLD_EMPTY": "No se encontraron servidores.",
+  "TXT_COL_PING": "Ping",
   "TXT_LANG_NAME": "Español"
 }

@@ -5412,7 +5412,7 @@ static void Live_Identity(player_t* list, int n) {
 
 enum { HUB_PROFILE, HUB_MATCHES, HUB_RANKING, HUB_SERVERS, HUB_MATCH, HUB_DEMOS, HUB_VIEWS };
 enum { WHY_NONE, WHY_PLACEMENT, WHY_INACTIVE, WHY_BANNED };
-enum { HIT_NONE, HIT_MATCH, HIT_PLAYER, HIT_SERVER, HIT_SERVER_JOIN, HIT_DEMO_PLAY, HIT_DEMO_GET };
+enum { HIT_NONE, HIT_MATCH, HIT_PLAYER, HIT_SERVER, HIT_SERVER_JOIN, HIT_DEMO_PLAY, HIT_DEMO_GET, HIT_WORLD_JOIN };
 enum { SUB_SUMMARY, SUB_WEAPONS, SUB_MEDALS, SUB_FLAGS };
 
 typedef struct {
@@ -10813,11 +10813,180 @@ static float Hub_RankView(float y) {
     return y + HUB_PAD * 2.0f + body;
 }
 
+static server_t worldList[STEAMW_MAX];
+static steamWorld_t worldRaw[STEAMW_MAX];
+static int worldPing[STEAMW_MAX], worldCount, worldSeen = -1, hubSrvTab;
+static Uint64 worldAskAt;
+
+static const char* World_Mode(const char* tags) {
+    static const char* const keys[] = {"ffa", "duel", "race", "tdm", "clanarena", "ctf", "oneflag", "overload", "harvester", "freezetag", "domination", "a&d", "redrover"};
+    static const char* const names[] = {"FFA", "DUEL", "RACE", "TDM", "CA", "CTF", "1FCTF", "OB", "HAR", "FT", "DOM", "A&D", "RR"};
+    static char first[32];
+    const char* comma = SDL_strchr(tags, ',');
+    size_t i, n = comma ? (size_t)(comma - tags) : SDL_strlen(tags);
+
+    SDL_strlcpy(first, tags, SDL_min(n + 1, sizeof(first)));
+    for (i = 0; i < SDL_arraysize(keys); i++) {
+        if (!SDL_strcasecmp(first, keys[i])) {
+            return names[i];
+        }
+    }
+    return Text_Upper(first);
+}
+
+static void World_Want(void) {
+    Uint64 now = SDL_GetTicks();
+    int state = SteamW_State();
+
+    if (state == STEAMW_LOADING || (worldAskAt && now - worldAskAt < 60000 && state != STEAMW_IDLE)) {
+        return;
+    }
+    worldAskAt = now;
+    SteamW_Ask();
+}
+
+#ifdef LAUNCHER_SHOT
+static bool World_Fake(void) {
+    const char* v = SDL_getenv("LAUNCHER_MUNDO");
+
+    return v && SDL_strcmp(v, "vacio");
+}
+
+static int World_Sample(void) {
+    static const char* const rows[][4] = {{"Frag Cave | Clan Arena | Frankfurt", "campgrounds", "clanarena,pql", "10.0.0.1:27960"},
+                                          {"North Duel #2", "bloodrun", "duel", "10.0.0.2:27961"},
+                                          {"Instagib Party", "almostlost", "ffa,instagib", "10.0.0.3:27962"},
+                                          {"Old School CTF", "shiningforces", "ctf", "10.0.0.4:27963"},
+                                          {"Freeze Tag Pub", "furiousheights", "freezetag", "10.0.0.5:27964"},
+                                          {"TDM 4v4", "hiddenfortress", "tdm", "10.0.0.6:27965"}};
+    static const int nums[][4] = {{14, 16, 0, 38}, {2, 2, 0, 52}, {9, 24, 3, 131}, {6, 16, 0, 160}, {0, 16, 0, 74}, {0, 8, 0, 210}};
+    int i, n = (int)SDL_arraysize(rows);
+
+    for (i = 0; i < n; i++) {
+        steamWorld_t* w = &worldRaw[i];
+
+        SDL_zerop(w);
+        SDL_strlcpy(w->name, rows[i][0], sizeof(w->name));
+        SDL_strlcpy(w->map, rows[i][1], sizeof(w->map));
+        SDL_strlcpy(w->tags, rows[i][2], sizeof(w->tags));
+        SDL_strlcpy(w->addr, rows[i][3], sizeof(w->addr));
+        w->players = nums[i][0];
+        w->max = nums[i][1];
+        w->bots = nums[i][2];
+        w->ping = nums[i][3];
+    }
+    return n;
+}
+#endif
+
+static void World_Sync(void) {
+    int v = SteamF_Version(), n, i, k;
+
+#ifdef LAUNCHER_SHOT
+    if (World_Fake()) {
+        v = -2;
+    }
+#endif
+    if (v == worldSeen) {
+        return;
+    }
+    worldSeen = v;
+    n = SteamW_Copy(worldRaw, STEAMW_MAX);
+#ifdef LAUNCHER_SHOT
+    if (v == -2) {
+        n = World_Sample();
+    }
+#endif
+    worldCount = 0;
+    for (i = 0; i < n; i++) {
+        const steamWorld_t* w = &worldRaw[i];
+        server_t* s = &worldList[worldCount];
+        bool ours = w->password;
+
+        for (k = 0; k < serverCount && !ours; k++) {
+            ours = !SDL_strcmp(servers[k].addr, w->addr);
+        }
+        if (ours) {
+            continue;
+        }
+        SDL_zerop(s);
+        Server_Name(w->name, s->name, sizeof(s->name));
+        SDL_strlcpy(s->map, w->map, sizeof(s->map));
+        SDL_strlcpy(s->mode, World_Mode(w->tags), sizeof(s->mode));
+        SDL_strlcpy(s->addr, w->addr, sizeof(s->addr));
+        s->players = SDL_max(0, w->players - w->bots);
+        s->max = w->max;
+        worldPing[worldCount++] = w->ping;
+    }
+}
+
+static float Hub_WorldView(float y) {
+    char line[96];
+    float x = HUB_IN + HUB_PAD, w = HUB_CW - HUB_PAD * 2.0f, ty, col[6], bw = Caps_Width(FONT_BOXBTN, T(TXT_JOIN), TRACK_BUTTON) + 32.0f, fr;
+    int i, state = SteamW_State();
+    bool sample = false;
+
+#ifdef LAUNCHER_SHOT
+    sample = World_Fake();
+#endif
+    if (!sample) {
+        World_Want();
+        if (SteamF_State() != STEAMF_UP) {
+            return Hub_Note(y, T(TXT_WORLD_STEAM));
+        }
+    }
+    World_Sync();
+    if (!worldCount) {
+        return Hub_Note(y, T(state == STEAMW_DONE || state == STEAMW_FAILED ? TXT_WORLD_EMPTY : TXT_WORLD_LOADING));
+    }
+    fr = (w - 16.0f - 64.0f - 112.0f - 56.0f - bw - 14.0f * 5.0f) / 2.4f;
+    col[0] = x + 8.0f;
+    col[1] = col[0] + 64.0f + 14.0f;
+    col[2] = col[1] + fr * 1.6f + 14.0f;
+    col[3] = col[2] + fr * 0.8f + 14.0f;
+    col[4] = col[3] + 112.0f + 14.0f;
+    col[5] = col[4] + 56.0f + 14.0f;
+    ty = Hub_Card(y, HUB_PAD * 2.0f + 28.0f + (float)worldCount * DEMO_ROW, NULL, NULL);
+    Hub_HeadRow(x, w, ty + 10.0f);
+    Draw_Caps(FONT_HUB_MONO, col[1], ty + 10.0f, tone.ink2, T(TXT_COL_SERVER), 1.6f);
+    Draw_Caps(FONT_HUB_MONO, col[2], ty + 10.0f, tone.ink2, T(TXT_COL_MODE), 1.6f);
+    Draw_Caps(FONT_HUB_MONO, col[3], ty + 10.0f, tone.ink2, T(TXT_COL_PLAYERS), 1.6f);
+    Draw_Caps(FONT_HUB_MONO, col[4], ty + 10.0f, tone.ink2, T(TXT_COL_PING), 1.6f);
+    for (i = 0; i < worldCount; i++) {
+        const server_t* s = &worldList[i];
+        float ry = ty + 28.0f + DEMO_ROW * (float)i, mid = ry + DEMO_ROW * 0.5f, cw;
+        Uint32 ink;
+
+        if (!Hub_Visible(ry, DEMO_ROW)) {
+            continue;
+        }
+        Hub_RowBack(x, ry, w, DEMO_ROW, i, 0.0f);
+        Row_Fill(HIT_WORLD_JOIN, i, false, col[5], mid - 16.0f, bw, 32.0f, &ink);
+        Hub_CapsCenter(FONT_BOXBTN, col[5] + bw * 0.5f, mid, ink, T(TXT_JOIN), TRACK_BUTTON);
+        Draw_Thumb(s->map, col[0], mid - 20.0f, 64.0f, 40.0f);
+        Draw_Text(FONT_SV_LIST, col[1], Text_Mid(FONT_SV_LIST, mid), tone.ink, Text_Fit(FONT_SV_LIST, s->name, col[2] - col[1] - 14.0f), -1);
+        SDL_snprintf(line, sizeof(line), "%s - %s", s->mode, Map_Title(s->map));
+        Draw_CapsFit(FONT_HUB_MAPLINE, col[2], mid, tone.ink2, line, 0.69f, col[3] - col[2] - 14.0f);
+        cw = Draw_Count(0.0f, 0.0f, s, false, true);
+        Draw_Count(col[3] + cw, mid - 6.0f, s, true, true);
+        Draw_Fill(col[3], mid + 10.0f, 96.0f, s);
+        SDL_snprintf(line, sizeof(line), "%d", worldPing[i]);
+        Draw_Text(FONT_HUB_RANKSTAT, col[4], Text_Mid(FONT_HUB_RANKSTAT, mid), worldPing[i] < 80 ? COL_OK : worldPing[i] < 150 ? tone.ink2 : COL_MAL, line, -1);
+    }
+    return ty + 28.0f + (float)worldCount * DEMO_ROW + HUB_PAD;
+}
+
 static float Hub_ServersView(float y) {
     char line[96];
     float x = HUB_IN + HUB_PAD, w = HUB_CW - HUB_PAD * 2.0f, ty, col[6], bw = Caps_Width(FONT_BOXBTN, T(TXT_JOIN), TRACK_BUTTON) + 32.0f, fr;
+    const char* tabs[2] = {T(TXT_WORLD_QC), T(TXT_WORLD_ALL)};
     int i;
 
+    Hub_Tabs(BTN_HUB_MODE_0, 2, tabs, hubSrvTab, HUB_IN, y + 10.0f, FONT_HUB_TAB, 0.96f, 30.0f);
+    y += 20.0f + 24.0f;
+    if (hubSrvTab == 1) {
+        return Hub_WorldView(y);
+    }
     if (!serversLoaded) {
         return Hub_Note(y, T(serversFailed ? TXT_SERVERS_FAILED : TXT_SERVERS_LOADING));
     }
@@ -11185,6 +11354,7 @@ static void Hub_Head(int v, float shown) {
     const char* owner = v == HUB_DEMOS ? Demo_Owner() : NULL;
     const char* title = v == HUB_MATCHES && !who ? T(TXT_HUB_MATCHES)
                         : owner                  ? T(TXT_DEMOS_OF)
+                        : v == HUB_SERVERS && hubSrvTab == 1 ? T(TXT_WORLD_TITLE)
                         : v != HUB_MATCH         ? T(names[v])
                         : Slot_Ready(&slotMatch) && hubMatch.status == PRO_READY ? hubMatch.title
                                                                                   : T(TXT_HUB_MATCHES);
@@ -11420,6 +11590,11 @@ static void Hub_Shots(void) {
     if (Hub_View() == HUB_MATCH && Slot_Ready(&slotMatch) && hubMatch.status == PRO_READY) {
         Hub_WantShot(hubMatch.map);
     }
+    if (Hub_View() == HUB_SERVERS && hubSrvTab == 1) {
+        for (i = 0; i < SDL_min(worldCount, 24); i++) {
+            Hub_WantShot(worldList[i].map);
+        }
+    }
 }
 
 static void Hub_Close(void) {
@@ -11446,6 +11621,9 @@ static bool Hub_Press(int index) {
             hubRankMode = i;
             hubRankPage = 1;
             hubGoal[HUB_RANKING] = 0.0f;
+        } else if (v == HUB_SERVERS && i < 2) {
+            hubSrvTab = i;
+            hubGoal[HUB_SERVERS] = 0.0f;
         }
         return true;
     }
@@ -11477,6 +11655,8 @@ static bool Hub_Press(int index) {
             Box_Open(&servers[hit->index]);
         } else if (hit->kind == HIT_SERVER_JOIN && hit->index < serverCount && Join_Ready()) {
             SDL_strlcpy(joinNow, servers[hit->index].addr, sizeof(joinNow));
+        } else if (hit->kind == HIT_WORLD_JOIN && hit->index < worldCount && Join_Ready()) {
+            SDL_strlcpy(joinNow, worldList[hit->index].addr, sizeof(joinNow));
         } else if (hit->kind == HIT_DEMO_PLAY || hit->kind == HIT_DEMO_GET) {
             const slot_t* s = hit->id[0] == 'p' ? &slotProDemos : &slotDemos;
             const hubDemos_t* ds = hit->id[0] == 'p' ? &hubProDemos : &hubDemos;
@@ -13251,6 +13431,9 @@ static void Hub_Shot_Open(void) {
         hubMode = SDL_clamp(SDL_atoi(option), 0, HUB_MODES - 1);
         hubRankMode = SDL_clamp(SDL_atoi(option), 0, HUB_RANK_MODES - 1);
         hubGamesMode = SDL_clamp(SDL_atoi(option), 0, HUB_MODES);
+    }
+    if (SDL_getenv("LAUNCHER_MUNDO")) {
+        hubSrvTab = 1;
     }
     option = SDL_getenv("LAUNCHER_HUB_SEASON");
     if (option && option[0]) {
