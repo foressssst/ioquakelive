@@ -806,6 +806,15 @@ static void CG_Item(centity_t* cent) {
     }
 }
 
+static int CG_GrenadeOwnColor(void) {
+    const char* s = cg_weaponColor_grenade.string;
+
+    if ((s[0] >= '0' && s[0] <= '9') || s[0] == '-') {
+        return cg_weaponColor_grenade.integer;
+    }
+    return 0x007000FF;
+}
+
 static void CG_GrenadeColor(const entityState_t* es, byte* color) {
     int viewer, owner, packed;
     qboolean teammate;
@@ -818,12 +827,12 @@ static void CG_GrenadeColor(const entityState_t* es, byte* color) {
         if (cg_forceTeamWeaponColor.integer == 1 && viewer != owner) {
             packed = cg_teamUpperColor.integer;
         } else {
-            packed = cg_weaponColor_grenade.integer;
+            packed = CG_GrenadeOwnColor();
         }
     } else if (cg_forceEnemyWeaponColor.integer == 1) {
         packed = cg_enemyUpperColor.integer;
     } else {
-        packed = cg_weaponColor_grenade.integer;
+        packed = CG_GrenadeOwnColor();
     }
 
     color[0] = (packed >> 24) & 0xff;
@@ -921,10 +930,12 @@ static void CG_Missile(centity_t* cent) {
         if (cg_forceTeamWeaponColor.integer == 1 || cg_forceEnemyWeaponColor.integer == 1) {
             CG_GrenadeColor(s1, ent.shaderRGBA);
         } else {
-            ent.shaderRGBA[0] = (cg_weaponColor_grenade.integer >> 24) & 0xff;
-            ent.shaderRGBA[1] = (cg_weaponColor_grenade.integer >> 16) & 0xff;
-            ent.shaderRGBA[2] = (cg_weaponColor_grenade.integer >> 8) & 0xff;
-            ent.shaderRGBA[3] = cg_weaponColor_grenade.integer & 0xff;
+            const int packed = CG_GrenadeOwnColor();
+
+            ent.shaderRGBA[0] = (packed >> 24) & 0xff;
+            ent.shaderRGBA[1] = (packed >> 16) & 0xff;
+            ent.shaderRGBA[2] = (packed >> 8) & 0xff;
+            ent.shaderRGBA[3] = packed & 0xff;
         }
     }
 
