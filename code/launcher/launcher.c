@@ -7136,6 +7136,14 @@ static bool Me_Find(char* out, size_t size) {
 
 static int SDLCALL Me_Thread(void* unused) {
     (void)unused;
+#ifdef LAUNCHER_SHOT
+    if (SDL_getenv("LAUNCHER_SINQC")) {
+        meNext.status = PRO_MISSING;
+        SDL_SetAtomicInt(&meState, 2);
+        Wake();
+        return 0;
+    }
+#endif
     if (Me_Find(meNext.steamId, sizeof(meNext.steamId))) {
         Profile_Load(&meNext);
     } else {
@@ -8241,8 +8249,14 @@ static bool Nav_Shown(void) {
     return gameFound && !install.active && setup.step == STEP_NONE;
 }
 
-static int Nav_Count(void) {
-    return meProfile.status == PRO_READY ? NAV_ITEMS : NAV_ITEMS - 1;
+static bool Nav_Has(int i) {
+    if (navTabs[i] == HUB_MATCHES) {
+        return meProfile.status == PRO_READY;
+    }
+    if (navTabs[i] == HUB_RANKING) {
+        return meProfile.status != PRO_MISSING;
+    }
+    return true;
 }
 
 static int Nav_Active(void) {
@@ -8262,16 +8276,20 @@ static int Nav_Active(void) {
 static void Draw_Nav(void) {
     float x = NAV_X;
     bool live = Nav_Shown() && !boxOpen;
-    int i, count = Nav_Count();
+    int i;
 
     Buttons_Hide(BTN_NAV_0, BTN_NAV_LAST);
     if (!Nav_Shown()) {
         pillX = -1.0f;
         return;
     }
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < NAV_ITEMS; i++) {
         float tw = Caps_Width(FONT_NAV, T(navNames[i]), TRACK_NAV);
 
+        if (!Nav_Has(i)) {
+            navW[i] = 0.0f;
+            continue;
+        }
         navX[i] = x - NAV_PILL;
         navW[i] = tw + NAV_PILL * 2.0f;
         x += tw + NAV_GAP;
@@ -8280,10 +8298,13 @@ static void Draw_Nav(void) {
         Draw_Rect(pillX + NAV_PILL, BAR_H - 3.0f, pillW - NAV_PILL * 2.0f, 3.0f, Col_Alpha(COL_WHITE, pillA));
     }
     x = NAV_X;
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < NAV_ITEMS; i++) {
         const char* text = T(navNames[i]);
         float tw = Caps_Width(FONT_NAV, text, TRACK_NAV);
 
+        if (!Nav_Has(i)) {
+            continue;
+        }
         Draw_Caps(FONT_NAV, x, TOP_MID, Col_Mix(COL_W70, COL_WHITE, SDL_max(navLit[i], heat[BTN_NAV_0 + i])), text, TRACK_NAV);
         Button_Set(BTN_NAV_0 + i, x - NAV_GAP * 0.5f, TOP_MID - 18.0f, tw + NAV_GAP, 36.0f, live);
         x += tw + NAV_GAP;
@@ -12680,7 +12701,7 @@ static bool Heat_Update(float dt, bool notes) {
     for (i = 0; i < NAV_ITEMS; i++) {
         moving |= Ease(&navLit[i], i == active ? 1.0f : 0.0f, dt * 9.0f);
     }
-    if (hotButton >= BTN_NAV_0 && hotButton < BTN_NAV_0 + Nav_Count() && buttons[hotButton].visible) {
+    if (hotButton >= BTN_NAV_0 && hotButton <= BTN_NAV_LAST && buttons[hotButton].visible) {
         active = hotButton - BTN_NAV_0;
     }
     moving |= Ease(&pillA, active >= 0 ? 1.0f : 0.0f, dt * 9.0f);
