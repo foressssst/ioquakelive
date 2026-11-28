@@ -256,7 +256,7 @@ static void R_LightScaleTexture( byte *in, int inwidth, int inheight, qboolean o
 	if ( only_gamma )
 	{
 #ifdef USE_FBO
-		if ( !glConfig.deviceSupportsGamma && !fboEnabled )
+		if ( !glConfig.deviceSupportsGamma && ( !fboEnabled || r_ignorehwgamma->integer ) )
 #else
 		if ( !glConfig.deviceSupportsGamma )
 #endif
@@ -285,7 +285,7 @@ static void R_LightScaleTexture( byte *in, int inwidth, int inheight, qboolean o
 		c = inwidth*inheight;
 
 #ifdef USE_FBO
-		if ( glConfig.deviceSupportsGamma || fboEnabled )
+		if ( glConfig.deviceSupportsGamma || ( fboEnabled && !r_ignorehwgamma->integer ) )
 #else
 		if ( glConfig.deviceSupportsGamma )
 #endif
@@ -1648,7 +1648,7 @@ void R_SetColorMappings( void ) {
 
 	tr.overbrightBits = r_overBrightBits->integer;
 
-	if ( !postGamma && ( !glConfig.deviceSupportsGamma || !glConfig.isFullscreen ) ) {
+	if ( ( !postGamma && ( !glConfig.deviceSupportsGamma || !glConfig.isFullscreen ) ) || ( !r_colorCorrectActive->integer && r_ignorehwgamma->integer ) ) {
 		tr.overbrightBits = 0;
 	}
 
