@@ -8454,7 +8454,6 @@ static void Draw_Hero(const image_t* image, float alpha) {
 static void Draw_Art(void) {
     if (hero.tex) {
         Draw_Hero(&hero, 1.0f);
-        Draw_Image(&shade, 0.0f, 0.0f, UI_W, UI_H, 1.0f);
     }
 }
 
