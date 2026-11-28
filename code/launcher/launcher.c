@@ -85,12 +85,17 @@
 #define NAME_RUNES 96
 #define TEXT_INK 0.7f
 #define TEXT_INK_OUTFIT 0.42f
-#define COL_WIDE 980.0f
+#define COL_WIDE 1160.0f
+#define COL_LEFT ((UI_W - COL_WIDE) * 0.5f)
 #define COL_W colW
 #define COL_X colX
 #define IN_X (COL_X + 24.0f)
-#define LOGO_X 24.0f
-#define TOP_MID 32.0f
+#define LOGO_X (COL_LEFT + 20.0f)
+#define TOP_MID 31.0f
+#define BAR_H 62.0f
+#define BAR_LINE 2.0f
+#define BAR_R 14.0f
+#define CTRL_R (COL_LEFT + COL_WIDE - 9.0f)
 #define VIG_W 160
 #define VIG_H 90
 #define VIG_BASE 0.30f
@@ -106,7 +111,7 @@
 #define PANEL_Y panelTop
 #define HEAD_H 48.0f
 #define BODY_TOP (PANEL_Y + HEAD_H)
-#define SIDE_W 380.0f
+#define SIDE_W 360.0f
 #define SIDE_X (COL_X + COL_W - 24.0f - SIDE_W)
 #define TEXT_W (SIDE_X - 48.0f - IN_X)
 #define PANEL_END UI_H
@@ -128,11 +133,11 @@
 #define OPTS_W 320.0f
 #define OPTS_ROW 40.0f
 #define OPTS_GAP 9.0f
-#define OPTS_X (UI_W - 12.0f - OPTS_W)
-#define OPTS_Y (CTRL_Y + CTRL_H + 6.0f)
+#define OPTS_X (COL_LEFT + COL_WIDE - OPTS_W)
+#define OPTS_Y (BAR_H + 8.0f)
 #define OPTS_H (OPTS_ROW * OPTS_ROWS + MENU_PAD * 2.0f + OPTS_GAP)
 #define LANG_W 196.0f
-#define LANG_X (UI_W - 12.0f - LANG_W)
+#define LANG_X (COL_LEFT + COL_WIDE - LANG_W)
 #define LANG_H (OPTS_ROW * LANG_COUNT + MENU_PAD * 2.0f)
 #define GEAR_ICON 16.0f
 #define SRV_MAX 40
@@ -205,7 +210,7 @@
 #define TRACK_NAV 1.4f
 #define NAV_ITEMS 5
 #define NAV_GAP 24.0f
-#define NAV_X 236.0f
+#define NAV_X (LOGO_X + 212.0f)
 #define NAV_PILL 12.0f
 #define FARO_DY 13.0f
 #define PULL_MAX 40.0f
@@ -214,7 +219,7 @@
 #define TOAST_H 42.0f
 #define TOAST_LIFE 4.0f
 #define FR_W 300.0f
-#define FR_X (UI_W - LOGO_X - FR_W)
+#define FR_X (COL_LEFT + COL_WIDE - FR_W)
 #define FR_Y cardTop
 #define FR_H (UI_H - FR_Y)
 #define FR_HEAD HEAD_H
@@ -633,7 +638,7 @@ static int stepDir, stepFrom;
 static float setupBodyEnd;
 static Uint64 stepStart;
 static float panelTop = PANEL_LOW;
-static float colW = COL_WIDE, colX = (UI_W - COL_WIDE) * 0.5f, cardTop = PANEL_LOW;
+static float colW = COL_WIDE, colX = COL_LEFT, cardTop = PANEL_LOW;
 static bool slideClip;
 static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta, prefShortcut, checkPending;
 static float optsHeat;
@@ -5606,6 +5611,7 @@ static char hubDemoWho[24];
 static float hubHeat, hubGoal[HUB_VIEWS], hubView[HUB_VIEWS], hubMost[HUB_VIEWS], hubPull[HUB_VIEWS], hubSwap = 1.0f, hubHue;
 static int hubShown = -1;
 static Uint32 hubHueBody = COL_P1;
+static Uint32 hubHueStrip = COL_P2;
 static char hubWho[24], hubMatchId[48];
 static hubHit_t hubHits[HUB_ROWS];
 static tone_t tone;
@@ -8154,8 +8160,22 @@ static void Draw_Sheet(float x, float y, float w, float h, Uint32 fill) {
     Draw_Round(x, y, w, h, PANEL_R, fill);
 }
 
+static void Draw_Strip(float x, float y, float w, Uint32 fill) {
+    Draw_Round(x, y, w, HEAD_H, PANEL_R, fill);
+    Draw_Rect(x, y + HEAD_H - PANEL_R, w, PANEL_R, fill);
+    Draw_Rect(x, y + HEAD_H - 1.0f, w, 2.0f, COL_P4);
+}
+
+static void Draw_Bar(void) {
+    Draw_Shadow(COL_LEFT, -BAR_R, COL_WIDE, BAR_H + BAR_R, BAR_R, 1.0f);
+    Draw_Round(COL_LEFT - 1.0f, -BAR_R, COL_WIDE + 2.0f, BAR_H + BAR_R + 1.0f, BAR_R + 1.0f, COL_RING);
+    Draw_Round(COL_LEFT, -BAR_R, COL_WIDE, BAR_H + BAR_R, BAR_R, COL_P1);
+    Draw_Rect(COL_LEFT, 0.0f, COL_WIDE, BAR_LINE, COL_P4);
+}
+
 static void Draw_Panel(void) {
     Draw_Sheet(COL_X, PANEL_Y, COL_W, PANEL_END - PANEL_Y, COL_P1);
+    Draw_Strip(COL_X, PANEL_Y, COL_W, COL_P2);
 }
 
 static float Caps_Width(int fontIndex, const char* text, float track) {
@@ -8257,7 +8277,7 @@ static void Draw_Nav(void) {
         x += tw + NAV_GAP;
     }
     if (pillX >= 0.0f && pillA > 0.0f) {
-        Draw_Round(pillX + NAV_PILL, TOP_MID + FARO_DY, pillW - NAV_PILL * 2.0f, 2.0f, 1.0f, Col_Alpha(COL_WHITE, pillA));
+        Draw_Rect(pillX + NAV_PILL, BAR_H - 3.0f, pillW - NAV_PILL * 2.0f, 3.0f, Col_Alpha(COL_WHITE, pillA));
     }
     x = NAV_X;
     for (i = 0; i < count; i++) {
@@ -8274,15 +8294,16 @@ static void Draw_Top(void) {
     const button_t* b;
     int i;
 
+    Draw_Bar();
     Draw_Image(&logo, LOGO_X, TOP_MID - LOGO * 0.5f, LOGO, LOGO, 1.0f);
     Draw_Caps(FONT_BRAND, LOGO_X + LOGO + 14.0f, TOP_MID, COL_WHITE, install.active ? "ioquakelive installer" : "ioquakelive", TRACK_CAPS);
     Draw_Nav();
 
-    Button_Set(BTN_DISCORD, UI_W - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, true);
-    Button_Set(BTN_OPTS, UI_W - CTRL_W * 4.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
-    Button_Set(BTN_LANG, UI_W - CTRL_W * 3.0f, CTRL_Y, CTRL_W, CTRL_H, langFlags[lang].tex != NULL);
-    Button_Set(BTN_MIN, UI_W - CTRL_W * 2.0f, CTRL_Y, CTRL_W, CTRL_H, true);
-    Button_Set(BTN_CLOSE, UI_W - CTRL_W, CTRL_Y, CTRL_W, CTRL_H, true);
+    Button_Set(BTN_DISCORD, CTRL_R - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, true);
+    Button_Set(BTN_OPTS, CTRL_R - CTRL_W * 4.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
+    Button_Set(BTN_LANG, CTRL_R - CTRL_W * 3.0f, CTRL_Y, CTRL_W, CTRL_H, langFlags[lang].tex != NULL);
+    Button_Set(BTN_MIN, CTRL_R - CTRL_W * 2.0f, CTRL_Y, CTRL_W, CTRL_H, true);
+    Button_Set(BTN_CLOSE, CTRL_R - CTRL_W, CTRL_Y, CTRL_W, CTRL_H, true);
     for (i = BTN_DISCORD; i <= BTN_CLOSE; i++) {
         float lit = (i == BTN_OPTS && optsOpen) || (i == BTN_LANG && langOpen) ? 1.0f : heat[i];
 
@@ -8304,7 +8325,7 @@ static void Draw_Top(void) {
     if (b->visible) {
         Draw_Image(&langFlags[lang], b->x + (b->w - FLAG_SIDE) * 0.5f, b->y + (b->h - FLAG_SIDE) * 0.5f, FLAG_SIDE, FLAG_SIDE, 1.0f);
     }
-    Draw_Rect(UI_W - CTRL_W * 2.0f, TOP_MID - 8.0f, 1.0f, 16.0f, COL_LINE);
+    Draw_Rect(CTRL_R - CTRL_W * 2.0f, TOP_MID - 8.0f, 1.0f, 16.0f, COL_LINE);
     b = &buttons[BTN_MIN];
     Draw_Rect(b->x + 16.0f, b->y + 18.0f, 12.0f, 1.0f, COL_WHITE);
     b = &buttons[BTN_CLOSE];
@@ -9299,7 +9320,7 @@ static void Draw_Me(void) {
     if (meProfile.status == PRO_READY && gameFound && !install.active && setup.step == STEP_NONE) {
         char key[sizeof(pics[0].key)];
         const pic_t* pic;
-        float x = UI_W - CTRL_W * 6.0f, mid = TOP_MID;
+        float x = CTRL_R - CTRL_W * 6.0f, mid = TOP_MID;
         bool mine = hubOpen && hubTab == HUB_PROFILE && !SDL_strcmp(hubWho, meProfile.steamId);
 
         Button_Set(BTN_ME, x, CTRL_Y, CTRL_W, CTRL_H, true);
@@ -9595,6 +9616,19 @@ static float Hub_Tabs(int first, int count, const char* const* names, int select
         x += w + gap;
     }
     return x;
+}
+
+static void Hub_RowBack(float x, float y, float w, float h, int index, float hot) {
+    if (index & 1) {
+        Draw_Round(x, y, w, h, 8.0f, Col_Alpha(tone.p3, 0.45f));
+    }
+    if (hot > 0.0f) {
+        Draw_Round(x, y, w, h, 8.0f, Col_Alpha(tone.p3, hot));
+    }
+}
+
+static void Hub_HeadRow(float x, float w, float mid) {
+    Draw_Round(x, mid - 16.0f, w, 32.0f, 8.0f, tone.p3);
 }
 
 static float Hub_Card(float y, float h, const char* title, const char* aside) {
@@ -10179,6 +10213,7 @@ static void Hub_GameHead(float x, float w, float mid) {
     float col[8];
     int i;
 
+    Hub_HeadRow(x, w, mid);
     Game_Columns(x + 8.0f, w - 16.0f, col);
     for (i = 0; i < 5; i++) {
         Draw_Caps(FONT_HUB_MONO, col[2 + i], mid, tone.ink2, T(labels[i]), 1.6f);
@@ -10191,9 +10226,7 @@ static void Hub_GameRow(const hubGame_t* g, int index, float x, float y, float w
     Uint32 c;
 
     hot = Hub_Hit(HIT_MATCH, index, g->id, x, y, w, 54.0f);
-    if (hot > 0.0f) {
-        Draw_Round(x, y, w, 54.0f, 8.0f, Col_Alpha(tone.p3, hot));
-    }
+    Hub_RowBack(x, y, w, 54.0f, index, hot);
     Game_Columns(x + 8.0f, w - 16.0f, col);
     c = g->win ? COL_OK : g->draw ? tone.ink2 : COL_MAL;
     Hub_Center(FONT_HUB_RESULT, col[0] + 20.0f, mid, c, g->win ? "W" : g->draw ? "E" : "L");
@@ -10408,6 +10441,7 @@ static void Demo_Head(float x, float w, float mid) {
     float col[9];
     int i;
 
+    Hub_HeadRow(x, w, mid);
     Demo_Columns(x + 8.0f, w - 16.0f, col);
     for (i = 0; i < 5; i++) {
         Draw_Caps(FONT_HUB_MONO, col[1 + i], mid, tone.ink2, T(labels[i]), 1.6f);
@@ -10461,6 +10495,7 @@ static void Demo_Row(const hubDemos_t* ds, int index, bool profile, float x, flo
     Uint32 ink;
 
     Demo_Columns(x + 8.0f, w - 16.0f, col);
+    Hub_RowBack(x, y, w, DEMO_ROW, index, 0.0f);
     Hub_Shot(d->map, col[0], mid - 20.0f, 64.0f, 40.0f, 6.0f, 1.0f);
     Draw_CapsFit(FONT_HUB_SEASON, col[1], mid - 8.0f, tone.ink, d->server[0] ? d->server : "-", 0.4f, col[2] - col[1] - 14.0f);
     if (failed) {
@@ -10677,6 +10712,7 @@ static float Hub_RankView(float y) {
     labels[n++] = TXT_HUB_TIER;
     labels[n++] = TXT_HUB_COL_ELO;
     labels[n++] = TXT_HUB_COL_KD;
+    Hub_HeadRow(x, w, ty + 10.0f);
     for (i = 0; i < n; i++) {
         if (i == 1) {
             Draw_Caps(FONT_HUB_MONO, col[i], ty + 10.0f, tone.ink2, T(labels[i]), 1.6f);
@@ -10699,8 +10735,8 @@ static float Hub_RankView(float y) {
         }
         if (cover) {
             Draw_Banner(&cover->img, x, ry, w, RANK_ROW, 8.0f, (0.62f + 0.28f * hot) * cover->heat);
-        } else if (hot > 0.0f) {
-            Draw_Round(x, ry, w, RANK_ROW, 8.0f, Col_Alpha(tone.p3, hot));
+        } else {
+            Hub_RowBack(x, ry, w, RANK_ROW, i, hot);
         }
         SDL_strlcpy(line, r->rank > 0 ? "" : "\xe2\x80\x94", sizeof(line));
         if (r->rank > 0) {
@@ -10772,6 +10808,7 @@ static float Hub_ServersView(float y) {
     col[4] = col[3] + 112.0f + 14.0f;
     col[5] = col[4] + bw;
     ty = Hub_Card(y, HUB_PAD * 2.0f + 28.0f + (float)serverCount * DEMO_ROW, NULL, NULL);
+    Hub_HeadRow(x, w, ty + 10.0f);
     Draw_Caps(FONT_HUB_MONO, col[1], ty + 10.0f, tone.ink2, T(TXT_COL_SERVER), 1.6f);
     Draw_Caps(FONT_HUB_MONO, col[2], ty + 10.0f, tone.ink2, T(TXT_COL_MODE), 1.6f);
     Draw_Caps(FONT_HUB_MONO, col[3], ty + 10.0f, tone.ink2, T(TXT_COL_PLAYERS), 1.6f);
@@ -10784,9 +10821,7 @@ static float Hub_ServersView(float y) {
             continue;
         }
         hot = Hub_Hit(HIT_SERVER, i, NULL, x, ry, col[4] - 8.0f - x, DEMO_ROW);
-        if (hot > 0.0f) {
-            Draw_Round(x, ry, w, DEMO_ROW, 8.0f, Col_Alpha(tone.p3, hot));
-        }
+        Hub_RowBack(x, ry, w, DEMO_ROW, i, hot);
         Row_Fill(HIT_SERVER_JOIN, i, false, col[4], mid - 16.0f, bw, 32.0f, &ink);
         Hub_CapsCenter(FONT_BOXBTN, col[4] + bw * 0.5f, mid, ink, T(TXT_JOIN), TRACK_BUTTON);
         Draw_Thumb(s->map, col[0], mid - 20.0f, 64.0f, 40.0f);
@@ -10851,7 +10886,8 @@ static float Match_Table(float y, int team, const int* labels, int columns, cons
         ty += 16.0f;
         Draw_Rect(HUB_IN + HUB_PAD + Caps_Width(FONT_HUB_SECTION, title, 0.8f) + 10.0f, y + HUB_PAD + 7.0f, 10.0f, 10.0f, team == 1 ? COL_RED : COL_BLUE);
     }
-    Draw_Caps(FONT_HUB_MONO, x, ty + 10.0f, tone.ink2, T(TXT_HUB_COL_PLAYER), 1.6f);
+    Hub_HeadRow(x, w, ty + 10.0f);
+    Draw_Caps(FONT_HUB_MONO, x + 8.0f, ty + 10.0f, tone.ink2, T(TXT_HUB_COL_PLAYER), 1.6f);
     for (i = 0; i < columns; i++) {
         Hub_CapsCenter(FONT_HUB_MONO, col[i + 1] + widths[i] * 0.5f, ty + 10.0f, tone.ink2, T(labels[i]), 1.6f);
     }
@@ -10863,9 +10899,7 @@ static float Match_Table(float y, int team, const int* labels, int columns, cons
             continue;
         }
         hot = Hub_Hit(HIT_PLAYER, list[k], man->steamId, x, ry, w, rowH);
-        if (hot > 0.0f) {
-            Draw_Round(x, ry, w, rowH, 8.0f, Col_Alpha(tone.p3, hot));
-        }
+        Hub_RowBack(x, ry, w, rowH, k, hot);
         Hub_ManName(man, x + 8.0f, mid, nameW - 8.0f);
         for (i = 0; i < columns; i++) {
             float cx = col[i + 1] + widths[i] * 0.5f;
@@ -10985,9 +11019,7 @@ static float Match_Medals(float y, int team) {
             continue;
         }
         hot = Hub_Hit(HIT_PLAYER, list[k], man->steamId, x, ty, w, rows[k]);
-        if (hot > 0.0f) {
-            Draw_Round(x, ty, w, rows[k], 8.0f, Col_Alpha(tone.p3, hot));
-        }
+        Hub_RowBack(x, ty, w, rows[k], k, hot);
         Hub_ManName(man, x + 8.0f, ty + 22.0f, nameW - 20.0f);
         for (i = 0; i < 16; i++) {
             int m = hubMatchMedals[i];
@@ -11199,8 +11231,10 @@ static void Hub_Draw(void) {
     Hub_Tone(hued ? hubPlayer.hue : -1);
     if (hued) {
         hubHueBody = tone.p1;
+        hubHueStrip = tone.p2;
     }
     Draw_Sheet(HUB_X, HUB_Y, HUB_W, end - HUB_Y, Col_Mix(COL_P1, hubHueBody, hubHue * e));
+    Draw_Strip(HUB_X, HUB_Y, HUB_W, Col_Mix(COL_P2, hubHueStrip, hubHue * e));
     Button_Set(BTN_HUB, HUB_X, HUB_Y, HUB_W, end - HUB_Y, hubLive);
     hubClipTop = 0.0f;
     hubClipBottom = UI_H;
@@ -12271,6 +12305,7 @@ static void Friends_Draw(void) {
     Button_Set(BTN_FR_PANEL, FR_X, FR_Y, FR_W, FR_H, true);
     slideFade = hubFonts ? SDL_clamp(1.0f - hubHeat / 0.4f, 0.0f, 1.0f) : 1.0f;
     Draw_Sheet(px, py, FR_W, FR_H, COL_P1);
+    Draw_Strip(px, py, FR_W, COL_P2);
     Friends_Head(px, py);
     Friends_List(px, py);
     slideFade = keep;
@@ -12303,8 +12338,8 @@ static void Friends_Poll(void) {
 
     side = can && (hubHeat <= 0.4f || !hubFonts);
     frOpen = side;
-    colW = side ? FR_X - 12.0f - LOGO_X : COL_WIDE;
-    colX = side ? LOGO_X : (UI_W - COL_WIDE) * 0.5f;
+    colW = side ? FR_X - 12.0f - COL_LEFT : COL_WIDE;
+    colX = COL_LEFT;
     if (frSample) {
         return;
     }
