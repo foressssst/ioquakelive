@@ -639,6 +639,7 @@ jobs:
           exit 1
         fi
         aws s3 cp game-files/ "s3://ioquakelive/v${VERSION}/" --recursive --endpoint-url "$R2_ENDPOINT" --only-show-errors
+        aws s3 sync content/videos/ "s3://ioquakelive/videos/" --endpoint-url "$R2_ENDPOINT" --only-show-errors
     - name: Create tag
       run: |
         git tag "${{ steps.version.outputs.tag }}"
@@ -701,6 +702,7 @@ jobs:
           exit 1
         fi
         aws s3 cp game-files/ "s3://ioquakelive/v${VERSION}/" --recursive --endpoint-url "$R2_ENDPOINT" --only-show-errors
+        aws s3 sync content/videos/ "s3://ioquakelive/videos/" --endpoint-url "$R2_ENDPOINT" --only-show-errors
     - name: Create tag
       run: |
         git tag "${{ steps.version.outputs.tag }}"

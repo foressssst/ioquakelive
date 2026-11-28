@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\code\client\cl_avi.c" />
     <ClCompile Include="..\..\code\client\cl_demowindow.c" />
+    <ClCompile Include="..\..\code\client\cl_mpeg.c" />
     <ClCompile Include="..\..\code\client\cl_intro.c" />
     <ClCompile Include="..\..\code\client\cl_streamer.c" />
     <ClCompile Include="..\..\code\client\cl_replay.c" />

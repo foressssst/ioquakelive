@@ -223,6 +223,86 @@ static int CIN_HandleForVideo(void) {
 
 extern int CL_ScaledMilliseconds(void);
 
+#define CIN_MPEG_GAP 250
+
+static qboolean CIN_MpegName(const char* name) {
+    int n = (int)strlen(name);
+    int i;
+
+    if (n < 11 || Q_strncmp(name, "video/", 6) || Q_stricmp(name + n - 4, ".mpg")) {
+        return qfalse;
+    }
+    for (i = 6; i < n - 4; i++) {
+        if (!isalnum((unsigned char)name[i]) && name[i] != '_' && name[i] != '-') {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
+static int CIN_PlayMpeg(const char* name, int x, int y, int w, int h, int systemBits) {
+    int handle = CIN_HandleForVideo();
+    cin_cache* c = &cinTable[handle];
+    qboolean silent = (systemBits & CIN_silent) != 0;
+    int width, height;
+    void* video;
+
+    video = CIN_MpegOpen(FS_BuildOSPath(Cvar_VariableString("fs_homepath"), NULL, name), silent,
+                         (systemBits & CIN_loop) != 0, &width, &height);
+    if (!video) {
+        return -1;
+    }
+    CIN_FreeOwn(handle);
+    Q_strncpyz(c->fileName, name, sizeof(c->fileName));
+    c->mpeg = video;
+    c->buf = CIN_MpegPixels(video);
+    c->CIN_WIDTH = c->drawX = width;
+    c->CIN_HEIGHT = c->drawY = height;
+    c->looping = (systemBits & CIN_loop) != 0;
+    c->holdAtEnd = (systemBits & CIN_hold) != 0;
+    c->silent = silent;
+    c->alterGameState = qfalse;
+    c->shader = qfalse;
+    c->playonwalls = 1;
+    c->status = FMV_PLAY;
+    c->lastTime = Sys_Milliseconds();
+    CIN_SetExtents(handle, x, y, w, h);
+    if (!silent) {
+        s_rawend[0] = s_soundtime;
+    }
+    return handle;
+}
+
+static e_status CIN_RunMpeg(int handle) {
+    cin_cache* c = &cinTable[handle];
+    int now = Sys_Milliseconds();
+    int msec = now - c->lastTime;
+    qboolean fresh = qfalse;
+
+    c->lastTime = now;
+    if (c->status != FMV_PLAY) {
+        return c->status;
+    }
+    if (msec < 0 || msec > CIN_MPEG_GAP) {
+        if (!c->silent) {
+            s_rawend[0] = s_soundtime;
+        }
+        CIN_MpegResync(c->mpeg);
+        msec = 0;
+    }
+    if (CIN_MpegRun(c->mpeg, msec, &fresh)) {
+        if (!c->holdAtEnd) {
+            CIN_StopCinematic(handle);
+            return FMV_EOF;
+        }
+        c->status = FMV_IDLE;
+    }
+    if (fresh) {
+        c->dirty = qtrue;
+    }
+    return c->status;
+}
+
 static void RllSetupTable(void) {
     int z;
 
@@ -1130,6 +1210,17 @@ static void RoQShutdown(void) {
 e_status CIN_StopCinematic(int handle) {
     if (handle < 0 || handle >= MAX_VIDEO_HANDLES || cinTable[handle].status == FMV_EOF)
         return FMV_EOF;
+    if (cinTable[handle].mpeg) {
+        CIN_MpegClose(cinTable[handle].mpeg);
+        if (!cinTable[handle].silent) {
+            s_rawend[0] = s_soundtime;
+        }
+        cinTable[handle].mpeg = NULL;
+        cinTable[handle].buf = NULL;
+        cinTable[handle].fileName[0] = 0;
+        cinTable[handle].status = FMV_EOF;
+        return FMV_EOF;
+    }
     currentHandle = handle;
 
     Com_DPrintf("trFMV::stop(), closing %s\n", cinTable[currentHandle].fileName);
@@ -1155,6 +1246,10 @@ e_status CIN_RunCinematic(int handle) {
 
     if (handle < 0 || handle >= MAX_VIDEO_HANDLES || cinTable[handle].status == FMV_EOF)
         return FMV_EOF;
+
+    if (cinTable[handle].mpeg) {
+        return CIN_RunMpeg(handle);
+    }
 
     if (cin.currentHandle != handle) {
         currentHandle = handle;
@@ -1233,6 +1328,10 @@ int CIN_PlayCinematic(const char* arg, int x, int y, int w, int h, int systemBit
                 return i;
             }
         }
+    }
+
+    if (CIN_MpegName(name)) {
+        return (systemBits & CIN_system) ? -1 : CIN_PlayMpeg(name, x, y, w, h, systemBits);
     }
 
     Com_DPrintf("CIN_PlayCinematic( %s )\n", arg);

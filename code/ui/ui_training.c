@@ -30,7 +30,11 @@ typedef enum {
     TR_HIT_NONE,
     TR_HIT_CARD,
     TR_HIT_START,
-    TR_HIT_VIDEO
+    TR_HIT_VIDEO,
+    TR_HIT_VIDEO_BLOCK,
+    TR_HIT_VIDEO_CLOSE,
+    TR_HIT_VIDEO_SCREEN,
+    TR_HIT_VIDEO_PLAY
 } trHitType_t;
 
 typedef struct {
@@ -41,24 +45,25 @@ typedef struct {
     const char* text;
     const char* command;
     const char* video;
+    float length;
 } trCard_t;
 
 static const trCard_t trCards[] = {
     {"qztraining", "webui/img/training/training.jpg", "Crash Course", "Welcome to the Arena",
      "Meet _Crash_, our QUAKE LIVE trainer, and get a guided tour of some of the basic items of combat.",
-     "map qztraining _training", NULL},
+     "map qztraining _training", NULL, 0},
     {"qzpractice2", "webui/img/training/strafe.jpg", "Accelerate", "Travelling at High Speed",
      "Practice the basics of _Strafe Jumping_, an essential skill to learning how to move faster than other arena "
      "combatants.",
-     "map qzpractice2 _sj; wait 2; team f", "https://youtu.be/HnIeHqBk8v4"},
+     "map qzpractice2 _sj; wait 2; team f", "strafe.mpg", 110.65f},
     {"qzpractice1", "webui/img/training/rocket.jpg", "Elevate", "Reaching Great Heights",
      "Use your projectile weapons to perform _Rocket Jumps_, and access areas of the arena in entirely different "
      "ways.",
-     "map qzpractice1 _rj; wait 2; team f", "https://youtu.be/pVs1KGK0VLY"},
+     "map qzpractice1 _rj; wait 2; team f", "rocket.mpg", 104.83f},
     {"thunderstruck", "", "Tracking", "Keeping the Beam On",
      "Keep the _Lightning Gun_ on a bot that does nothing but dodge. It never fights back and never goes "
      "down.",
-     "map thunderstruck _lgtrack; wait 2; team f; addbot crash 5", NULL},
+     "map thunderstruck _lgtrack; wait 2; team f; addbot crash 5", NULL, 0},
 };
 #define TR_NUM_CARDS ((int)ARRAY_LEN(trCards))
 
@@ -69,10 +74,245 @@ static struct {
     int lastTime;
     float scroll;
     float content;
+    qboolean videoOpen;
+    int video;
+    qboolean cinOn;
+    int cin;
+    int extents[4];
+    qboolean paused;
+    qboolean ended;
+    qboolean failed;
+    float played;
+    float progress;
 } tr;
 
 static const vec4_t trYellow = SM_RGB(247, 209, 0);
 static const vec4_t trBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
+
+#define TR_VIDEO_W 1280.0f
+#define TR_VIDEO_PAD 15.0f
+#define TR_VIDEO_TITLE 57.6f
+#define TR_VIDEO_ROW 24.0f
+#define TR_VIDEO_GAP 15.0f
+#define TR_VIDEO_GLYPH 14.0f
+#define TR_VIDEO_BIG 36.0f
+#define TR_VIDEO_STALL 0.25f
+
+static const vec4_t trDialog = SM_RGB(30, 30, 30);
+
+static void TR_VideoClose(void) {
+    if (tr.cinOn) {
+        trap_CIN_StopCinematic(tr.cin);
+    }
+    tr.cinOn = qfalse;
+    tr.videoOpen = qfalse;
+}
+
+static void TR_VideoStart(void) {
+    tr.cin = trap_CIN_PlayCinematic(trCards[tr.video].video, 0, 0, 0, 0, CIN_hold);
+    tr.cinOn = tr.cin >= 0 ? qtrue : qfalse;
+    tr.failed = !tr.cinOn;
+    tr.extents[2] = 0;
+    tr.played = 0;
+    tr.paused = qfalse;
+    tr.ended = qfalse;
+}
+
+static void TR_VideoOpen(int i) {
+    TR_VideoClose();
+    tr.videoOpen = qtrue;
+    tr.video = i;
+    tr.failed = qfalse;
+    tr.paused = qfalse;
+    tr.ended = qfalse;
+    tr.played = 0;
+    tr.progress = 0;
+    trap_Cmd_ExecuteText(EXEC_NOW, va("videofetch %s\n", trCards[i].video));
+}
+
+static void TR_VideoToggle(void) {
+    if (!tr.cinOn) {
+        return;
+    }
+    if (tr.ended) {
+        trap_CIN_StopCinematic(tr.cin);
+        TR_VideoStart();
+        return;
+    }
+    tr.paused = !tr.paused;
+}
+
+static void TR_VideoUpdate(float dt) {
+    if (!tr.cinOn) {
+        if (!tr.failed) {
+            tr.progress = trap_Cvar_VariableValue("cl_videoProgress");
+            if (tr.progress < 0) {
+                tr.failed = qtrue;
+            } else if (tr.progress >= 100) {
+                TR_VideoStart();
+            }
+        }
+        return;
+    }
+    if (tr.paused || tr.ended) {
+        return;
+    }
+    switch (trap_CIN_RunCinematic(tr.cin)) {
+        case FMV_IDLE:
+            tr.ended = qtrue;
+            tr.played = trCards[tr.video].length;
+            break;
+        case FMV_EOF:
+            tr.cinOn = qfalse;
+            tr.failed = qtrue;
+            break;
+        default:
+            if (dt < TR_VIDEO_STALL) {
+                tr.played += dt;
+            }
+            break;
+    }
+    if (tr.played > trCards[tr.video].length) {
+        tr.played = trCards[tr.video].length;
+    }
+}
+
+static void TR_Triangle(float x, float y, float size, const vec4_t color) {
+    int rows = (int)(size * smScale + 0.5f);
+    int r;
+
+    for (r = 0; r < rows; r++) {
+        float t = (r + 0.5f) / rows;
+
+        SM_Fill(x, y + r / smScale, (t < 0.5f ? t : 1.0f - t) * 2.0f * size * 0.866f, 1.0f / smScale, color, NULL);
+    }
+}
+
+static void TR_Glyph(float x, float y, float size, qboolean pause, const vec4_t color) {
+    if (pause) {
+        SM_Fill(x + size * 0.15f, y, size * 0.25f, size, color, NULL);
+        SM_Fill(x + size * 0.6f, y, size * 0.25f, size, color, NULL);
+    } else {
+        TR_Triangle(x + size * 0.15f, y, size, color);
+    }
+}
+
+static void TR_Loader(float x, float y) {
+    float size = SM_Len(24.0f), thick = SM_LenBorder(4.0f);
+    float r = (size - thick) * 0.5f;
+    float cx = x + size * 0.5f, cy = y + size * 0.5f;
+    float turn = (uiInfo.uiDC.realTime % 750) / 750.0f * 2 * M_PI;
+    int i;
+
+    for (i = 0; i < 36; i++) {
+        float a = i * (2 * M_PI / 36);
+        float rel = a - turn;
+
+        rel = rel - 2 * M_PI * floor(rel / (2 * M_PI));
+        if (rel > M_PI * 0.25f && rel < M_PI * 0.75f) {
+            continue;
+        }
+        SM_Fill(cx + cos(a) * r - thick * 0.5f, cy + sin(a) * r - thick * 0.5f, thick, thick, trYellow, NULL);
+    }
+}
+
+static void TR_DrawVideo(void) {
+    const trCard_t* card = &trCards[tr.video];
+    float side = smVW * 0.15f, width = smVW * 0.7f;
+    float inner = width - 2 * TR_VIDEO_PAD;
+    float vw = inner < TR_VIDEO_W ? inner : TR_VIDEO_W;
+    float vh = vw * 9.0f / 16.0f;
+    float room = smBottom - 2 * TR_VIDEO_GAP - (2 * TR_VIDEO_PAD + TR_VIDEO_TITLE + TR_VIDEO_GAP + TR_VIDEO_ROW);
+    float h, top, x, y, vx, vy, sx, sy, row, tw, tx, fill;
+    int e[4];
+    smRect_t band;
+    char time[32];
+
+    if (vh > room) {
+        vh = room;
+        vw = vh * 16.0f / 9.0f;
+    }
+    h = 2 * TR_VIDEO_PAD + TR_VIDEO_TITLE + vh + TR_VIDEO_GAP + TR_VIDEO_ROW;
+    top = smBottom * 0.5f - h * 0.5f;
+    x = side + TR_VIDEO_PAD;
+    y = top + TR_VIDEO_PAD;
+    band = SM_R(0, top, smVW, h);
+
+    SM_Fill(0, 0, smVW, smBottom, trBlack80, NULL);
+    SM_Hit(0, 0, smVW, smBottom, TR_HIT_VIDEO_BLOCK, 0, NULL);
+    SM_Fill(0, top, smVW, h, trDialog, NULL);
+    if (tr.picture[tr.video]) {
+        SM_Pic(0, top + h * 0.5f - smVW * 0.5f, smVW, smVW, tr.picture[tr.video], &band);
+    }
+    SM_Fill(side, top, width, h, trBlack80, NULL);
+
+    y += TR_VIDEO_TITLE;
+
+    sx = 640.0f / uiInfo.uiDC.glconfig.vidWidth;
+    sy = 480.0f / uiInfo.uiDC.glconfig.vidHeight;
+    e[0] = (int)((x + (inner - vw) * 0.5f) * smScale * sx + 0.5f);
+    e[1] = (int)((smTop + y * smScale) * sy + 0.5f);
+    e[2] = (int)(vw * smScale * sx + 0.5f);
+    e[3] = (int)(vh * smScale * sy + 0.5f);
+    vx = e[0] / sx / smScale;
+    vy = (e[1] / sy - smTop) / smScale;
+    vw = e[2] / sx / smScale;
+    vh = e[3] / sy / smScale;
+
+    SM_TextRaw(vx + vw - SM_Advance(FONT_SANS, 32, "\xc3\x97", -1),
+               SM_Baseline(FONT_SANS, 32, vy - TR_VIDEO_TITLE, 18.6667f), FONT_SANS, 32, trYellow, "\xc3\x97", -1, qfalse);
+    SM_Hit(vx + vw - 24, vy - TR_VIDEO_TITLE - 8, 24, 32, TR_HIT_VIDEO_CLOSE, 0, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
+    SM_Text(vx, SM_Baseline(FONT_DEFAULT, 48, vy - TR_VIDEO_TITLE, TR_VIDEO_TITLE), FONT_DEFAULT, 48, smText, card->title,
+            -1, qfalse);
+    SM_SetSpacing(0);
+    SM_Fill(vx, vy, vw, vh, smPage, NULL);
+    if (tr.cinOn) {
+        if (memcmp(e, tr.extents, sizeof(e))) {
+            memcpy(tr.extents, e, sizeof(e));
+            trap_CIN_SetExtents(tr.cin, e[0], e[1], e[2], e[3]);
+        }
+        trap_CIN_DrawCinematic(tr.cin);
+        if (tr.paused || tr.ended) {
+            float box = TR_VIDEO_BIG * 2;
+
+            SM_Fill(vx + (vw - box) * 0.5f, vy + (vh - box) * 0.5f, box, box, trBlack80, NULL);
+            TR_Glyph(vx + (vw - TR_VIDEO_BIG) * 0.5f + TR_VIDEO_BIG * 0.1f, vy + (vh - TR_VIDEO_BIG) * 0.5f,
+                     TR_VIDEO_BIG, qfalse, smText);
+        }
+    } else if (tr.failed) {
+        const char* text = "Video unavailable";
+
+        SM_Text(vx + SM_Center(vw, SM_Advance(FONT_SANS, 21.3333f, text, -1)),
+                SM_Baseline(FONT_SANS, 21.3333f, vy + vh * 0.5f - 17.0f, 34.0f), FONT_SANS, 21.3333f, smText, text, -1,
+                qfalse);
+    } else {
+        TR_Loader(vx + vw * 0.5f - SM_Len(12.0f), vy + vh * 0.5f - SM_Len(12.0f));
+    }
+    SM_Hit(vx, vy, vw, vh, TR_HIT_VIDEO_SCREEN, 0, NULL);
+
+    row = vy + vh + TR_VIDEO_GAP;
+    if (tr.cinOn) {
+        int now = (int)tr.played, all = (int)trCards[tr.video].length;
+
+        Com_sprintf(time, sizeof(time), "%i:%02i / %i:%02i", now / 60, now % 60, all / 60, all % 60);
+        fill = trCards[tr.video].length > 0 ? tr.played / trCards[tr.video].length : 0;
+    } else {
+        Com_sprintf(time, sizeof(time), "%i%%", tr.failed ? 0 : (int)tr.progress);
+        fill = tr.failed ? 0 : tr.progress / 100.0f;
+    }
+    TR_Glyph(vx + (TR_VIDEO_ROW - TR_VIDEO_GLYPH) * 0.5f, row + (TR_VIDEO_ROW - TR_VIDEO_GLYPH) * 0.5f, TR_VIDEO_GLYPH,
+             tr.cinOn && !tr.paused && !tr.ended, SM_Over(TR_HIT_VIDEO_PLAY, 0) ? trYellow : smText);
+    SM_Hit(vx, row, TR_VIDEO_ROW, TR_VIDEO_ROW, TR_HIT_VIDEO_PLAY, 0, NULL);
+    tw = SM_Advance(FONT_SANS, 15, time, -1);
+    SM_Text(vx + vw - tw, SM_Baseline(FONT_SANS, 15, row, TR_VIDEO_ROW), FONT_SANS, 15, smText, time, -1, qfalse);
+    tx = vx + TR_VIDEO_ROW + 12;
+    tw = vw - (tx - vx) - tw - 12;
+    SM_Fill(tx, row + TR_VIDEO_ROW * 0.5f - 2, tw, 4, smBorder, NULL);
+    if (fill > 0) {
+        SM_Fill(tx, row + TR_VIDEO_ROW * 0.5f - 2, tw * (fill > 1 ? 1 : fill), 4, trYellow, NULL);
+    }
+}
 
 static void TR_Launch(int i) {
     trap_Cvar_Set("bot_minplayers", "0");
@@ -270,6 +510,7 @@ void UI_Training_Open(void) {
     }
     tr.lastTime = uiInfo.uiDC.realTime;
     tr.scroll = 0;
+    TR_VideoClose();
 
     menu = Menus_FindByName("training");
     item = menu ? Menu_FindItemByName(menu, "training") : NULL;
@@ -314,7 +555,7 @@ void UI_Training_Paint(void) {
 
         TR_SectionAt(i, left, y, w, margin, &x, &sy);
         box = SM_R(x, sy, w, TR_SECTION_H);
-        tr.hover[i] += SM_In(&box, smMX, smMY) && SM_In(&clip, smMX, smMY) ? dt : -dt;
+        tr.hover[i] += !tr.videoOpen && SM_In(&box, smMX, smMY) && SM_In(&clip, smMX, smMY) ? dt : -dt;
         if (tr.hover[i] < 0) {
             tr.hover[i] = 0;
         } else if (tr.hover[i] > 1) {
@@ -337,7 +578,28 @@ void UI_Training_Paint(void) {
     }
 
     UI_Home_Banner();
+    if (tr.videoOpen) {
+        TR_VideoUpdate(dt);
+        TR_DrawVideo();
+    }
     SM_EndFrame();
+}
+
+static qboolean TR_VideoKey(int key) {
+    const smHit_t* hit;
+
+    if (key == K_ESCAPE) {
+        TR_VideoClose();
+    } else if (key == K_SPACE) {
+        TR_VideoToggle();
+    } else if (key == K_MOUSE1 && (hit = SM_HitAt(smMX, smMY)) != NULL) {
+        if (hit->type == TR_HIT_VIDEO_CLOSE) {
+            TR_VideoClose();
+        } else if (hit->type == TR_HIT_VIDEO_SCREEN || hit->type == TR_HIT_VIDEO_PLAY) {
+            TR_VideoToggle();
+        }
+    }
+    return qtrue;
 }
 
 qboolean UI_Training_HandleKey(int key) {
@@ -345,6 +607,9 @@ qboolean UI_Training_HandleKey(int key) {
 
     if (key & K_CHAR_FLAG) {
         return qtrue;
+    }
+    if (tr.videoOpen) {
+        return TR_VideoKey(key);
     }
     if (key == K_MWHEELUP || key == K_MWHEELDOWN) {
         tr.scroll += key == K_MWHEELUP ? -60.0f : 60.0f;
@@ -366,7 +631,7 @@ qboolean UI_Training_HandleKey(int key) {
             TR_Launch(hit->index);
             break;
         case TR_HIT_VIDEO:
-            trap_Sys_OpenURL(trCards[hit->index].video);
+            TR_VideoOpen(hit->index);
             break;
         default:
             break;

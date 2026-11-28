@@ -513,6 +513,11 @@ void CIN_SetExtents(int handle, int x, int y, int w, int h);
 void CIN_SetLooping(int handle, qboolean loop);
 void CIN_UploadCinematic(int handle);
 void CIN_CloseAllVideos(void);
+void* CIN_MpegOpen(const char* path, qboolean silent, qboolean loop, int* width, int* height);
+byte* CIN_MpegPixels(void* video);
+qboolean CIN_MpegRun(void* video, int msec, qboolean* fresh);
+void CIN_MpegResync(void* video);
+void CIN_MpegClose(void* video);
 
 void CL_InitCGame(void);
 void CL_ShutdownCGame(void);

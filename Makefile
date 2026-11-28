@@ -1318,6 +1318,7 @@ Q3OBJ = \
   $(B)/client/cl_ui.o \
   $(B)/client/cl_avi.o \
   $(B)/client/cl_demowindow.o \
+  $(B)/client/cl_mpeg.o \
   $(B)/client/cl_intro.o \
   $(B)/client/cl_streamer.o \
   $(B)/client/cl_replay.o \

@@ -55,6 +55,7 @@ enum { CLU_IDLE, CLU_RUNNING, CLU_DONE, CLU_FAILED, CLU_HANDLED };
 enum { CLD_IDLE, CLD_RUNNING, CLD_DOWNLOADED, CLD_EXTRACT, CLD_READY, CLD_FAILED };
 
 #define CL_UPDATE_SITE "https://github.com/"
+#define CL_VIDEO_SITE "https://pub-ad23407a3c15497799842a38688c8ab4.r2.dev/videos/"
 
 static char clUpdateText[0x40000];
 static char clUpdateURL[512];
@@ -231,6 +232,7 @@ typedef struct {
     int used;
     FILE* file;
     clSha256_t* sha;
+    volatile long* bytes;
     qboolean failed;
 } clUpdateSink_t;
 
@@ -242,7 +244,7 @@ static void CL_UpdateSinkWrite(clUpdateSink_t* sink, const char* data, int n) {
             sink->failed = qtrue;
         }
         CL_Sha256Update(sink->sha, data, n);
-        CL_UpdateSet(&clDownloadBytes, CL_UpdateGet(&clDownloadBytes) + n);
+        CL_UpdateSet(sink->bytes, CL_UpdateGet(sink->bytes) + n);
         return;
     }
     room = sink->size - 1 - sink->used;
@@ -1061,6 +1063,7 @@ static void CL_UpdateDownloadThread(void* unused) {
     Com_Memset(&sink, 0, sizeof(sink));
     CL_Sha256Init(&sha);
     sink.sha = &sha;
+    sink.bytes = &clDownloadBytes;
     sink.file = Sys_FOpen(clUpdateZipPath, "wb");
     if (!sink.file) {
         CL_UpdateSet(&clDownloadState, CLD_FAILED);
@@ -1252,6 +1255,119 @@ static void CL_UpdateDownload_f(void) {
     }
 }
 
+static const struct {
+    const char* name;
+    long size;
+    const char* sha256;
+} clVideos[] = {
+    {"rocket.mpg", 42313728, "2ad767ef5d5543baa7ff4d9c4adbbe4577bd8f79de2a9f421ce47f6c93447496"},
+    {"strafe.mpg", 38694912, "5bc0254858b5502cce46f46f046637ef47e4752ba8a318fe5028affdcc9e5359"},
+};
+
+static volatile long clVideoState;
+static volatile long clVideoBytes;
+static long clVideoSize;
+static char clVideoSha[65];
+static char clVideoURL[256];
+static char clVideoPath[MAX_OSPATH];
+static char clVideoTemp[MAX_OSPATH];
+static int clVideoShown;
+
+static void CL_VideoThread(void* unused) {
+    clUpdateSink_t sink;
+    clSha256_t sha;
+    char hex[65];
+    qboolean ok;
+
+    (void)unused;
+    Com_Memset(&sink, 0, sizeof(sink));
+    CL_Sha256Init(&sha);
+    sink.sha = &sha;
+    sink.bytes = &clVideoBytes;
+    sink.file = Sys_FOpen(clVideoTemp, "wb");
+    if (!sink.file) {
+        CL_UpdateSet(&clVideoState, CLD_FAILED);
+        return;
+    }
+    ok = CL_UpdateHttpGet(clVideoURL, &sink, CL_UPDATE_DOWNLOAD_TIMEOUT_MS);
+    fclose(sink.file);
+    CL_Sha256Hex(&sha, hex);
+    if (!ok || sink.failed || CL_UpdateGet(&clVideoBytes) != clVideoSize || Q_stricmp(hex, clVideoSha)) {
+        remove(clVideoTemp);
+        CL_UpdateSet(&clVideoState, CLD_FAILED);
+        return;
+    }
+    remove(clVideoPath);
+    if (rename(clVideoTemp, clVideoPath)) {
+        remove(clVideoTemp);
+        CL_UpdateSet(&clVideoState, CLD_FAILED);
+        return;
+    }
+    CL_UpdateSet(&clVideoState, CLD_DOWNLOADED);
+}
+
+static void CL_VideoFetch_f(void) {
+    const char* name = Cmd_Argv(1);
+    FILE* f;
+    long size = -1;
+    int i;
+
+    if (CL_UpdateGet(&clVideoState) == CLD_RUNNING) {
+        return;
+    }
+    for (i = 0; i < (int)ARRAY_LEN(clVideos) && Q_stricmp(name, clVideos[i].name); i++) {
+    }
+    if (i == (int)ARRAY_LEN(clVideos)) {
+        Cvar_Set("cl_videoProgress", "-1");
+        return;
+    }
+    Q_strncpyz(clVideoPath, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), NULL, va("video/%s", clVideos[i].name)),
+               sizeof(clVideoPath));
+    f = Sys_FOpen(clVideoPath, "rb");
+    if (f) {
+        if (!fseek(f, 0, SEEK_END)) {
+            size = ftell(f);
+        }
+        fclose(f);
+    }
+    if (size == clVideos[i].size) {
+        Cvar_Set("cl_videoProgress", "100");
+        return;
+    }
+    FS_CreatePath(clVideoPath);
+    Com_sprintf(clVideoTemp, sizeof(clVideoTemp), "%s.tmp", clVideoPath);
+    Com_sprintf(clVideoURL, sizeof(clVideoURL), "%s%s", CL_VIDEO_SITE, clVideos[i].name);
+    Q_strncpyz(clVideoSha, clVideos[i].sha256, sizeof(clVideoSha));
+    clVideoSize = clVideos[i].size;
+    clVideoShown = 0;
+    CL_UpdateSet(&clVideoBytes, 0);
+    CL_UpdateSet(&clVideoState, CLD_RUNNING);
+    Cvar_Set("cl_videoProgress", "0");
+    if (!Sys_ThreadCreate(CL_VideoThread, NULL)) {
+        CL_UpdateSet(&clVideoState, CLD_FAILED);
+    }
+}
+
+static void CL_VideoFetchFrame(void) {
+    long state = CL_UpdateGet(&clVideoState);
+    int percent;
+
+    if (state == CLD_RUNNING) {
+        percent = clVideoSize > 0 ? (int)(CL_UpdateGet(&clVideoBytes) * 100.0 / clVideoSize) : 0;
+        percent = percent > 99 ? 99 : percent;
+        if (percent != clVideoShown) {
+            clVideoShown = percent;
+            Cvar_Set("cl_videoProgress", va("%i", percent));
+        }
+    } else if (state == CLD_DOWNLOADED) {
+        CL_UpdateSet(&clVideoState, CLD_IDLE);
+        Cvar_Set("cl_videoProgress", "100");
+    } else if (state == CLD_FAILED) {
+        CL_UpdateSet(&clVideoState, CLD_IDLE);
+        Cvar_Set("cl_videoProgress", "-1");
+    }
+}
+
 static void CL_UpdateRestart_f(void) {
     if (CL_UpdateGet(&clDownloadState) != CLD_READY) {
         return;
@@ -1316,9 +1432,11 @@ void CL_UpdateInit(void) {
     Cvar_Get("cl_updateStatus", "", CVAR_ROM);
     Cvar_Get("cl_updateProgress", "0", CVAR_ROM);
     Cvar_Get("cl_updateAuto", "0", CVAR_ROM);
+    Cvar_Get("cl_videoProgress", "0", CVAR_ROM);
     Cmd_AddCommand("openupdate", CL_OpenUpdate_f);
     Cmd_AddCommand("updatedownload", CL_UpdateDownload_f);
     Cmd_AddCommand("updaterestart", CL_UpdateRestart_f);
+    Cmd_AddCommand("videofetch", CL_VideoFetch_f);
     if (!clUpdateDir[0]) {
         CL_UpdateExeDir();
         if (clUpdateDir[0]) {
@@ -1389,6 +1507,7 @@ void CL_UpdateFrame(void) {
     long state;
 
     CL_UpdateDownloadFrame();
+    CL_VideoFetchFrame();
     CL_ClubFrame();
     state = CL_UpdateGet(&clUpdateState);
     if (state != CLU_DONE && state != CLU_FAILED) {
