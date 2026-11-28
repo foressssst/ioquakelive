@@ -814,6 +814,7 @@ qboolean Sys_PathIsDir(const char* path);
 qboolean Sys_LauncherHandoff(int argc, char** argv);
 qboolean Sys_OpenLauncher(void);
 void Sys_ReturnToLauncher(void);
+qboolean Sys_LauncherJoin(char* out, int size);
 
 void Sys_Print(const char* msg);
 

@@ -5003,9 +5003,14 @@ static bool Update_Busy(void) {
 
 static SDL_Process* gameProcess;
 static bool gameStarted;
+static char joinPath[1100];
 
 static bool Play_Ready(void) {
     return gameFound && !gameProcess && !Update_Busy() && SDL_GetAtomicInt(&checkState) != CHECK_RUNNING;
+}
+
+static bool Join_Ready(void) {
+    return gameProcess ? joinPath[0] != '\0' : Play_Ready();
 }
 
 static void Update_Auto(void) {
@@ -7768,6 +7773,9 @@ static bool Game_Start(void) {
         args[++i] = demoTo;
     }
     args[i + 1] = NULL;
+    SDL_snprintf(joinPath, sizeof(joinPath), "%sioquakelive-join.txt", basePath);
+    SDL_RemovePath(joinPath);
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "IOQUAKELIVE_JOIN", joinPath, true);
     SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "IOQUAKELIVE_LAUNCHER", "stay", true);
     process = SDL_CreateProcess(args, false);
     if (!process) {
@@ -7778,6 +7786,39 @@ static bool Game_Start(void) {
     Game_ForgetTarget();
     SDL_MinimizeWindow(window);
     return true;
+}
+
+#ifdef _WIN32
+static BOOL CALLBACK Game_FrontEach(HWND w, LPARAM pid) {
+    DWORD owner = 0;
+
+    GetWindowThreadProcessId(w, &owner);
+    if (owner != (DWORD)pid || !IsWindowVisible(w) || GetWindow(w, GW_OWNER)) {
+        return TRUE;
+    }
+    if (IsIconic(w)) {
+        ShowWindow(w, SW_RESTORE);
+    }
+    SetForegroundWindow(w);
+    return FALSE;
+}
+#endif
+
+static void Join_Send(const char* addr) {
+    char tmp[1110];
+
+    if (!gameProcess || !joinPath[0] || !addr[0]) {
+        return;
+    }
+    SDL_snprintf(tmp, sizeof(tmp), "%s.tmp", joinPath);
+    if (!SDL_SaveFile(tmp, addr, SDL_strlen(addr)) || !SDL_RenamePath(tmp, joinPath)) {
+        SDL_RemovePath(tmp);
+        return;
+    }
+#ifdef _WIN32
+    EnumWindows(Game_FrontEach, (LPARAM)SDL_GetNumberProperty(SDL_GetProcessProperties(gameProcess), SDL_PROP_PROCESS_PID_NUMBER, 0));
+#endif
+    SDL_MinimizeWindow(window);
 }
 
 static bool Game_Stay(void) {
@@ -7793,6 +7834,9 @@ static void Game_Poll(void) {
     if (gameProcess && SDL_WaitProcess(gameProcess, false, &code)) {
         SDL_DestroyProcess(gameProcess);
         gameProcess = NULL;
+        if (joinPath[0]) {
+            SDL_RemovePath(joinPath);
+        }
         Window_FromTray();
     }
 }
@@ -7916,6 +7960,10 @@ static bool Launch_Poll(void) {
             shakeAt[BTN_PLAY] = Anim_Now();
             Toast(T(TXT_TOAST_START));
         }
+    }
+    if (joinNow[0] && gameProcess) {
+        Join_Send(joinNow);
+        joinNow[0] = '\0';
     }
     if (joinNow[0]) {
         SDL_strlcpy(connectTo, joinNow, sizeof(connectTo));
@@ -9202,7 +9250,7 @@ static void Draw_Box(void) {
         Draw_Round(x + BOX_W - 12.0f, top + (bodyH - thumb) * boxView / most, 3.0f, thumb, 1.5f, COL_DOT);
     }
     fy = y + h - 24.0f - BOX_BTN_H;
-    cw = Draw_Button(BTN_CONNECT, x + 24.0f, fy, T(TXT_JOIN), true, boxOpen && Play_Ready());
+    cw = Draw_Button(BTN_CONNECT, x + 24.0f, fy, T(TXT_JOIN), true, boxOpen && Join_Ready());
     bx = x + 24.0f + cw + 10.0f;
     if (!boxForeign) {
         bx += Draw_Button(BTN_SEE_SERVER, bx, fy, T(TXT_SEE_SERVER), false, boxOpen) + 10.0f;
@@ -11343,7 +11391,7 @@ static bool Hub_Press(int index) {
             hubGoal[HUB_PROFILE] = hubView[HUB_PROFILE] = 0.0f;
         } else if (hit->kind == HIT_SERVER && hit->index < serverCount) {
             Box_Open(&servers[hit->index]);
-        } else if (hit->kind == HIT_SERVER_JOIN && hit->index < serverCount && Play_Ready()) {
+        } else if (hit->kind == HIT_SERVER_JOIN && hit->index < serverCount && Join_Ready()) {
             SDL_strlcpy(joinNow, servers[hit->index].addr, sizeof(joinNow));
         } else if (hit->kind == HIT_DEMO_PLAY || hit->kind == HIT_DEMO_GET) {
             const slot_t* s = hit->id[0] == 'p' ? &slotProDemos : &slotDemos;
@@ -11713,7 +11761,7 @@ static bool Friends_Over(float x, float y) {
 static void Fr_Join(Uint64 id) {
     int fi = Fr_Find(id);
 
-    if (fi < 0 || !Fr_Addr(frList[fi].connect) || !Play_Ready()) {
+    if (fi < 0 || !Fr_Addr(frList[fi].connect) || !Join_Ready()) {
         return;
     }
     SDL_strlcpy(joinNow, frList[fi].connect, sizeof(joinNow));
@@ -12749,15 +12797,19 @@ static void Box_Open(const server_t* s) {
 }
 
 static bool Box_Connect(void) {
+    bool ok;
+
+    if (gameProcess) {
+        Join_Send(boxServer.addr);
+        return false;
+    }
     if (!Play_Ready()) {
         return false;
     }
     SDL_strlcpy(connectTo, boxServer.addr, sizeof(connectTo));
-    if (Game_Start()) {
-        return true;
-    }
+    ok = Game_Start();
     connectTo[0] = '\0';
-    return false;
+    return ok;
 }
 
 static void Box_See(void) {

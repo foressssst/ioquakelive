@@ -1265,3 +1265,20 @@ void Sys_ReturnToLauncher(void) {
         Sys_OpenLauncher();
     }
 }
+
+qboolean Sys_LauncherJoin(char* out, int size) {
+    const char* path = getenv("IOQUAKELIVE_JOIN");
+    char text[128];
+    FILE* f;
+    size_t got;
+
+    if (!path || !path[0] || (f = fopen(path, "rb")) == NULL) {
+        return qfalse;
+    }
+    got = fread(text, 1, sizeof(text) - 1, f);
+    fclose(f);
+    unlink(path);
+    text[got] = '\0';
+    Q_strncpyz(out, text, size);
+    return qtrue;
+}

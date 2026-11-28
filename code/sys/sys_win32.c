@@ -1362,3 +1362,21 @@ void Sys_ReturnToLauncher(void) {
         Sys_OpenLauncher();
     }
 }
+
+qboolean Sys_LauncherJoin(char* out, int size) {
+    wchar_t path[MAX_OSPATH];
+    DWORD n = GetEnvironmentVariableW(L"IOQUAKELIVE_JOIN", path, ARRAY_LEN(path));
+    char text[128];
+    FILE* f;
+    size_t got;
+
+    if (!n || n >= ARRAY_LEN(path) || (f = _wfopen(path, L"rb")) == NULL) {
+        return qfalse;
+    }
+    got = fread(text, 1, sizeof(text) - 1, f);
+    fclose(f);
+    _wremove(path);
+    text[got] = '\0';
+    Q_strncpyz(out, text, size);
+    return qtrue;
+}

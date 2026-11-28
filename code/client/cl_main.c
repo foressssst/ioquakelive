@@ -3063,6 +3063,32 @@ static void CL_ReconnectFrame(void) {
     }
 }
 
+static void CL_LauncherJoinFrame(void) {
+    static int next;
+    char text[128];
+    int i;
+
+    if (cls.realtime - next < 0) {
+        return;
+    }
+    next = cls.realtime + 250;
+    if (!Sys_LauncherJoin(text, sizeof(text))) {
+        return;
+    }
+    for (i = 0; text[i] && text[i] != '\r' && text[i] != '\n'; i++) {
+        char c = text[i];
+
+        if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && c != '.' && c != ':' &&
+            c != '-' && c != '[' && c != ']') {
+            return;
+        }
+    }
+    text[i] = '\0';
+    if (i > 0) {
+        Cbuf_AddText(va("connect %s\n", text));
+    }
+}
+
 void CL_Frame(int msec) {
     if (!com_cl_running->integer) {
         return;
@@ -3193,6 +3219,7 @@ void CL_Frame(int msec) {
         CL_WarmPlayers();
         if (!com_demoWindowParent) {
             CL_UpdateFrame();
+            CL_LauncherJoinFrame();
         }
         CL_DemoWindowFrame();
         CL_StreamerFrame();
