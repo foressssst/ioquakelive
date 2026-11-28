@@ -1113,7 +1113,11 @@ static void CG_AutoAction(void) {
 }
 
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback) {
-    cg.seeking = demoPlayback && (serverTime < cg.time || serverTime - cg.time > 1000);
+    if (demoPlayback && (serverTime < cg.time || serverTime - cg.time > 1000)) {
+        cg.seekSettling = qtrue;
+        cg.joinMenuCloseTime = serverTime;
+    }
+    cg.seeking = demoPlayback && cg.seekSettling;
     cg.time = serverTime;
     cg.demoPlayback = demoPlayback;
 

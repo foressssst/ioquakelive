@@ -686,6 +686,7 @@ typedef struct {
     int soundBufferDelay[MAX_SOUNDBUFFER];
     qboolean soundBufferLocked;
     qboolean seeking;
+    qboolean seekSettling;
     int joinMenuCloseTime;
 
     int voiceChatTime;

@@ -189,6 +189,7 @@ static void CG_TransitionSnapshot(void) {
         if (cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW) || cg_nopredict.integer) {
             CG_TransitionPlayerState(ps, ops);
         }
+        cg.seekSettling = qfalse;
     }
 
     if (cg.reloadOtherClients == qtrue) {
