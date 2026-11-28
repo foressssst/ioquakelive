@@ -24,21 +24,18 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define INTRO_W 1920.0f
 #define INTRO_H 1080.0f
-#define INTRO_LOGO 140.0f
 #define INTRO_ZOOM 0.7f
-#define INTRO_GAP 70.0f
+#define INTRO_TILE 220.0f
+#define INTRO_LOGO 140.0f
+#define INTRO_TK (INTRO_TILE / INTRO_LOGO)
+#define INTRO_GAP 35.0f
 #define INTRO_SIZE 95.0f
-#define INTRO_BUILD 300.0f
 #define INTRO_TEXTW 715.68f
 #define INTRO_CAPH 67.0f
 #define INTRO_RX (511.9f / 1024.0f)
 #define INTRO_RY (371.6f / 1024.0f)
 #define INTRO_RR (298.6f / 1024.0f)
 #define INTRO_RI (260.1f / 1024.0f)
-#define INTRO_DY (-32.6f / 1024.0f)
-#define INTRO_PAD (160.0f / 1024.0f)
-#define INTRO_MEDAL 240.0f
-#define INTRO_LINE 5.0f
 #define INTRO_M_RO 26.98f
 #define INTRO_M_WO 3.72f
 #define INTRO_M_RI 19.6f
@@ -58,34 +55,30 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define INTRO_G_N 18
 #define INTRO_G_RING 14.0f
 
-#define INTRO_TILEIN 0.1f
-#define INTRO_MED0 0.08f
+#define INTRO_FADEIN 0.3f
+#define INTRO_MED0 0.28f
 #define INTRO_FRAME 0.03f
-#define INTRO_EXIT0 0.92f
-#define INTRO_EXIT1 1.02f
-#define INTRO_CV0 0.98f
-#define INTRO_CV1 1.16f
-#define INTRO_G0 1.02f
-#define INTRO_GL0 1.78f
-#define INTRO_GL1 2.04f
+#define INTRO_EXIT0 1.12f
+#define INTRO_EXIT1 1.22f
+#define INTRO_CV0 1.18f
+#define INTRO_CV1 1.36f
+#define INTRO_G0 1.22f
+#define INTRO_UNDO 1.98f
 #define INTRO_FIST_OUT 0.18f
-#define INTRO_DROP0 1.74f
-#define INTRO_HIT 2.04f
-#define INTRO_FILL1 2.32f
-#define INTRO_MV0 2.4f
-#define INTRO_MV1 2.95f
-#define INTRO_TXT 2.68f
-#define INTRO_STAG 0.03f
-#define INTRO_DUR 0.45f
-#define INTRO_RISE 0.35f
-#define INTRO_SHINE0 2.3f
-#define INTRO_SHINE1 2.68f
-#define INTRO_OUT0 3.66f
-#define INTRO_OUT1 3.98f
-#define INTRO_BG0 3.98f
+#define INTRO_RFRAME 0.02f
+#define INTRO_NAIL0 2.4f
+#define INTRO_NAIL1 2.52f
+#define INTRO_NAIL_T0 0.47f
+#define INTRO_NAIL_T1 0.91f
+#define INTRO_ARC0 2.46f
+#define INTRO_MV0 2.94f
+#define INTRO_MV1 3.64f
+#define INTRO_OUT0 4.52f
+#define INTRO_OUT1 4.84f
+#define INTRO_BG0 4.84f
+#define INTRO_END 5.14f
 #define INTRO_WARM_FRAMES 12
 #define INTRO_WARM_MS 40
-#define INTRO_END 4.28f
 
 #define INTRO_MAX_VERTS 3072
 #define INTRO_MAX_POLY 192
@@ -117,13 +110,14 @@ static struct {
     int last;
     int warm;
     int swallowKey;
-    qhandle_t tile, arc, nail, nailGlow, line, fist;
+    qhandle_t tile, arc, nail, line, fist;
     qhandle_t wreath[INTRO_G_N];
     int font;
-    float scale, ox, oy, cam, sx, sy;
+    float scale, ox, oy;
     qhandle_t batch;
     int numVerts;
     polyVert_t verts[INTRO_MAX_VERTS];
+    char held[MAX_STRING_CHARS];
 } intro = {INTRO_IDLE, 0.0f, 0, 0, -1};
 
 static float Intro_Clamp(float v) {
@@ -136,6 +130,10 @@ static float Intro_Lerp(float a, float b, float p) {
 
 static float Intro_Span(float t, float a, float b) {
     return Intro_Clamp((t - a) / (b - a));
+}
+
+static float Intro_EaseIn(float p) {
+    return p * p;
 }
 
 static float Intro_EaseOut(float p) {
@@ -154,13 +152,9 @@ static float Intro_EaseInOut(float p) {
     return 1.0f - q * q * q * q * 0.5f;
 }
 
-static float Intro_EaseExpo(float p) {
-    return p >= 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * p);
-}
-
 static void Intro_Point(float lx, float ly, float* x, float* y) {
-    *x = intro.ox + intro.scale * (intro.cam * lx + INTRO_W * 0.5f * (1.0f - intro.cam) + intro.sx);
-    *y = intro.oy + intro.scale * (intro.cam * ly + INTRO_H * 0.5f * (1.0f - intro.cam) + intro.sy);
+    *x = intro.ox + intro.scale * lx;
+    *y = intro.oy + intro.scale * ly;
 }
 
 static void Intro_Color(float r, float g, float b, float a) {
@@ -174,10 +168,26 @@ static void Intro_Color(float r, float g, float b, float a) {
 }
 
 static void Intro_Pic(float lx, float ly, float lw, float lh, qhandle_t shader) {
-    float x, y, u = intro.scale * intro.cam;
+    float x, y, u = intro.scale;
 
     Intro_Point(lx, ly, &x, &y);
     re.DrawStretchPic(x, y, lw * u, lh * u, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+}
+
+static void Intro_PicClip(float lx, float ly, float lw, float lh, float top, float bottom, qhandle_t shader) {
+    float x, y, u = intro.scale, t0 = 0.0f, t1 = 1.0f;
+
+    if (ly + lh <= top || ly >= bottom) {
+        return;
+    }
+    if (ly < top) {
+        t0 = (top - ly) / lh;
+    }
+    if (ly + lh > bottom) {
+        t1 = (bottom - ly) / lh;
+    }
+    Intro_Point(lx, ly + t0 * lh, &x, &y);
+    re.DrawStretchPic(x, y, lw * u, (t1 - t0) * lh * u, 0.0f, t0, 1.0f, t1, shader);
 }
 
 static void Intro_Flush(void) {
@@ -273,7 +283,7 @@ static void Intro_Poly(const introVert_t* in, int n, const float* rect) {
 }
 
 static int Intro_Segments(float r) {
-    float rs = r * intro.scale * intro.cam;
+    float rs = r * intro.scale;
     int n;
 
     if (rs <= 1.0f) {
@@ -304,7 +314,7 @@ static float Intro_Table(const float* v, int n, float f) {
 
 static void Intro_Stroke(const float* p0, const float* n0, const float* p1, const float* n1, float h, const float* c,
                          float alpha, const float* rect) {
-    float e = 0.5f / (intro.scale * intro.cam), o[4], a[4];
+    float e = 0.5f / intro.scale, o[4], a[4];
     introVert_t q[4];
     int b;
 
@@ -465,8 +475,20 @@ static void Intro_Fan(float cx, float cy, float r, float from, float to, float a
     }
 }
 
+static float Intro_Snap(float l, float o) {
+    return (floorf(o + intro.scale * l + 0.5f) - o) / intro.scale;
+}
+
+static float Intro_Whole(float l) {
+    return floorf(l * intro.scale + 0.5f) / intro.scale;
+}
+
+static float Intro_MedalK(float s) {
+    return (INTRO_RR + INTRO_RI) * 0.5f * s / INTRO_G_WR;
+}
+
 static void Intro_Plate(float cx, float cy, float hw, float rh, const float* c, float alpha, const float* rect) {
-    float e = 0.5f / (intro.scale * intro.cam);
+    float e = 0.5f / intro.scale;
     introVert_t v[4];
     int q, j, k, n;
 
@@ -504,60 +526,42 @@ static void Intro_Plate(float cx, float cy, float hw, float rh, const float* c, 
 }
 
 static float Intro_WreathFrame(float t) {
-    float fw = 1.0f + (t - INTRO_G0) / INTRO_FRAME;
+    float fw = t >= INTRO_UNDO ? 24.0f - (t - INTRO_UNDO) / INTRO_RFRAME : 1.0f + (t - INTRO_G0) / INTRO_FRAME;
 
     return fw > 24.0f ? 24.0f : fw;
 }
 
-static void Intro_Gauntlet(float t, float mx, float my, float cx, float cy, float s, float reach, float fade) {
-    float k = INTRO_MEDAL / 64.0f, fg = 1.0f + (t - INTRO_G0) / INTRO_FRAME, fw = Intro_WreathFrame(t);
-    float gl = Intro_EaseInOut(Intro_Span(t, INTRO_GL0, INTRO_GL1)), wy = my + INTRO_G_WDY * k;
-    float sc = Intro_Lerp(1.0f, (INTRO_RR + INTRO_RI) * 0.5f * s / (INTRO_G_WR * k), gl);
-    float rx = Intro_Lerp(mx, cx, gl), ry = Intro_Lerp(wy, cy, gl);
-    float l = rx - 32.0f * k * sc, top = ry + (my - 32.0f * k - wy) * sc, w = 64.0f * k * sc;
-    int i;
+static void Intro_Gauntlet(float t, float mx, float my, float s) {
+    float k = Intro_MedalK(s), fg = 1.0f + (t - INTRO_G0) / INTRO_FRAME, fw = Intro_WreathFrame(t);
+    float l = mx - 32.0f * k, top = my - 32.0f * k, w = 64.0f * k;
 
-    if (fg < 0.6f || fade <= 0.0f || reach >= M_PI) {
+    if (fg < 0.6f) {
         return;
     }
     if (fw > 7.0f) {
-        i = (int)fw;
-        i = i > 24 ? 24 : i;
-        if (reach > 0.0f) {
-            float wr[4];
-
-            wr[0] = l;
-            wr[1] = top;
-            wr[2] = l + w;
-            wr[3] = top + w;
-            Intro_Begin(intro.wreath[i - INTRO_G_W0]);
-            Intro_Fan(cx, cy, INTRO_RR * s * 1.6f, reach, M_PI, fade, wr);
-            Intro_Flush();
-        } else {
-            Intro_Color(1.0f, 1.0f, 1.0f, fade);
-            Intro_Pic(l, top, w, w, intro.wreath[i - INTRO_G_W0]);
-        }
+        Intro_Color(1.0f, 1.0f, 1.0f, 1.0f);
+        Intro_Pic(l, top, w, w, intro.wreath[(int)fw - INTRO_G_W0]);
     }
-    if (t >= INTRO_GL0) {
-        fg = 9.0f - 8.4f * Intro_Span(t, INTRO_GL0, INTRO_GL0 + INTRO_FIST_OUT);
+    if (t >= INTRO_UNDO) {
+        fg = 9.0f - 8.4f * Intro_Span(t, INTRO_UNDO, INTRO_UNDO + INTRO_FIST_OUT);
     }
     if (fg >= 1.0f) {
-        float sx = Intro_Table(introFistX, ARRAY_LEN(introFistX), fg - 1.0f) * sc;
-        float sy = Intro_Table(introFistY, ARRAY_LEN(introFistY), fg - 1.0f) * sc;
-        float ax = rx + (INTRO_G_FX - 32.0f) * k * sc, ay = ry + (my + (INTRO_G_FY - 32.0f) * k - wy) * sc;
+        float sx = Intro_Table(introFistX, ARRAY_LEN(introFistX), fg - 1.0f);
+        float sy = Intro_Table(introFistY, ARRAY_LEN(introFistY), fg - 1.0f);
+        float ax = mx + (INTRO_G_FX - 32.0f) * k, ay = my + (INTRO_G_FY - 32.0f) * k;
 
-        Intro_Color(1.0f, 1.0f, 1.0f, fade);
-        Intro_Pic(ax + (l - ax) * sx / sc, ay + (top - ay) * sy / sc, w * sx / sc, w * sy / sc, intro.fist);
+        Intro_Color(1.0f, 1.0f, 1.0f, 1.0f);
+        Intro_Pic(ax + (l - ax) * sx, ay + (top - ay) * sy, w * sx, w * sy, intro.fist);
     }
 }
 
-static void Intro_Medal(float t, float mx, float my, float cx, float cy, float s, float reach, float fade) {
-    float f = 1.0f + (t - INTRO_MED0) / INTRO_FRAME, k = INTRO_MEDAL / 64.0f;
+static void Intro_Medal(float t, float mx, float my, float cx, float cy, float s, float fade) {
+    float f = 1.0f + (t - INTRO_MED0) / INTRO_FRAME, k = Intro_MedalK(s);
     float ex = Intro_Span(t, INTRO_EXIT0, INTRO_EXIT1);
     float cv = Intro_EaseInOut(Intro_Span(t, INTRO_CV0, INTRO_CV1));
     float wy = my + INTRO_G_WDY * k, big[4], lo, ho, hn, hd;
 
-    if (f < 0.6f || reach >= M_PI || fade <= 0.0f) {
+    if (f < 0.6f || fade <= 0.0f) {
         return;
     }
     big[0] = -INTRO_W;
@@ -568,7 +572,6 @@ static void Intro_Medal(float t, float mx, float my, float cx, float cy, float s
     hn = DEG2RAD(Intro_Table(introSpanI, ARRAY_LEN(introSpanI), f - 3.0f));
     ho = ho > M_PI ? M_PI : ho;
     hn = hn > M_PI ? M_PI : hn;
-    fade *= Intro_Clamp((M_PI - reach) / 0.5f);
 
     Intro_Begin(intro.line);
     if (f >= 19.0f && t < INTRO_EXIT1) {
@@ -595,154 +598,87 @@ static void Intro_Medal(float t, float mx, float my, float cx, float cy, float s
     Intro_Flush();
 }
 
-static void Intro_Shine(float x, float y, float s, float bx, float alpha, const float* rect) {
-    float cx = x + s * 0.5f, cy = y + s * 0.5f, co = cosf(-0.38f), si = sinf(-0.38f);
-    float u[3], al[3];
-    introVert_t q[4];
-    int i, k;
-
-    u[0] = bx - s * 0.3f;
-    u[1] = bx;
-    u[2] = bx + s * 0.3f;
-    al[0] = 0.0f;
-    al[1] = alpha;
-    al[2] = 0.0f;
-    for (i = 0; i < 2; i++) {
-        float cu[4], cv[4], ca[4];
-
-        cu[0] = u[i];
-        cv[0] = -s;
-        ca[0] = al[i];
-        cu[1] = u[i + 1];
-        cv[1] = -s;
-        ca[1] = al[i + 1];
-        cu[2] = u[i + 1];
-        cv[2] = s;
-        ca[2] = al[i + 1];
-        cu[3] = u[i];
-        cv[3] = s;
-        ca[3] = al[i];
-        for (k = 0; k < 4; k++) {
-            Intro_Set(&q[k], cx + cu[k] * co - cv[k] * si, cy + cu[k] * si + cv[k] * co, introWhite, ca[k], qfalse);
-        }
-        Intro_Poly(q, 4, rect);
-    }
-}
-
-static void Intro_Text(float t, float finalX, float fade) {
-    float lt = t - INTRO_TXT, base = INTRO_H * 0.5f + INTRO_CAPH * 0.5f, tx = finalX + INTRO_LOGO + INTRO_GAP;
+static void Intro_Text(float x0) {
+    float base = INTRO_H * 0.5f + INTRO_CAPH * INTRO_TK * 0.5f;
     char ch[2];
     int n;
 
-    if (lt <= 0.0f) {
-        return;
-    }
     ch[1] = '\0';
+    Intro_Color(0.949f, 0.949f, 0.949f, 1.0f);
     for (n = 0; n < (int)ARRAY_LEN(introGlyphX); n++) {
-        float p = Intro_Clamp((lt - n * INTRO_STAG) / INTRO_DUR), e, x, y;
+        float x = intro.ox + intro.scale * (x0 + introGlyphX[n] * INTRO_TK), y = intro.oy + intro.scale * base;
 
-        if (p <= 0.0f) {
-            continue;
-        }
-        e = Intro_EaseExpo(Intro_Clamp(p / INTRO_RISE));
-        x = intro.ox + intro.scale * (tx + introGlyphX[n]);
-        y = intro.oy + intro.scale * (base + (1.0f - e) * 18.0f);
-        Intro_Color(0.949f, 0.949f, 0.949f, Intro_EaseOut(Intro_Clamp(p * 1.4f)) * fade);
         ch[0] = introName[n];
-        re.Font_DrawString((int)floorf(x + 0.5f), (int)floorf(y + 0.5f), ch, intro.font, INTRO_SIZE * intro.scale, 0,
-                           NULL, 0);
+        re.Font_DrawString((int)floorf(x + 0.5f), (int)floorf(y + 0.5f), ch, intro.font, INTRO_SIZE * INTRO_TK * intro.scale,
+                           0, NULL, 0);
     }
 }
 
-static void Intro_Logo(float t, float x, float y, float s, float fade) {
-    float h = t - INTRO_HIT;
-    float cx = x + INTRO_RX * s, cy = y + INTRO_RY * s;
-    float reach = h > 0.0f ? M_PI * Intro_EaseOut(Intro_Span(t, INTRO_HIT, INTRO_FILL1)) : 0.0f;
-    float sp = Intro_Span(t, INTRO_SHINE0, INTRO_SHINE1);
-    float pad = s * INTRO_PAD, rect[4];
+static void Intro_Logo(float t, float x, float y, float s) {
+    float cx = x + INTRO_RX * s, cy = y + INTRO_RY * s, rect[4];
+    float reach = DEG2RAD(Intro_Table(introSpanO, ARRAY_LEN(introSpanO), (t - INTRO_ARC0) / INTRO_FRAME));
 
     rect[0] = x;
     rect[1] = y;
     rect[2] = x + s;
     rect[3] = y + s;
 
-    Intro_Color(introBlue[0], introBlue[1], introBlue[2], Intro_Clamp(t / INTRO_TILEIN) * fade);
+    Intro_Color(introBlue[0], introBlue[1], introBlue[2], 1.0f);
     Intro_Pic(x, y, s, s, intro.tile);
 
-    if (reach >= M_PI) {
-        Intro_Color(1.0f, 1.0f, 1.0f, fade);
+    if (t >= INTRO_ARC0 && reach >= M_PI) {
+        Intro_Color(1.0f, 1.0f, 1.0f, 1.0f);
         Intro_Pic(x, y, s, s, intro.arc);
-    } else if (reach > 0.0f) {
+    } else if (t >= INTRO_ARC0 && reach > 0.0f) {
         Intro_Begin(intro.arc);
-        Intro_Fan(cx, cy, INTRO_RR * s * 1.35f, 0.0f, reach, fade, rect);
+        Intro_Fan(cx, cy, INTRO_RR * s * 1.35f, 0.0f, reach, 1.0f, rect);
         Intro_Flush();
     }
+    if (t >= INTRO_NAIL0) {
+        float p = Intro_EaseOut(Intro_Span(t, INTRO_NAIL0, INTRO_NAIL1));
 
-    Intro_Gauntlet(t, x + s * 0.5f, y + s * 0.5f, cx, cy, s, reach, fade);
-    Intro_Medal(t, x + s * 0.5f, y + s * 0.5f, cx, cy, s, reach, fade);
-
-    if (t >= INTRO_DROP0) {
-        float dd = INTRO_HIT - INTRO_DROP0, p = Intro_Span(t, INTRO_DROP0, INTRO_HIT), l = s * 2.35f;
-        float off = -l * (1.0f - powf(p, 2.6f));
-        float vel = l * 2.6f * powf(p, 1.6f) / dd;
-        float trail = t < INTRO_HIT ? (s * 0.6f < vel * 0.035f ? s * 0.6f : vel * 0.035f) : 0.0f;
-        float na = Intro_Clamp((t - INTRO_DROP0) / 0.03f) * fade;
-        int i;
-
-        if (trail > 1.0f) {
-            for (i = 18; i >= 1; i--) {
-                Intro_Color(1.0f, 1.0f, 1.0f, na * 0.22f * (1.0f - i / 19.0f));
-                Intro_Pic(x, y + off - trail * i / 18.0f, s, s, intro.nail);
-            }
-        }
-        Intro_Color(1.0f, 1.0f, 1.0f, na);
-        Intro_Pic(x, y + off, s, s, intro.nail);
+        Intro_Color(1.0f, 1.0f, 1.0f, 1.0f);
+        Intro_PicClip(x, y, s, s, -INTRO_H, y + s * Intro_Lerp(INTRO_NAIL_T0, INTRO_NAIL_T1, p), intro.nail);
     }
 
-    if (h >= 0.0f && h < 1.2f) {
-        float g = 0.7f * expf(-h * 6.0f) * fade;
-
-        if (g > 0.002f) {
-            Intro_Color(g, g, g, 1.0f);
-            Intro_Pic(x - pad, y - pad, s + pad * 2.0f, s + pad * 2.0f, intro.nailGlow);
-        }
-    }
-
-    if (sp > 0.0f && sp < 1.0f) {
-        Intro_Begin(intro.tile);
-        Intro_Shine(x, y, s, Intro_Lerp(-s * 1.15f, s * 1.15f, Intro_EaseInOut(sp)), 0.32f * fade, rect);
-        Intro_Flush();
-    }
+    Intro_Gauntlet(t, x + s * 0.5f, y + s * 0.5f, s);
+    Intro_Medal(t, x + s * 0.5f, y + s * 0.5f, cx, cy, s, 1.0f);
 }
 
 static void Intro_Render(float t) {
     float vw = cls.glconfig.vidWidth, vh = cls.glconfig.vidHeight;
-    float fade = 1.0f - Intro_Span(t, INTRO_OUT0, INTRO_OUT1), bg = 1.0f - Intro_Span(t, INTRO_BG0, INTRO_END);
-    float k, m, s, x, finalX;
+    float fade = 1.0f - Intro_EaseIn(Intro_Span(t, INTRO_OUT0, INTRO_OUT1));
+    float vis = fade * (1.0f - Intro_EaseIn(1.0f - Intro_Span(t, 0.0f, INTRO_FADEIN)));
+    float bg = 1.0f - Intro_EaseOut(Intro_Span(t, INTRO_BG0, INTRO_END));
+    float s, wide, finalX, startX, y, m, x, tx, edge, dummy;
 
     intro.scale = (vh / INTRO_H < vw / 1200.0f ? vh / INTRO_H : vw / 1200.0f) * INTRO_ZOOM;
     intro.ox = (vw - INTRO_W * intro.scale) * 0.5f;
     intro.oy = (vh - INTRO_H * intro.scale) * 0.5f;
+    s = Intro_Whole(INTRO_TILE);
+    wide = s + (INTRO_GAP + INTRO_TEXTW) * INTRO_TK;
+    finalX = (INTRO_W - wide) * 0.5f;
+    startX = (INTRO_W - s) * 0.5f;
+    y = Intro_Snap((INTRO_H - s) * 0.5f, intro.oy);
 
     Intro_Color(0.0f, 0.0f, 0.0f, bg);
     re.DrawStretchPic(0.0f, 0.0f, vw, vh, 0.0f, 0.0f, 0.0f, 0.0f, cls.whiteShader);
 
     if (fade > 0.0f) {
-        intro.cam = 1.0f;
-        k = t >= INTRO_HIT ? expf(-(t - INTRO_HIT) * 13.0f) : 0.0f;
-        intro.sx = k * 8.0f * sinf(t * 97.3f);
-        intro.sy = k * 8.0f * cosf(t * 71.9f);
-
         m = Intro_EaseInOut(Intro_Span(t, INTRO_MV0, INTRO_MV1));
-        finalX = (INTRO_W - (INTRO_LOGO + INTRO_GAP + INTRO_TEXTW)) * 0.5f;
-        s = Intro_Lerp(INTRO_BUILD, INTRO_LOGO, m);
-        x = Intro_Lerp(INTRO_W * 0.5f, finalX + INTRO_LOGO * 0.5f, m) - s * 0.5f;
+        x = Intro_Snap(Intro_Lerp(startX, finalX, m), intro.ox);
+        tx = Intro_Snap(Intro_Lerp(startX + s - INTRO_TEXTW * INTRO_TK, finalX + s + INTRO_GAP * INTRO_TK, m), intro.ox);
 
-        Intro_Text(t, finalX, 1.0f);
-        Intro_Logo(t, x, INTRO_H * 0.5f - s * 0.5f, s, 1.0f);
+        if (m > 0.0f) {
+            Intro_Text(tx);
+            Intro_Point(x + s, 0.0f, &edge, &dummy);
+            Intro_Color(0.0f, 0.0f, 0.0f, 1.0f);
+            re.DrawStretchPic(0.0f, 0.0f, edge, vh, 0.0f, 0.0f, 0.0f, 0.0f, cls.whiteShader);
+        }
+        Intro_Logo(t, x, y, s);
         Intro_Flush();
-        if (fade < 1.0f) {
-            Intro_Color(0.0f, 0.0f, 0.0f, 1.0f - fade);
+        if (vis < 1.0f) {
+            Intro_Color(0.0f, 0.0f, 0.0f, 1.0f - vis);
             re.DrawStretchPic(0.0f, 0.0f, vw, vh, 0.0f, 0.0f, 0.0f, 0.0f, cls.whiteShader);
         }
     }
@@ -766,9 +702,8 @@ static qboolean Intro_Register(void) {
     intro.line = re.RegisterShader("gfx/intro/line");
     intro.arc = re.RegisterShader("gfx/intro/arc");
     intro.nail = re.RegisterShader("gfx/intro/nail");
-    intro.nailGlow = re.RegisterShader("gfx/intro/nail_glow");
     intro.font = re.Font_Register("Outfit-SemiBold");
-    return intro.tile && intro.arc && intro.nail && intro.nailGlow && intro.line && intro.fist && intro.font >= 0;
+    return intro.tile && intro.arc && intro.nail && intro.line && intro.fist && intro.font >= 0;
 }
 
 static void Intro_Start(void) {
@@ -785,6 +720,30 @@ static void Intro_Start(void) {
     intro.warm = INTRO_WARM_FRAMES;
 }
 
+static void Intro_Release(void) {
+    char command[MAX_STRING_CHARS + 1];
+
+    if (!intro.held[0]) {
+        return;
+    }
+    Com_sprintf(command, sizeof(command), "%s\n", intro.held);
+    intro.held[0] = '\0';
+    Cbuf_ExecuteText(EXEC_INSERT, command);
+}
+
+qboolean CL_IntroHold(const char* command) {
+    if (!cls.rendererStarted) {
+        return qfalse;
+    }
+    Q_strncpyz(intro.held, command, sizeof(intro.held));
+    Intro_Start();
+    if (intro.state != INTRO_RUNNING) {
+        intro.held[0] = '\0';
+        return qfalse;
+    }
+    return qtrue;
+}
+
 qboolean CL_IntroActive(void) {
     return intro.state == INTRO_RUNNING;
 }
@@ -799,9 +758,10 @@ void CL_IntroDraw(void) {
 
     Intro_Start();
     if (intro.state != INTRO_RUNNING) {
+        Intro_Release();
         return;
     }
-    if (clc.state != CA_DISCONNECTED || !re.DrawTriangles2D) {
+    if ((clc.state != CA_DISCONNECTED && intro.time < INTRO_BG0) || !re.DrawTriangles2D) {
         intro.state = INTRO_DONE;
         return;
     }
@@ -825,6 +785,9 @@ void CL_IntroDraw(void) {
     if (intro.time >= INTRO_END) {
         intro.state = INTRO_DONE;
         return;
+    }
+    if (intro.time >= INTRO_BG0) {
+        Intro_Release();
     }
     Intro_Render(intro.time);
 }

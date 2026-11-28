@@ -46,28 +46,6 @@ gfx/intro/tile
 	}
 }
 
-gfx/intro/arc_glow
-{
-	nopicmip
-	cull disable
-	{
-		clampmap gfx/intro/arc_glow.png
-		blendFunc add
-		rgbGen vertex
-	}
-}
-
-gfx/intro/nail_glow
-{
-	nopicmip
-	cull disable
-	{
-		clampmap gfx/intro/nail_glow.png
-		blendFunc add
-		rgbGen vertex
-	}
-}
-
 gfx/intro/gauntlet/fist
 {
 	nopicmip

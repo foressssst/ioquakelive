@@ -1743,6 +1743,25 @@ void CL_Reconnect_f(void) {
     Cbuf_AddText(va("connect %s\n", cl_reconnectArgs));
 }
 
+static const char* CL_ConnectCommand(void) {
+    static char command[MAX_STRING_CHARS];
+    char arg[MAX_OSPATH];
+    const char* s;
+    int i, n;
+
+    Q_strncpyz(command, "connect", sizeof(command));
+    for (i = 1; i < Cmd_Argc(); i++) {
+        for (s = Cmd_Argv(i), n = 0; *s && n < (int)sizeof(arg) - 1; s++) {
+            if (*s != '"' && *s != ';' && *s != '\n' && *s != '\r') {
+                arg[n++] = *s;
+            }
+        }
+        arg[n] = '\0';
+        Q_strcat(command, sizeof(command), va(" \"%s\"", arg));
+    }
+    return command;
+}
+
 void CL_Connect_f(void) {
     char server[MAX_OSPATH];
     const char* serverString;
@@ -1751,6 +1770,10 @@ void CL_Connect_f(void) {
 
     if (argc != 2 && argc != 3) {
         Com_Printf("usage: connect [-4|-6] server\n");
+        return;
+    }
+
+    if (CL_IntroHold(CL_ConnectCommand())) {
         return;
     }
 

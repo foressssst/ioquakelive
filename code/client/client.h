@@ -549,6 +549,7 @@ qboolean CL_DemoWindowMouse(int x, int y);
 void CL_DemoWindowDraw(void);
 
 qboolean CL_IntroActive(void);
+qboolean CL_IntroHold(const char* command);
 qboolean CL_IntroCoversUI(void);
 void CL_IntroDraw(void);
 qboolean CL_IntroKey(int key, qboolean down);
