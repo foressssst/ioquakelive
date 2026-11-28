@@ -1410,6 +1410,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_lodCurveError, "Level of detail error on curved surface grids. Higher values result in better quality at a distance." );
 	r_lodbias = ri.Cvar_Get( "r_lodbias", "-2", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetDescription( r_lodbias, "Sets the level of detail of in-game models:\n -2: Ultra (further delays LOD transition in the distance)\n -1: Very High (delays LOD transition in the distance)\n 0: High\n 1: Medium\n 2: Low" );
+	RI_Cvar_CheckRange( r_lodbias, "-2", "2", CV_INTEGER );
 	r_znear = ri.Cvar_Get( "r_znear", "1", CVAR_CHEAT );
 	RI_Cvar_CheckRange( r_znear, "0.001", "200", CV_FLOAT );
 	ri.Cvar_SetDescription( r_znear, "Viewport distance from view origin (how close objects can be to the player before they're clipped out of the scene)." );
@@ -1575,7 +1576,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_nobind, "Backend debugging tool: Disables texture binding." );
 	r_showtris = ri.Cvar_Get ("r_showtris", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_showtris, "Debugging tool: Wireframe rendering of polygon triangles in the world." );
-	r_showsky = ri.Cvar_Get( "r_showsky", "0", 0 );
+	r_showsky = ri.Cvar_Get( "r_showsky", "0", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_showsky, "Forces sky in front of all surfaces." );
 	r_shownormals = ri.Cvar_Get ("r_shownormals", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_shownormals, "Debugging tool: Show wireframe surface normals." );
@@ -1589,7 +1590,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_drawBuffer, "Sets which frame buffer to draw into." );
 	r_lockpvs = ri.Cvar_Get ("r_lockpvs", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_lockpvs, "Debugging tool: Locks to current potentially visible set. Useful for testing vis-culling in maps." );
-	r_noportals = ri.Cvar_Get( "r_noportals", "0", 0 );
+	r_noportals = ri.Cvar_Get( "r_noportals", "0", CVAR_CHEAT );
 	ri.Cvar_SetDescription(r_noportals, "Disables in-game portals, valid values: 0: Portals enabled\n 1: Portals disabled\n 2: Portals and mirrors disabled" );
 	r_shadows = ri.Cvar_Get( "cg_shadows", "1", 0 );
 
