@@ -800,6 +800,14 @@ static void readQuadInfo(byte* qData) {
     cinTable[currentHandle].drawX = cinTable[currentHandle].CIN_WIDTH;
     cinTable[currentHandle].drawY = cinTable[currentHandle].CIN_HEIGHT;
 
+    if (cinTable[currentHandle].shader ? !CIN_OwnFrames() : cinTable[currentHandle].xsize * cinTable[currentHandle].ysize > DEFAULT_CIN_WIDTH * DEFAULT_CIN_HEIGHT) {
+        Com_Printf(S_COLOR_YELLOW "WARNING: cinematic %s is too large (%ux%u)\n", cinTable[currentHandle].fileName, cinTable[currentHandle].xsize, cinTable[currentHandle].ysize);
+        cinTable[currentHandle].looping = qfalse;
+        cinTable[currentHandle].holdAtEnd = qfalse;
+        cinTable[currentHandle].status = FMV_EOF;
+        return;
+    }
+
     if (cls.glconfig.hardwareType == GLHW_RAGEPRO || cls.glconfig.maxTextureSize <= 256) {
         if (cinTable[currentHandle].drawX > 256) {
             cinTable[currentHandle].drawX = 256;
@@ -919,6 +927,9 @@ redump:
         case ROQ_QUAD_INFO:
             if (cinTable[currentHandle].numQuads == -1) {
                 readQuadInfo(framedata);
+                if (cinTable[currentHandle].status == FMV_EOF) {
+                    return;
+                }
                 setupQuad(0, 0);
                 cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CL_ScaledMilliseconds();
             }
@@ -1058,8 +1069,11 @@ e_status CIN_RunCinematic(int handle) {
     if (cin.currentHandle != handle) {
         currentHandle = handle;
         cin.currentHandle = currentHandle;
-        cinTable[currentHandle].status = FMV_EOF;
-        RoQReset();
+        CIN_Bind();
+        if (!cinTable[currentHandle].shader) {
+            cinTable[currentHandle].status = FMV_EOF;
+            RoQReset();
+        }
     }
 
     if (cinTable[handle].playonwalls < -1) {
