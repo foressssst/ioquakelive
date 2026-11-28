@@ -93,6 +93,17 @@ void CG_DemoRewind(int snapshotNum, int serverCommandSequence) {
     trap_GetGameState(&cgs.gameState);
     CG_ParseServerinfo();
     CG_SetConfigValues();
+    cgs.voteTime = atoi(CG_ConfigString(CS_VOTE_TIME));
+    cgs.voteYes = atoi(CG_ConfigString(CS_VOTE_YES));
+    cgs.voteNo = atoi(CG_ConfigString(CS_VOTE_NO));
+    Q_strncpyz(cgs.voteString, CG_ConfigString(CS_VOTE_STRING), sizeof(cgs.voteString));
+    cgs.voteModified = qtrue;
+    trap_Cvar_Set("ui_votestring", cgs.voteString);
+    trap_Cvar_Set("ui_voteactive",
+                  cgs.voteTime && !cgs.localServer && !atoi(CG_ConfigString(CS_DISABLE_VOTE_UI)) ? "1" : "0");
+    cgs.allReadyTime = atoi(CG_ConfigString(CS_ALLREADY_TIME));
+    cg.intermissionStarted = atoi(CG_ConfigString(CS_INTERMISSION));
+    trap_Cvar_Set("ui_intermission", cg.intermissionStarted == 1 ? "1" : "0");
     for (i = 0; i < MAX_CLIENTS; i++) {
         CG_NewClientInfo(i);
     }
