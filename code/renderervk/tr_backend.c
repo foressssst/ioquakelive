@@ -937,7 +937,9 @@ void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 #endif
 	} else if ( dirty ) {
 #ifdef USE_VULKAN
-		vk_upload_image_data( image, 0, 0, cols, rows, 1, (byte *)data, cols * rows * 4, qtrue );
+		if ( !vk_upload_video_in_frame( image, cols, rows, data ) ) {
+			vk_upload_image_data( image, 0, 0, cols, rows, 1, (byte *)data, cols * rows * 4, qtrue );
+		}
 #else
 		qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
 #endif

@@ -248,6 +248,7 @@ void vk_create_image( image_t *image, int width, int height, int mip_levels );
 void vk_upload_image_data( image_t *image, int x, int y, int width, int height, int miplevels, byte *pixels, int size, qboolean update );
 qboolean vk_can_upload_in_frame( const image_t *image );
 void vk_upload_alpha_in_frame( image_t *image, int x, int y, int width, int height, const byte *alpha );
+qboolean vk_upload_video_in_frame( image_t *image, int width, int height, const byte *pixels );
 void vk_update_descriptor_set( image_t *image, qboolean mipmap );
 void vk_destroy_image_resources( VkImage *image, VkImageView *imageView );
 void vk_update_attachment_descriptors( void );

@@ -47,17 +47,26 @@ static long ROQ_UB_tab[256];
 static long ROQ_UG_tab[256];
 static long ROQ_VG_tab[256];
 static long ROQ_VR_tab[256];
-static unsigned short vq2[256 * 16 * 4];
-static unsigned short vq4[256 * 64 * 4];
-static unsigned short vq8[256 * 256 * 4];
+#define VQ2_SIZE (256 * 16 * 4)
+#define VQ4_SIZE (256 * 64 * 4)
+#define VQ8_SIZE (256 * 256 * 4)
+#define MAX_SHADER_CIN_PIXELS (2048 * 1024)
+static unsigned short vq2Base[VQ2_SIZE];
+static unsigned short vq4Base[VQ4_SIZE];
+static unsigned short vq8Base[VQ8_SIZE];
+static unsigned short* vq2 = vq2Base;
+static unsigned short* vq4 = vq4Base;
+static unsigned short* vq8 = vq8Base;
 
 typedef struct {
-    byte linbuf[DEFAULT_CIN_WIDTH * DEFAULT_CIN_HEIGHT * 4 * 2];
+    byte linbufBase[DEFAULT_CIN_WIDTH * DEFAULT_CIN_HEIGHT * 4 * 2];
     byte file[65536];
     short sqrTable[256];
 
     int mcomp[256];
-    byte* qStatus[2][32768];
+    byte* qStatusBase[2][32768];
+    byte* linbuf;
+    byte** qStatus[2];
 
     long oldXOff, oldYOff, oldysize, oldxsize;
 
@@ -102,11 +111,90 @@ typedef struct {
     int playonwalls;
     byte* buf;
     long drawX, drawY;
+    unsigned short* ownVq;
+    byte* ownLinbuf;
+    byte** ownQStatus;
+    long ownQuadCels;
+    void* mpeg;
 } cin_cache;
 
 static cinematics_t cin;
 static cin_cache cinTable[MAX_VIDEO_HANDLES];
 static int currentHandle = -1;
+
+static void CIN_Bind(void) {
+    cin_cache* c;
+
+    vq2 = vq2Base;
+    vq4 = vq4Base;
+    vq8 = vq8Base;
+    cin.linbuf = cin.linbufBase;
+    cin.qStatus[0] = cin.qStatusBase[0];
+    cin.qStatus[1] = cin.qStatusBase[1];
+
+    if (currentHandle < 0 || currentHandle >= MAX_VIDEO_HANDLES) {
+        return;
+    }
+    c = &cinTable[currentHandle];
+    if (c->ownVq) {
+        vq2 = c->ownVq;
+        vq4 = vq2 + VQ2_SIZE;
+        vq8 = vq4 + VQ4_SIZE;
+    }
+    if (c->ownLinbuf) {
+        cin.linbuf = c->ownLinbuf;
+        cin.qStatus[0] = c->ownQStatus;
+        cin.qStatus[1] = c->ownQStatus + c->ownQuadCels;
+    }
+}
+
+static void CIN_FreeOwn(int handle) {
+    cin_cache* c = &cinTable[handle];
+
+    if (c->ownLinbuf && c->buf) {
+        c->buf = NULL;
+    }
+    free(c->ownVq);
+    free(c->ownLinbuf);
+    free(c->ownQStatus);
+    c->ownVq = NULL;
+    c->ownLinbuf = NULL;
+    c->ownQStatus = NULL;
+    c->ownQuadCels = 0;
+    if (handle == currentHandle) {
+        CIN_Bind();
+    }
+}
+
+static qboolean CIN_OwnFrames(void) {
+    cin_cache* c = &cinTable[currentHandle];
+    long quadCels;
+
+    if (!c->xsize || !c->ysize || c->xsize > 4096 || c->ysize > 4096 || c->xsize * c->ysize > MAX_SHADER_CIN_PIXELS) {
+        return qfalse;
+    }
+    quadCels = (long)(c->xsize * c->ysize) / 16;
+    quadCels += quadCels / 4 + 64;
+    if (!c->ownLinbuf || c->ownQuadCels != quadCels) {
+        free(c->ownLinbuf);
+        free(c->ownQStatus);
+        c->ownLinbuf = calloc((size_t)c->xsize * c->ysize * 4 * 2, 1);
+        c->ownQStatus = calloc((size_t)quadCels * 2, sizeof(byte*));
+        c->ownQuadCels = quadCels;
+        if (!c->ownLinbuf || !c->ownQStatus) {
+            free(c->ownLinbuf);
+            free(c->ownQStatus);
+            c->ownLinbuf = NULL;
+            c->ownQStatus = NULL;
+            c->ownQuadCels = 0;
+            CIN_Bind();
+            return qfalse;
+        }
+    }
+    CIN_Bind();
+    cin.oldXOff = -1;
+    return qtrue;
+}
 static int CL_handle = -1;
 
 extern int s_soundtime;
@@ -746,7 +834,7 @@ static void setupQuad(long xOff, long yOff) {
     long numQuadCels, i, x, y;
     byte* temp;
 
-    if (xOff == cin.oldXOff && yOff == cin.oldYOff && cinTable[currentHandle].ysize == cin.oldysize && cinTable[currentHandle].xsize == cin.oldxsize) {
+    if (!cinTable[currentHandle].ownLinbuf && xOff == cin.oldXOff && yOff == cin.oldYOff && cinTable[currentHandle].ysize == cin.oldysize && cinTable[currentHandle].xsize == cin.oldxsize) {
         return;
     }
 
@@ -826,7 +914,7 @@ static void RoQPrepMcomp(long xoff, long yoff) {
 
     i = cinTable[currentHandle].samplesPerLine;
     j = cinTable[currentHandle].samplesPerPixel;
-    if (cinTable[currentHandle].xsize == (cinTable[currentHandle].ysize * 4) && !cinTable[currentHandle].half) {
+    if (!cinTable[currentHandle].shader && cinTable[currentHandle].xsize == (cinTable[currentHandle].ysize * 4) && !cinTable[currentHandle].half) {
         j = j + j;
         i = i + i;
     }
@@ -1033,8 +1121,10 @@ static void RoQShutdown(void) {
         }
         CL_handle = -1;
     }
+    CIN_FreeOwn(currentHandle);
     cinTable[currentHandle].fileName[0] = 0;
     currentHandle = -1;
+    CIN_Bind();
 }
 
 e_status CIN_StopCinematic(int handle) {
@@ -1081,6 +1171,7 @@ e_status CIN_RunCinematic(int handle) {
     }
 
     currentHandle = handle;
+    CIN_Bind();
 
     if (cinTable[currentHandle].alterGameState) {
         if (clc.state != CA_CINEMATIC) {
@@ -1150,6 +1241,7 @@ int CIN_PlayCinematic(const char* arg, int x, int y, int w, int h, int systemBit
     currentHandle = CIN_HandleForVideo();
 
     cin.currentHandle = currentHandle;
+    CIN_FreeOwn(currentHandle);
 
     strcpy(cinTable[currentHandle].fileName, name);
 
@@ -1172,6 +1264,13 @@ int CIN_PlayCinematic(const char* arg, int x, int y, int w, int h, int systemBit
     cinTable[currentHandle].playonwalls = 1;
     cinTable[currentHandle].silent = (systemBits & CIN_silent) != 0;
     cinTable[currentHandle].shader = (systemBits & CIN_shader) != 0;
+    if (cinTable[currentHandle].shader) {
+        cinTable[currentHandle].ownVq = calloc(VQ2_SIZE + VQ4_SIZE + VQ8_SIZE, sizeof(unsigned short));
+        if (!cinTable[currentHandle].ownVq) {
+            cinTable[currentHandle].shader = qfalse;
+        }
+    }
+    CIN_Bind();
 
     if (cinTable[currentHandle].alterGameState) {
         if (uivm) {
@@ -1206,6 +1305,7 @@ int CIN_PlayCinematic(const char* arg, int x, int y, int w, int h, int systemBit
     }
     Com_DPrintf("trFMV::play(), invalid RoQ ID\n");
 
+    CIN_FreeOwn(currentHandle);
     RoQShutdown();
     return -1;
 }

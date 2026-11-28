@@ -2962,17 +2962,77 @@ static int loadShaderBuffers( char **shaderFiles, const int numShaderFiles, char
 	return sum;
 }
 
+static void ShaderTextName( const char *oldp, const char *token, int *sizes, qboolean fill )
+{
+	int hash = generateHashValue( token, MAX_SHADERTEXT_HASH );
+
+	if ( fill ) {
+		shaderTextHashTable[hash][sizes[hash]] = (char*)oldp;
+	}
+	sizes[hash]++;
+}
+
+static int ShaderTextNames( const char **starts, int numFiles, int *sizes, qboolean fill )
+{
+	const char *p, *oldp, *token;
+	int i, count = 0;
+
+	p = s_shaderText;
+	while ( 1 ) {
+		oldp = p;
+		token = COM_ParseExt( &p, qtrue );
+		if ( token[0] == 0 ) {
+			break;
+		}
+		if ( p > s_extensionOffset ) {
+			ShaderTextName( oldp, token, sizes, fill );
+			count++;
+		}
+		SkipBracedSection( &p, 0 );
+	}
+
+	for ( i = 0; i < numFiles - 1; i++ ) {
+		if ( !starts[i] ) {
+			continue;
+		}
+		p = starts[i];
+		oldp = p;
+		token = COM_ParseExt( &p, qtrue );
+		if ( token[0] == 0 || p > s_extensionOffset ) {
+			continue;
+		}
+		ShaderTextName( oldp, token, sizes, fill );
+		count++;
+	}
+
+	p = s_shaderText;
+	while ( 1 ) {
+		oldp = p;
+		token = COM_ParseExt( &p, qtrue );
+		if ( token[0] == 0 ) {
+			break;
+		}
+		if ( p <= s_extensionOffset ) {
+			ShaderTextName( oldp, token, sizes, fill );
+			count++;
+		}
+		SkipBracedSection( &p, 0 );
+	}
+
+	return count;
+}
+
 static void ScanAndLoadShaderFiles( void )
 {
-	char **shaderFiles, **shaderxFiles;
+	char **shaderFiles, **shaderxFiles, **shaderx2Files;
 	char *buffers[MAX_SHADER_FILES];
 	char *xbuffers[MAX_SHADER_FILES];
-	int numShaderFiles, numShaderxFiles;
+	const char *starts[MAX_SHADER_FILES];
+	int numShaderFiles, numShaderxFiles, numShaderx2Files;
 	int i;
-	const char *token, *hashMem;
+	const char *hashMem;
 	char *textEnd;
-	const char *p, *oldp;
-	int shaderTextHashTableSizes[MAX_SHADERTEXT_HASH], hash, size, pass;
+	int shaderTextHashTableSizes[MAX_SHADERTEXT_HASH], size;
 
 	long sum = 0;
 
@@ -2985,6 +3045,8 @@ static void ScanAndLoadShaderFiles( void )
 		numShaderxFiles = 0;
 	}
 
+	shaderx2Files = ri.FS_ListFiles( "scripts", ".shaderx2", &numShaderx2Files );
+
 	if ( (!shaderFiles || !numShaderFiles) && (!shaderxFiles || !numShaderxFiles) ) {
 		ri.Printf( PRINT_WARNING, "WARNING: no shader files found\n" );
 		return;
@@ -2996,9 +3058,14 @@ static void ScanAndLoadShaderFiles( void )
 	if ( numShaderxFiles > MAX_SHADER_FILES ) {
 		numShaderxFiles = MAX_SHADER_FILES;
 	}
+	if ( numShaderx2Files > MAX_SHADER_FILES - numShaderxFiles ) {
+		numShaderx2Files = MAX_SHADER_FILES - numShaderxFiles;
+	}
 
 	sum = 0;
 	sum += loadShaderBuffers( shaderxFiles, numShaderxFiles, xbuffers );
+	sum += loadShaderBuffers( shaderx2Files, numShaderx2Files, xbuffers + numShaderxFiles );
+	numShaderxFiles += numShaderx2Files;
 	sum += loadShaderBuffers( shaderFiles, numShaderFiles, buffers );
 
 	s_shaderText = ri.Hunk_Alloc( sum + numShaderxFiles*2 + numShaderFiles*2 + 1, h_low );
@@ -3007,7 +3074,9 @@ static void ScanAndLoadShaderFiles( void )
 	textEnd = s_shaderText;
 
 	for ( i = numShaderFiles - 1; i >= 0 ; i-- ) {
+		starts[ i ] = NULL;
 		if ( buffers[ i ] ) {
+			starts[ i ] = textEnd;
 			textEnd = Q_stradd( textEnd, buffers[ i ] );
 			textEnd = Q_stradd( textEnd, "\n" );
 			ri.FS_FreeFile( buffers[ i ] );
@@ -3026,23 +3095,13 @@ static void ScanAndLoadShaderFiles( void )
 
 	if ( shaderxFiles )
 		ri.FS_FreeFileList( shaderxFiles );
+	if ( shaderx2Files )
+		ri.FS_FreeFileList( shaderx2Files );
 	if ( shaderFiles )
 		ri.FS_FreeFileList( shaderFiles );
 
 	Com_Memset( shaderTextHashTableSizes, 0, sizeof( shaderTextHashTableSizes ) );
-	size = 0;
-
-	p = s_shaderText;
-	while ( 1 ) {
-		token = COM_ParseExt( &p, qtrue );
-		if ( token[0] == 0 ) {
-			break;
-		}
-		hash = generateHashValue(token, MAX_SHADERTEXT_HASH);
-		shaderTextHashTableSizes[hash]++;
-		size++;
-		SkipBracedSection(&p, 0);
-	}
+	size = ShaderTextNames( starts, numShaderFiles, shaderTextHashTableSizes, qfalse );
 
 	size += MAX_SHADERTEXT_HASH;
 
@@ -3054,21 +3113,7 @@ static void ScanAndLoadShaderFiles( void )
 	}
 
 	Com_Memset( shaderTextHashTableSizes, 0, sizeof( shaderTextHashTableSizes ) );
-	for ( pass = 0; pass < 2; pass++ ) {
-		p = s_shaderText;
-		while ( 1 ) {
-			oldp = p;
-			token = COM_ParseExt( &p, qtrue );
-			if ( token[0] == 0 ) {
-				break;
-			}
-			if ( ( oldp >= s_extensionOffset ) == ( pass == 0 ) ) {
-				hash = generateHashValue( token, MAX_SHADERTEXT_HASH );
-				shaderTextHashTable[hash][shaderTextHashTableSizes[hash]++] = (char*)oldp;
-			}
-			SkipBracedSection( &p, 0 );
-		}
-	}
+	ShaderTextNames( starts, numShaderFiles, shaderTextHashTableSizes, qtrue );
 }
 
 static void CreateInternalShaders( void ) {

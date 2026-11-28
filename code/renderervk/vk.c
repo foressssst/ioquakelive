@@ -1375,6 +1375,11 @@ typedef struct {
 } vk_frame_upload_t;
 
 static vk_frame_upload_t vk_frame_upload[ NUM_COMMAND_BUFFERS ];
+static vk_frame_upload_t vk_video_upload[ NUM_COMMAND_BUFFERS ];
+static VkDeviceSize vk_video_offset[ NUM_COMMAND_BUFFERS ];
+static VkDeviceSize vk_video_wanted;
+static VkCommandBuffer vk_video_cmd[ NUM_COMMAND_BUFFERS ];
+static qboolean vk_video_recording[ NUM_COMMAND_BUFFERS ];
 
 static void vk_free_frame_upload( vk_frame_upload_t *u )
 {
@@ -1393,7 +1398,11 @@ static void vk_release_frame_uploads( void )
 
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
 		vk_free_frame_upload( &vk_frame_upload[ i ] );
+		vk_free_frame_upload( &vk_video_upload[ i ] );
+		vk_video_offset[ i ] = 0;
+		vk_video_recording[ i ] = qfalse;
 	}
+	vk_video_wanted = 0;
 }
 
 static void vk_alloc_frame_upload( vk_frame_upload_t *u, VkDeviceSize size )
@@ -1475,6 +1484,79 @@ void vk_upload_alpha_in_frame( image_t *image, int x, int y, int width, int heig
 	record_image_layout_transition( vk.cmd->command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, 0 );
 	qvkCmdCopyBufferToImage( vk.cmd->command_buffer, u->handle, image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region );
 	record_image_layout_transition( vk.cmd->command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
+}
+
+qboolean vk_upload_video_in_frame( image_t *image, int width, int height, const byte *pixels )
+{
+	const int slot = vk.cmd_index;
+	vk_frame_upload_t *u = &vk_video_upload[ slot ];
+	const VkDeviceSize size = (VkDeviceSize)width * height * 4;
+	VkCommandBufferBeginInfo begin_info;
+	VkBufferImageCopy region;
+	byte *dst;
+	int i;
+
+	if ( vk.frame_count == 0 || vk_video_cmd[ slot ] == VK_NULL_HANDLE || !vk_can_upload_in_frame( image ) ) {
+		return qfalse;
+	}
+	if ( width != image->width || height != image->height ) {
+		return qfalse;
+	}
+	if ( u->size - vk_video_offset[ slot ] < size ) {
+		vk_video_wanted = MAX( vk_video_wanted, vk_video_offset[ slot ] + size );
+		if ( vk_video_recording[ slot ] ) {
+			return qfalse;
+		}
+		vk_alloc_frame_upload( u, vk_video_wanted * 2 );
+	}
+
+	dst = u->ptr + vk_video_offset[ slot ];
+	if ( image->internalFormat == VK_FORMAT_B8G8R8A8_UNORM ) {
+		for ( i = 0; i < width * height * 4; i += 4 ) {
+			dst[i + 0] = pixels[i + 2];
+			dst[i + 1] = pixels[i + 1];
+			dst[i + 2] = pixels[i + 0];
+			dst[i + 3] = pixels[i + 3];
+		}
+	} else {
+		Com_Memcpy( dst, pixels, size );
+	}
+
+	if ( !vk_video_recording[ slot ] ) {
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		begin_info.pNext = NULL;
+		begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		begin_info.pInheritanceInfo = NULL;
+		VK_CHECK( qvkBeginCommandBuffer( vk_video_cmd[ slot ], &begin_info ) );
+		vk_video_recording[ slot ] = qtrue;
+	}
+
+	Com_Memset( &region, 0, sizeof( region ) );
+	region.bufferOffset = vk_video_offset[ slot ];
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageExtent.width = width;
+	region.imageExtent.height = height;
+	region.imageExtent.depth = 1;
+	record_image_layout_transition( vk_video_cmd[ slot ], image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, 0 );
+	qvkCmdCopyBufferToImage( vk_video_cmd[ slot ], u->handle, image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region );
+	record_image_layout_transition( vk_video_cmd[ slot ], image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
+	vk_video_offset[ slot ] += PAD( size, 16 );
+	return qtrue;
+}
+
+static void vk_video_finish( qboolean submitted )
+{
+	const int slot = vk.cmd_index;
+
+	if ( vk_video_recording[ slot ] && !submitted ) {
+		VK_CHECK( qvkEndCommandBuffer( vk_video_cmd[ slot ] ) );
+		qvkResetCommandBuffer( vk_video_cmd[ slot ], 0 );
+	}
+	vk_video_recording[ slot ] = qfalse;
+	vk_video_offset[ slot ] = 0;
 }
 
 #ifdef USE_VK_VALIDATION
@@ -4451,6 +4533,7 @@ void vk_initialize( void )
 		alloc_info.commandBufferCount = 1;
 
 		VK_CHECK( qvkAllocateCommandBuffers( vk.device, &alloc_info, &vk.tess[i].command_buffer ) );
+		VK_CHECK( qvkAllocateCommandBuffers( vk.device, &alloc_info, &vk_video_cmd[i] ) );
 
 	}
 
@@ -4822,6 +4905,7 @@ void vk_shutdown( refShutdownCode_t code )
 	}
 
 	qvkDestroyCommandPool( vk.device, vk.command_pool, NULL );
+	Com_Memset( vk_video_cmd, 0, sizeof( vk_video_cmd ) );
 
 	qvkDestroyDescriptorPool(vk.device, vk.descriptor_pool, NULL);
 
@@ -7813,6 +7897,7 @@ static void vk_resize_geometry_buffer( void )
 	VK_CHECK( qvkEndCommandBuffer( vk.cmd->command_buffer ) );
 
 	qvkResetCommandBuffer( vk.cmd->command_buffer, 0 );
+	vk_video_finish( qfalse );
 
 	vk_wait_idle();
 
@@ -7846,6 +7931,7 @@ void vk_end_frame( void )
 	const VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 #endif
 	VkSubmitInfo submit_info;
+	VkCommandBuffer cmdbufs[2];
 	VkLatencySubmissionPresentIdNV latency_submit;
 
 	if ( vk.frame_count == 0 )
@@ -7913,8 +7999,16 @@ void vk_end_frame( void )
 
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit_info.pNext = NULL;
-	submit_info.commandBufferCount = 1;
-	submit_info.pCommandBuffers = &vk.cmd->command_buffer;
+	if ( vk_video_recording[ vk.cmd_index ] ) {
+		VK_CHECK( qvkEndCommandBuffer( vk_video_cmd[ vk.cmd_index ] ) );
+		cmdbufs[0] = vk_video_cmd[ vk.cmd_index ];
+		cmdbufs[1] = vk.cmd->command_buffer;
+		submit_info.commandBufferCount = 2;
+		submit_info.pCommandBuffers = cmdbufs;
+	} else {
+		submit_info.commandBufferCount = 1;
+		submit_info.pCommandBuffers = &vk.cmd->command_buffer;
+	}
 	if ( vk.cmd->swapchain_image_acquired ) {
 #ifdef USE_UPLOAD_QUEUE
 		if ( vk.image_uploaded != VK_NULL_HANDLE ) {
@@ -7974,6 +8068,7 @@ void vk_end_frame( void )
 	vk_pacing_update();
 
 	VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.cmd->rendering_finished_fence ) );
+	vk_video_finish( qtrue );
 	vk.cmd->waitForFence = qtrue;
 
 	RB_Font_UploadSubmitted();
