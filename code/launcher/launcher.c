@@ -2950,10 +2950,24 @@ static int Notes_Line(const char** cursor, char* line, size_t size, const char**
 static float Draw_Notes(float x, float y, float width, float alpha) {
     char line[512];
     const char* p = latestNotes;
+    const char* q = latestNotes;
+    const char* end = NULL;
     const char* text;
     bool first = true;
 
-    while (*p) {
+    while (*q) {
+        const char* at = q;
+
+        if (Notes_Line(&q, line, sizeof(line), &text) == LINE_HEAD && !SDL_strcasecmp(text, "English")) {
+            if (lang == LANG_EN) {
+                p = q;
+            } else {
+                end = at;
+            }
+            break;
+        }
+    }
+    while (*p && p != end) {
         switch (Notes_Line(&p, line, sizeof(line), &text)) {
             case LINE_BLANK:
                 continue;
