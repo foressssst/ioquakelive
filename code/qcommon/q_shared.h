@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_APPID         "282440"
 
 #ifndef PRODUCT_VERSION
-#define PRODUCT_VERSION "3.0.1"
+#define PRODUCT_VERSION "3.0.2"
 #endif
 
 #ifndef PRODUCT_DATE
@@ -55,6 +55,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #define FULL_PRODUCT_VERSION PRODUCT_NAME " v" PRODUCT_VERSION " (" PRODUCT_GIT_HASH ") - " PRODUCT_DATE " @ " PRODUCT_TIME
+#define CONSOLE_PRODUCT_VERSION PRODUCT_NAME " v" PRODUCT_VERSION
 
 #define MAX_TEAMNAME 32
 

@@ -1995,9 +1995,9 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     }
     Con_FillRectPx(0, lines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
 
-    len = strlen(FULL_PRODUCT_VERSION);
+    len = strlen(CONSOLE_PRODUCT_VERSION);
     Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
-                      FULL_PRODUCT_VERSION, con_colors[CC_BORDER].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
+                      CONSOLE_PRODUCT_VERSION, con_colors[CC_BORDER].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
 
     con.vislines = lines;
     rows = (int)((lines - m.cellH) / m.cellH);
@@ -2097,9 +2097,9 @@ void Con_DrawSolidConsole(float frac) {
     SCR_FillRect(0, y, SCREEN_WIDTH, 2, color);
 
     re.SetColor(g_color_table[ColorIndex(COLOR_RED)]);
-    len = strlen(FULL_PRODUCT_VERSION);
+    len = strlen(CONSOLE_PRODUCT_VERSION);
     Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
-                      FULL_PRODUCT_VERSION, NULL, CON_CELL_WIDTH, CON_CELL_HEIGHT, 0);
+                      CONSOLE_PRODUCT_VERSION, NULL, CON_CELL_WIDTH, CON_CELL_HEIGHT, 0);
 
     con.vislines = lines;
     rows = (int)((lines - CON_CELL_WIDTH * s) / (CON_CELL_WIDTH * s));

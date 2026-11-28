@@ -19,7 +19,8 @@ def detect_hash():
     short = git(['rev-parse', '--short=10', 'HEAD'])
     if not short:
         return 'unknown'
-    status = git(['status', '--porcelain', '--untracked-files=no'])
+    status = git(['status', '--porcelain', '--untracked-files=no', '--',
+                  ':(top)', ':(top,exclude)code/qcommon/official_key.h'])
     if status:
         return short + '-dirty'
     return short
