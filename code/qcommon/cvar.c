@@ -443,7 +443,7 @@ cvar_t* Cvar_GetRange(const char* var_name, const char* var_value, const char* m
     var->minString = CopyString(min_value);
     var->maxString = CopyString(max_value);
     var->min = atof(min_value);
-    var->max = atof(max_value);
+    var->max = max_value[0] ? atof(max_value) : 1e30f;
 
     Cvar_ClampToRange(var);
     return var;
@@ -459,7 +459,7 @@ void Cvar_Print(cvar_t* v) {
     if (v->minString) {
         Com_Printf(" min:\"%s\"", v->minString);
     }
-    if (v->maxString) {
+    if (v->maxString && v->maxString[0]) {
         Com_Printf(" max:\"%s\"", v->maxString);
     }
 
@@ -1138,6 +1138,8 @@ void Cvar_PrintFirstHelpLine(const cvar_t* var, printf_t print) {
 
     if (!var->validate && !var->minString) {
         print("value");
+    } else if (var->maxString && !var->maxString[0]) {
+        print(S_COLOR_VAL "%g" S_COLOR_WHITE " or more", var->min);
     } else if (integral) {
         const int minV = (int)var->min;
         const int maxV = (int)var->max;

@@ -2101,7 +2101,7 @@ void Com_Init(char* commandLine) {
 #ifdef __EMSCRIPTEN__
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    com_maxfps = Cvar_GetRange("com_maxfps", "250", "0", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
+    com_maxfps = Cvar_GetRange("com_maxfps", "250", "0", "", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 
@@ -2806,9 +2806,11 @@ void Com_Frame(void) {
                 minMsec = 1000 / com_maxfpsMinimized->integer;
             } else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0) {
                 minMsec = 1000 / com_maxfpsUnfocused->integer;
-            } else if (com_maxfps->integer > 0) {
+            } else if (com_maxfps->integer >= 30) {
                 minMsec = 1000 / com_maxfps->integer;
                 capUs = 1000000 / com_maxfps->integer;
+                if (minMsec < 1)
+                    com_subMsec = CL_SubMsecFrames();
             } else {
                 minMsec = 1;
                 com_subMsec = CL_SubMsecFrames();
@@ -2828,14 +2830,14 @@ void Com_Frame(void) {
 
             if (com_subMsec) {
                 minMsec = 0;
-                capUs = 0;
+                capUs = com_maxfps->integer > 1000 ? 1000000 / com_maxfps->integer : 0;
                 bias = 0;
             }
         }
     } else
         minMsec = 1;
 
-    if (com_preciseFrameTiming->integer && capUs > 1000) {
+    if (capUs > 0 && (com_subMsec || (com_preciseFrameTiming->integer && capUs > 1000))) {
         int64_t nowUs = Sys_Microseconds();
 
         if (!com_frameTargetUs || nowUs - com_frameTargetUs > 250000 ||

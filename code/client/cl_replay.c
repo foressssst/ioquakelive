@@ -589,7 +589,7 @@ static qboolean CL_ReplayRenderLaunch(const char* name) {
                           "+set", "r_windowedWidth", sw,
                           "+set", "r_windowedHeight", sh,
                           "+set", "r_swapInterval", "0",
-                          "+set", "com_maxfps", "0",
+                          "+set", "com_maxfps", "250x",
                           "+set", "com_maxfpsUnfocused", "0",
                           "+set", "com_maxfpsMinimized", "0",
                           "+set", "com_introPlayed", "1",
