@@ -8208,6 +8208,24 @@ static int SDLCALL Vulkan_Thread(void* unused) {
     return 0;
 }
 
+static void Game_ForgetTarget(void) {
+    int i, n = 0;
+
+    for (i = 0; i < gameArgCount; i++) {
+        if ((!SDL_strcasecmp(gameArgs[i], "+connect") || !SDL_strcasecmp(gameArgs[i], "+demo") ||
+             !SDL_strcasecmp(gameArgs[i], "+password")) &&
+            i + 1 < gameArgCount) {
+            i++;
+            continue;
+        }
+        if (!SDL_strncasecmp(gameArgs[i], "quakelive:", 10)) {
+            continue;
+        }
+        gameArgs[n++] = gameArgs[i];
+    }
+    gameArgCount = n;
+}
+
 static bool Game_Start(void) {
     char path[1024];
     const char* args[36];
@@ -8236,7 +8254,7 @@ static bool Game_Start(void) {
     }
     gameProcess = process;
     gameStarted = true;
-    Window_ToTray();
+    Game_ForgetTarget();
     return true;
 }
 
