@@ -105,7 +105,7 @@ Necesitas Visual Studio 2026 o sus Build Tools, con la carga de trabajo «Desarr
 
 La instalación de [NASM](https://www.nasm.us/) es opcional. Si se encuentra instalado en su carpeta por defecto, se optimizará la carga de imágenes JPEG.
 
-Los videos del Training Center se reproducen mediante FFmpeg. Para compilarlo necesitas MSYS2 con los paquetes `make` y `diffutils` instalados. Antes de compilar el juego, ejecuta `code\tools\Build-FFmpeg.ps1` (agrega `-Platform ARM64` si estás compilando para ARM64).
+Los videos del Training Center se reproducen mediante FFmpeg. Para compilarlo necesitas MSYS2 con los paquetes `make` y `diffutils` instalados. Antes de compilar el juego, ejecuta `powershell -ExecutionPolicy Bypass -File code\tools\Build-FFmpeg.ps1` (agrega `-Platform ARM64` si estás compilando para ARM64).
 
 Este paso es opcional. Si decides omitirlo, podrás compilar y ejecutar el juego con normalidad, pero los videos del Training Center no estarán disponibles.
 

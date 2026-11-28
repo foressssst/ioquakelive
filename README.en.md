@@ -105,7 +105,7 @@ You need Visual Studio 2026 or its Build Tools, with the "Desktop development wi
 
 Installing [NASM](https://www.nasm.us/) is optional. If it's installed in its default folder, JPEG image loading is optimized.
 
-Training Center videos are played using FFmpeg. To build it, you need MSYS2 with the `make` and `diffutils` packages installed. Before building the game, run `code\tools\Build-FFmpeg.ps1` (add `-Platform ARM64` when building for ARM64).
+Training Center videos are played using FFmpeg. To build it, you need MSYS2 with the `make` and `diffutils` packages installed. Before building the game, run `powershell -ExecutionPolicy Bypass -File code\tools\Build-FFmpeg.ps1` (add `-Platform ARM64` when building for ARM64).
 
 This step is optional. If skipped, the game will still build and run normally, but Training Center videos will not be available.
 
