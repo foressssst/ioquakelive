@@ -601,14 +601,12 @@ static const char *gammaFP = {
 	"!!ARBfp1.0 \n"
 	"OPTION ARB_precision_hint_fastest; \n"
 	"PARAM gamma = program.local[0]; \n"
-	"PARAM contrast = program.local[1]; \n"
 	"TEMP base; \n"
 	"TEX base, fragment.texcoord[0], texture[0], 2D; \n"
 	"POW base.x, base.x, gamma.x; \n"
 	"POW base.y, base.y, gamma.y; \n"
 	"POW base.z, base.z, gamma.z; \n"
 	"MUL base.xyz, base, gamma.w; \n"
-	"MAD base.xyz, base, contrast.x, contrast.y; \n"
 	"%s"
 	"MOV base.w, 1.0; \n"
 	"MOV_SAT result.color, base; \n"
@@ -1859,8 +1857,7 @@ void FBO_CopyScratchToMain( void ) {
 void FBO_PostProcess( void )
 {
 	const float obScale = 1 << tr.overbrightBits;
-	const float gamma = ( backEnd.frameHasWorld && !web_browserActive->integer ) ? 1.0f / r_gamma->value : 1.0f;
-	const float contrast = ( backEnd.frameHasWorld && !web_browserActive->integer ) ? r_contrast->value : 1.0f;
+	const float gamma = ( backEnd.frameHasWorld && !web_browserActive->integer && ( r_colorCorrectActive->integer || !r_ignorehwgamma->integer ) ) ? 1.0f / r_gamma->value : 1.0f;
 	const float w = glConfig.vidWidth;
 	const float h = glConfig.vidHeight;
 	qboolean minimized;
@@ -1910,7 +1907,6 @@ void FBO_PostProcess( void )
 		GL_BindTexture( 0, frameBuffers[ fboReadIndex ].color );
 		ARB_ProgramEnable( DUMMY_VERTEX, GAMMA_FRAGMENT );
 		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 0, gamma, gamma, gamma, obScale );
-		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 1, contrast, 0.5f - 0.5f * contrast, 0.0f, 0.0f );
 		RenderQuad( w, h );
 		ARB_ProgramDisable();
 		return;
@@ -1920,7 +1916,6 @@ void FBO_PostProcess( void )
 	GL_BindTexture( 0, frameBuffers[ fboReadIndex ].color );
 	ARB_ProgramEnable( DUMMY_VERTEX, GAMMA_FRAGMENT );
 	qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 0, gamma, gamma, gamma, obScale );
-	qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 1, contrast, 0.5f - 0.5f * contrast, 0.0f, 0.0f );
 	RenderQuad( w, h );
 	ARB_ProgramDisable();
 
