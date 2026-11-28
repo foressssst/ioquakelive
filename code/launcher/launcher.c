@@ -117,7 +117,7 @@
 #define MORE_ICON 18.0f
 #define ITEM_R 6.0f
 #define MENU_PAD 6.0f
-#define NOTES_LINE 27.0f
+#define NOTES_LINE 24.0f
 #define CHECK_ICON 16.0f
 #define CLOSE_ICON 12.0f
 #define OPTS_ROWS 6
@@ -199,7 +199,7 @@
 #define TRACK_CAPS 1.5f
 #define TRACK_BUTTON 1.2f
 #define TRACK_NAV 1.4f
-#define NAV_ITEMS 6
+#define NAV_ITEMS 5
 #define NAV_GAP 24.0f
 #define NAV_X 236.0f
 #define NAV_PILL 12.0f
@@ -1762,10 +1762,12 @@ static void Icons_Load(void) {
     static const float more[6] = {0.2f, 0.64f, 0.5f, 0.36f, 0.8f, 0.64f};
     static const float check[6] = {0.2f, 0.52f, 0.42f, 0.74f, 0.8f, 0.3f};
     static const float slash[4] = {0.1f, 0.1f, 0.9f, 0.9f};
+    static const float play[8] = {0.3f, 0.2f, 0.8f, 0.5f, 0.3f, 0.8f, 0.3f, 0.2f};
 
     Icon_Lines(&iconMore, MORE_ICON, more, 3, 0.065f);
     Icon_Lines(&iconCheck, CHECK_ICON, check, 3, 0.09f);
     Icon_Lines(&iconSlash, CLOSE_ICON, slash, 2, 0.05f);
+    Icon_Lines(&iconPlay, CHECK_ICON, play, 4, 0.065f);
     Icon_Gear(&iconGear, GEAR_ICON);
     Icon_People(&iconPeople, FR_ICON);
 }
@@ -8188,26 +8190,30 @@ static float Draw_Title(const char* over, const char* title) {
     return BODY_TOP + 26.0f;
 }
 
-static const int navNames[NAV_ITEMS] = {TXT_NAV_HOME, TXT_HUB_SERVERS, TXT_HUB_RANKING, TXT_DEMOS, TXT_NAV_MATCHES, TXT_HUB_PROFILE};
-static const int navTabs[NAV_ITEMS] = {-1, HUB_SERVERS, HUB_RANKING, HUB_DEMOS, HUB_MATCHES, HUB_PROFILE};
+static const int navNames[NAV_ITEMS] = {TXT_NAV_HOME, TXT_HUB_SERVERS, TXT_HUB_RANKING, TXT_DEMOS, TXT_NAV_MATCHES};
+static const int navTabs[NAV_ITEMS] = {-1, HUB_SERVERS, HUB_RANKING, HUB_DEMOS, HUB_MATCHES};
+static float pillA = 1.0f;
 
 static bool Nav_Shown(void) {
     return gameFound && !install.active && setup.step == STEP_NONE;
 }
 
 static int Nav_Count(void) {
-    return meProfile.status == PRO_READY ? NAV_ITEMS : NAV_ITEMS - 2;
+    return meProfile.status == PRO_READY ? NAV_ITEMS : NAV_ITEMS - 1;
 }
 
 static int Nav_Active(void) {
     int i;
 
-    for (i = 1; hubOpen && i < NAV_ITEMS; i++) {
+    if (!hubOpen) {
+        return 0;
+    }
+    for (i = 1; i < NAV_ITEMS; i++) {
         if (navTabs[i] == hubTab) {
             return i;
         }
     }
-    return 0;
+    return -1;
 }
 
 static void Draw_Nav(void) {
@@ -8451,7 +8457,7 @@ static void Draw_SideServers(float y) {
     float x = SIDE_X, w = SIDE_W;
     int i, n;
 
-    n = (int)((PLAY_Y - 12.0f - y + SIDE_GAP) / (SIDE_ROW_H + SIDE_GAP));
+    n = (int)((PLAY_Y - 52.0f - y + SIDE_GAP) / (SIDE_ROW_H + SIDE_GAP));
     n = SDL_min(n, SDL_min(serverCount, SIDE_ROWS));
     if (n > 0 && !waveServers) {
         waveServers = true;
@@ -8467,6 +8473,8 @@ static void Draw_SideServers(float y) {
     }
     waveNow = NULL;
 }
+
+static void Draw_Status(void);
 
 static void Draw_Card(void) {
     char work[64];
@@ -8501,6 +8509,7 @@ static void Draw_Card(void) {
         Draw_Text(FONT_SMALL, x, Text_Mid(FONT_SMALL, row), COL_W70, Text_Fit(FONT_SMALL, T(serversFailed ? TXT_SERVERS_FAILED : TXT_SERVERS_LOADING), SIDE_W), -1);
     }
 
+    Draw_Status();
     if (steamLaunch && !busy) {
         Draw_Big(BTN_PLAY, T(TXT_PLAY_STEAM), ready, steamMissing ? 0.35f : 0.8f, T(TXT_STEAM_OPENING), NULL);
         return;
@@ -8510,35 +8519,24 @@ static void Draw_Card(void) {
 
 static void Draw_Status(void) {
     char line[96];
-    const char* text = line;
     int state = SDL_GetAtomicInt(&checkState);
-    float x = (buttons[BTN_ME].visible ? buttons[BTN_ME].x : UI_W - CTRL_W * (buttons[BTN_FRIENDS].visible ? 5.0f : 4.0f)) - 14.0f;
+    float x = SIDE_X, mid = PLAY_Y - 26.0f;
 
     Button_Set(BTN_UPDATE, 0.0f, 0.0f, 0.0f, 0.0f, false);
-    if (!gameFound || install.active || setup.step != STEP_NONE) {
+    if (!gameFound || install.active || setup.step != STEP_NONE || Update_Busy() || steamLaunch) {
         return;
     }
-    if (Update_Busy()) {
-        if (SDL_GetAtomicInt(&jobPhase) == PHASE_DOWNLOAD) {
-            SDL_snprintf(line, sizeof(line), T(TXT_DOWNLOADING), (int)(Job_Done() * 100.0f));
-        } else {
-            text = T(TXT_INSTALLING);
-        }
-    } else if (state == CHECK_DONE && updateAvailable) {
+    if (state == CHECK_DONE && updateAvailable) {
         float w;
 
         SDL_snprintf(line, sizeof(line), T(TXT_PATCH_OUT), latestVersion);
         w = Text_Width(FONT_BODY, line, -1) + 28.0f;
-        x -= w;
-        Button_Set(BTN_UPDATE, x, TOP_MID - 15.0f, w, 30.0f, true);
-        Draw_Round(x, TOP_MID - 15.0f, w, 30.0f, ITEM_R, Col_Mix(COL_P3, COL_P4, heat[BTN_UPDATE]));
-        Draw_Text(FONT_BODY, x + 14.0f, Text_Mid(FONT_BODY, TOP_MID), COL_WHITE, line, -1);
+        Button_Set(BTN_UPDATE, x, mid - 15.0f, w, 30.0f, true);
+        Draw_Round(x, mid - 15.0f, w, 30.0f, ITEM_R, Col_Mix(COL_P3, COL_P4, heat[BTN_UPDATE]));
+        Draw_Text(FONT_BODY, x + 14.0f, Text_Mid(FONT_BODY, mid), COL_WHITE, line, -1);
         return;
-    } else {
-        text = T(state == CHECK_RUNNING ? TXT_CHECKING : state == CHECK_FAILED ? TXT_CHECK_FAILED : TXT_UPTODATE);
     }
-    x -= Text_Width(FONT_BODY, text, -1);
-    Draw_Text(FONT_BODY, x, Text_Mid(FONT_BODY, TOP_MID), COL_W70, text, -1);
+    Draw_Text(FONT_BODY, x, Text_Mid(FONT_BODY, mid), COL_W70, T(state == CHECK_RUNNING ? TXT_CHECKING : state == CHECK_FAILED ? TXT_CHECK_FAILED : TXT_UPTODATE), -1);
 }
 
 static void Draw_Path(float x, float y, float width, Uint32 rgba, const char* path) {
@@ -9283,28 +9281,25 @@ static void Draw_Box(void) {
 
 static void Draw_Me(void) {
     if (meProfile.status == PRO_READY && gameFound && !install.active && setup.step == STEP_NONE) {
-        nameRune_t r[NAME_RUNES + 3];
         char key[sizeof(pics[0].key)];
         const pic_t* pic;
-        float nw, w, x, mid = TOP_MID;
+        float x = UI_W - CTRL_W * 6.0f, mid = TOP_MID;
+        bool mine = hubOpen && hubTab == HUB_PROFILE && !SDL_strcmp(hubWho, meProfile.steamId);
 
-        textTrack = TRACK_NAV;
-        nw = SDL_min(Runes_Width(FONT_NAV, r, Name_Runes(meProfile.raw, r, NAME_RUNES)), 150.0f);
-        textTrack = 0.0f;
-        w = 8.0f + 24.0f + 10.0f + nw + 12.0f;
-        x = UI_W - CTRL_W * (buttons[BTN_FRIENDS].visible ? 5.0f : 4.0f) - 8.0f - w;
-        Button_Set(BTN_ME, x, CTRL_Y + 4.0f, w, CTRL_H - 8.0f, true);
-        if (heat[BTN_ME] > 0.0f) {
-            Draw_Round(x, CTRL_Y + 4.0f, w, CTRL_H - 8.0f, 6.0f, Col_Alpha(COL_HUSH, heat[BTN_ME]));
+        Button_Set(BTN_ME, x, CTRL_Y, CTRL_W, CTRL_H, true);
+        if (mine) {
+            Draw_Round(x, CTRL_Y, CTRL_W, CTRL_H, ITEM_R, Col_Alpha(COL_WHITE, 0.09f));
+        } else if (heat[BTN_ME] > 0.0f) {
+            Draw_Round(x, CTRL_Y, CTRL_W, CTRL_H, ITEM_R, Col_Alpha(COL_HUSH, heat[BTN_ME]));
         }
         SDL_snprintf(key, sizeof(key), "a:%s", meProfile.avatar);
         pic = meProfile.avatar[0] ? Pic_Find(key) : NULL;
+        x += (CTRL_W - 24.0f) * 0.5f;
         if (pic && pic->img.tex) {
-            Draw_RoundImage(&pic->img, x + 8.0f, mid - 12.0f, 24.0f, 24.0f, 5.0f, Col_Gray(1.0f, pic->heat));
+            Draw_RoundImage(&pic->img, x, mid - 12.0f, 24.0f, 24.0f, 5.0f, Col_Gray(1.0f, pic->heat));
         } else {
-            Draw_Round(x + 8.0f, mid - 12.0f, 24.0f, 24.0f, 5.0f, COL_P3);
+            Draw_Round(x, mid - 12.0f, 24.0f, 24.0f, 5.0f, COL_P3);
         }
-        Draw_NameFit(FONT_NAV, x + 42.0f, mid, COL_WHITE, meProfile.raw, TRACK_NAV, nw + 1.0f);
     } else {
         Button_Set(BTN_ME, 0.0f, 0.0f, 0.0f, 0.0f, false);
     }
@@ -9626,7 +9621,7 @@ static float Hub_Header(float y) {
     const hubPlayer_t* pl = &hubPlayer;
     const pic_t* pic;
     char line[200], clean[96];
-    float cover = SDL_floorf(HUB_CW * 215.0f / 1000.0f), strip, top, tx, mid, bw, ax, ay, x;
+    float cover = pl->banner[0] ? SDL_floorf(HUB_CW * 215.0f / 1000.0f) : 72.0f, strip, top, tx, mid, bw, ax, ay, x;
     bool title = pl->title[0] != '\0';
 
     strip = 16.0f + 36.0f + (title ? 24.0f : 0.0f) + 10.0f + 16.0f + 18.0f;
@@ -10151,13 +10146,13 @@ static float Hub_IconsCard(float y, bool medals) {
 }
 
 static void Game_Columns(float x, float w, float* col) {
-    float fr = (w - 432.0f - 84.0f) / 2.4f;
+    float fr = (w - 432.0f - 84.0f) / 2.6f;
 
     col[0] = x;
     col[1] = col[0] + 40.0f + 14.0f;
     col[2] = col[1] + 64.0f + 14.0f;
-    col[3] = col[2] + fr * 1.4f + 14.0f;
-    col[4] = col[3] + fr + 14.0f;
+    col[3] = col[2] + fr * 1.8f + 14.0f;
+    col[4] = col[3] + fr * 0.8f + 14.0f;
     col[5] = col[4] + 144.0f + 14.0f;
     col[6] = col[5] + 72.0f + 14.0f;
     col[7] = col[6] + 112.0f;
@@ -10375,15 +10370,15 @@ static float Hub_GamesView(float y) {
 }
 
 static float Demo_WatchWidth(void) {
-    return Caps_Width(FONT_BOXBTN, T(TXT_DEMO_WATCH), TRACK_BUTTON) + 32.0f;
+    return 32.0f;
 }
 
 static void Demo_Columns(float x, float w, float* col) {
-    float bw = Demo_WatchWidth(), fr = (w - 64.0f - 92.0f - 44.0f - 64.0f - bw - 8.0f - 32.0f - 14.0f * 6.0f) / 2.3f;
+    float bw = Demo_WatchWidth(), fr = (w - 64.0f - 92.0f - 44.0f - 64.0f - bw - 8.0f - 32.0f - 14.0f * 6.0f) / 2.5f;
 
     col[0] = x;
     col[1] = col[0] + 64.0f + 14.0f;
-    col[2] = col[1] + fr * 1.3f + 14.0f;
+    col[2] = col[1] + fr * 1.5f + 14.0f;
     col[3] = col[2] + fr + 14.0f;
     col[4] = col[3] + 92.0f + 14.0f;
     col[5] = col[4] + 44.0f + 14.0f;
@@ -10488,12 +10483,9 @@ static void Demo_Row(const hubDemos_t* ds, int index, bool profile, float x, flo
     if (busy && demoWatch) {
         float p = Demo_Progress();
 
-        Draw_Round(col[6], by, (col[7] - 8.0f - col[6]) * p, bh, 6.0f, Col_Alpha(COL_GOLD, 0.35f));
-        SDL_snprintf(line, sizeof(line), "%d %%", (int)(p * 100.0f));
-        Hub_CapsCenter(FONT_BOXBTN, (col[6] + col[7] - 8.0f) * 0.5f, mid, tone.ink, line, TRACK_BUTTON);
-    } else {
-        Hub_CapsCenter(FONT_BOXBTN, (col[6] + col[7] - 8.0f) * 0.5f, mid, ink, T(TXT_DEMO_WATCH), TRACK_BUTTON);
+        Draw_Round(col[6], by + bh * (1.0f - p), 32.0f, bh * p, 6.0f, Col_Alpha(COL_GOLD, 0.35f));
     }
+    Draw_Spin(&iconPlay, col[6] + (32.0f - CHECK_ICON) * 0.5f + 1.0f, mid - CHECK_ICON * 0.5f, 0.0f, ink);
     if (d->have) {
         Draw_Round(col[7], by, 32.0f, bh, 6.0f, Col_Alpha(tone.p3, 0.5f));
         Draw_Spin(&iconCheck, col[7] + (32.0f - CHECK_ICON) * 0.5f, mid - CHECK_ICON * 0.5f, 0.0f, COL_OK);
@@ -12535,7 +12527,6 @@ static void Draw_Frame(void) {
     Hub_Draw();
     Draw_Top();
     Draw_Me();
-    Draw_Status();
     Friends_Draw();
     Draw_Options();
     Draw_Languages();
