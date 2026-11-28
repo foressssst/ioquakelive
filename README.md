@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <b>Español</b> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/foressssst/ioquakelive/releases/latest"><img src="https://img.shields.io/github/v/release/foressssst/ioquakelive?label=versi%C3%B3n&color=4073FF" alt="Última versión"></a>
   <a href="https://github.com/foressssst/ioquakelive/releases"><img src="https://img.shields.io/github/downloads/foressssst/ioquakelive/total?label=descargas&color=4073FF" alt="Descargas"></a>
   <a href="https://github.com/foressssst/ioquakelive/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/foressssst/ioquakelive/build.yml?branch=main&label=build" alt="Build"></a>
