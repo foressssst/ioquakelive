@@ -95,6 +95,9 @@
 #define VIG_H 90
 #define VIG_BASE 0.30f
 #define VIG_EDGE 0.45f
+#define FALL_H 150.0f
+#define FALL_A 0.7f
+#define FALL_STEPS 8
 #define CTRL_W 44.0f
 #define CTRL_H 36.0f
 #define CTRL_Y (TOP_MID - CTRL_H * 0.5f)
@@ -204,6 +207,7 @@
 #define NAV_GAP 24.0f
 #define NAV_X 236.0f
 #define NAV_PILL 12.0f
+#define FARO_DY 13.0f
 #define PULL_MAX 40.0f
 #define ROLL_MAX 64
 #define TOAST_MAX 4
@@ -272,21 +276,21 @@
 
 #define COL_BLACK 0x000000FF
 #define COL_PURE 0xFFFFFFFF
-#define COL_PAGE 0x1F1F1FFF
-#define COL_P1 0x313131FF
-#define COL_P2 0x3A3A3AFF
-#define COL_P3 0x424242FF
-#define COL_P4 0x4E4E4EFF
-#define COL_WHITE 0xF2F2F2FF
-#define COL_W85 0xF2F2F2E6
-#define COL_W70 0xA8A8A8FF
-#define COL_W40 0xA8A8A899
-#define COL_DOT 0x777777FF
-#define COL_INK 0x141414FF
+#define COL_PAGE 0x1A1815FF
+#define COL_P1 0x2F2B27FF
+#define COL_P2 0x393531FF
+#define COL_P3 0x44403BFF
+#define COL_P4 0x4F4A42FF
+#define COL_WHITE 0xF2F0E9FF
+#define COL_W85 0xF2F0E9E6
+#define COL_W70 0xA5A199FF
+#define COL_W40 0xA5A19999
+#define COL_DOT 0x7A766FFF
+#define COL_INK 0x141310FF
 #define COL_OK 0x5DB872FF
 #define COL_MAL 0xDC5C54FF
-#define COL_LINE 0x555555FF
-#define COL_GOLD 0xC9A961FF
+#define COL_LINE 0x58534CFF
+#define COL_GOLD 0xC8A95FFF
 #define COL_RED 0xD65A52FF
 #define COL_BLUE 0x4D86D9FF
 #define COL_HUSH 0x00000066
@@ -5601,7 +5605,7 @@ static int hubDemoMode, hubDemoPage = 1;
 static char hubDemoWho[24];
 static float hubHeat, hubGoal[HUB_VIEWS], hubView[HUB_VIEWS], hubMost[HUB_VIEWS], hubPull[HUB_VIEWS], hubSwap = 1.0f, hubHue;
 static int hubShown = -1;
-static Uint32 hubHueBody = COL_P1, hubHueHead = COL_P3;
+static Uint32 hubHueBody = COL_P1;
 static char hubWho[24], hubMatchId[48];
 static hubHit_t hubHits[HUB_ROWS];
 static tone_t tone;
@@ -8039,9 +8043,37 @@ static void Draw_Hero(const image_t* image, float alpha) {
     Draw_ImageAt(image, box[0] - ART_PAD + artX, box[1] - ART_PAD + artY, box[2] + ART_PAD * 2.0f, box[3] + ART_PAD * 2.0f, alpha, false);
 }
 
+static void Draw_Fall(float h, float alpha) {
+    SDL_Vertex v[(FALL_STEPS + 1) * 2];
+    int idx[FALL_STEPS * 6], i;
+
+    SDL_zeroa(v);
+    for (i = 0; i <= FALL_STEPS; i++) {
+        float t = (float)i / (float)FALL_STEPS, y = Px_Y(h * t);
+        SDL_FColor c = { 0.0f, 0.0f, 0.0f, alpha * (1.0f - t * t * (3.0f - 2.0f * t)) };
+
+        v[i * 2].position.x = Px_X(0.0f);
+        v[i * 2 + 1].position.x = Px_X(UI_W);
+        v[i * 2].position.y = v[i * 2 + 1].position.y = y;
+        v[i * 2].color = v[i * 2 + 1].color = c;
+    }
+    for (i = 0; i < FALL_STEPS; i++) {
+        int* q = idx + i * 6;
+
+        q[0] = i * 2;
+        q[1] = i * 2 + 1;
+        q[2] = i * 2 + 2;
+        q[3] = i * 2 + 1;
+        q[4] = i * 2 + 3;
+        q[5] = i * 2 + 2;
+    }
+    SDL_RenderGeometry(renderer, NULL, v, (FALL_STEPS + 1) * 2, idx, FALL_STEPS * 6);
+}
+
 static void Draw_Art(void) {
     if (hero.tex) {
         Draw_Hero(&hero, 1.0f);
+        Draw_Fall(FALL_H, FALL_A);
     }
 }
 
@@ -8115,17 +8147,15 @@ static void Draw_Shadow(float x, float y, float w, float h, float radius, float 
     }
 }
 
-static void Draw_Sheet(float x, float y, float w, float h, Uint32 fill, Uint32 head) {
+static void Draw_Sheet(float x, float y, float w, float h, Uint32 fill) {
     h += PANEL_R * 2.0f;
     Draw_Shadow(x, y, w, h, PANEL_R, 1.0f);
     Draw_Round(x - 1.0f, y - 1.0f, w + 2.0f, h + 2.0f, PANEL_R + 1.0f, COL_RING);
     Draw_Round(x, y, w, h, PANEL_R, fill);
-    Draw_Round(x, y, w, HEAD_H + PANEL_R * 2.0f, PANEL_R, head);
-    Draw_Rect(x, y + HEAD_H, w, PANEL_R * 2.0f, fill);
 }
 
 static void Draw_Panel(void) {
-    Draw_Sheet(COL_X, PANEL_Y, COL_W, PANEL_END - PANEL_Y, COL_P1, COL_P3);
+    Draw_Sheet(COL_X, PANEL_Y, COL_W, PANEL_END - PANEL_Y, COL_P1);
 }
 
 static float Caps_Width(int fontIndex, const char* text, float track) {
@@ -8226,8 +8256,8 @@ static void Draw_Nav(void) {
         navW[i] = tw + NAV_PILL * 2.0f;
         x += tw + NAV_GAP;
     }
-    if (pillX >= 0.0f) {
-        Draw_Round(pillX, TOP_MID - 15.0f, pillW, 30.0f, 15.0f, Col_Alpha(COL_WHITE, 0.09f));
+    if (pillX >= 0.0f && pillA > 0.0f) {
+        Draw_Round(pillX + NAV_PILL, TOP_MID + FARO_DY, pillW - NAV_PILL * 2.0f, 2.0f, 1.0f, Col_Alpha(COL_WHITE, pillA));
     }
     x = NAV_X;
     for (i = 0; i < count; i++) {
@@ -11169,9 +11199,8 @@ static void Hub_Draw(void) {
     Hub_Tone(hued ? hubPlayer.hue : -1);
     if (hued) {
         hubHueBody = tone.p1;
-        hubHueHead = tone.p3;
     }
-    Draw_Sheet(HUB_X, HUB_Y, HUB_W, end - HUB_Y, Col_Mix(COL_P1, hubHueBody, hubHue * e), Col_Mix(COL_P3, hubHueHead, hubHue * e));
+    Draw_Sheet(HUB_X, HUB_Y, HUB_W, end - HUB_Y, Col_Mix(COL_P1, hubHueBody, hubHue * e));
     Button_Set(BTN_HUB, HUB_X, HUB_Y, HUB_W, end - HUB_Y, hubLive);
     hubClipTop = 0.0f;
     hubClipBottom = UI_H;
@@ -12603,7 +12632,7 @@ static bool Friends_Update(float dt) {
 static bool Heat_Update(float dt, bool notes) {
     bool moving = false;
     float d;
-    int i;
+    int active, i;
 
     if (dt > 0.05f) {
         dt = 0.05f;
@@ -12612,16 +12641,21 @@ static bool Heat_Update(float dt, bool notes) {
     for (i = 0; i < BTN_COUNT; i++) {
         moving |= Ease(&heat[i], hotButton == i ? 1.0f : 0.0f, dt * 9.0f);
     }
+    active = Nav_Active();
     for (i = 0; i < NAV_ITEMS; i++) {
-        moving |= Ease(&navLit[i], i == Nav_Active() ? 1.0f : 0.0f, dt * 9.0f);
+        moving |= Ease(&navLit[i], i == active ? 1.0f : 0.0f, dt * 9.0f);
     }
-    if (navW[Nav_Active()] > 0.0f) {
+    if (hotButton >= BTN_NAV_0 && hotButton < BTN_NAV_0 + Nav_Count() && buttons[hotButton].visible) {
+        active = hotButton - BTN_NAV_0;
+    }
+    moving |= Ease(&pillA, active >= 0 ? 1.0f : 0.0f, dt * 9.0f);
+    if (active >= 0 && navW[active] > 0.0f) {
         if (pillX < 0.0f) {
-            pillX = navX[Nav_Active()];
-            pillW = navW[Nav_Active()];
+            pillX = navX[active];
+            pillW = navW[active];
         }
-        moving |= Glide(&pillX, navX[Nav_Active()], dt * 14.0f, 0.05f);
-        moving |= Glide(&pillW, navW[Nav_Active()], dt * 14.0f, 0.05f);
+        moving |= Glide(&pillX, navX[active], dt * 14.0f, 0.05f);
+        moving |= Glide(&pillW, navW[active], dt * 14.0f, 0.05f);
     }
     moving |= Ease(&optsHeat, optsOpen ? 1.0f : 0.0f, dt * 7.0f);
     moving |= Ease(&langHeat, langOpen ? 1.0f : 0.0f, dt * 7.0f);
