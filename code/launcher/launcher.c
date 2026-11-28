@@ -8107,7 +8107,7 @@ static void Tray_Labels(void) {
 }
 
 static void Window_ToTray(void) {
-    if (tray) {
+    if (tray && !gameProcess) {
         SDL_HideWindow(window);
     } else {
         SDL_MinimizeWindow(window);
@@ -8255,6 +8255,7 @@ static bool Game_Start(void) {
     gameProcess = process;
     gameStarted = true;
     Game_ForgetTarget();
+    SDL_MinimizeWindow(window);
     return true;
 }
 
@@ -13830,7 +13831,7 @@ int main(int argc, char** argv) {
                     running = false;
                     break;
                 case SDL_EVENT_WINDOW_MINIMIZED:
-                    if (tray) {
+                    if (tray && !gameProcess) {
                         SDL_HideWindow(window);
                         SDL_RestoreWindow(window);
                     }
