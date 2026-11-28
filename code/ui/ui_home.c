@@ -462,6 +462,7 @@ qboolean UI_Home_NavClick(void) {
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_FRIEND) {
+        UI_Home_ContextOpen(hit->index);
         return qtrue;
     }
 
