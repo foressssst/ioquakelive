@@ -263,7 +263,6 @@
 #define ZIP_TAIL (65536 + 22)
 #define ZIP_BLOCK 0x10000
 #define PAK_GAME "baseq3/pak00.pk3"
-#define ART_HERO "ui/assets/backscreen_classic.jpg"
 #define ART_CUSTOM "baseq3/launcher.jpg"
 #define PAK_MAX_FILE 0x4000000
 #define HTTP_MAX 0x40000
@@ -542,7 +541,7 @@ static SDL_Renderer* renderer;
 static image_t hero, heroSoft, shade, logo, iconMore, iconCheck, iconSlash, iconGear, iconSteam, iconDiscord, iconPeople;
 static float artX, artY, artMidX, artMidY, artGoalX, artGoalY;
 static float uiScale = 1.0f;
-static const float artBox[2][4] = {{-24.0f, -40.0f, UI_W * 1.06f, UI_H * 1.06f}, {-12.0f, -26.0f, UI_W + 24.0f, UI_H + 24.0f}};
+static const float artBox[4] = {-12.0f, -26.0f, UI_W + 24.0f, UI_H + 24.0f};
 static const char* basePath = "";
 static font_t fonts[FONT_COUNT];
 static bool fontsReady;
@@ -592,7 +591,7 @@ static SDL_Cursor* cursorArrow;
 static SDL_Cursor* cursorHand;
 static int hotButton = -1;
 static float navLit[NAV_ITEMS], navX[NAV_ITEMS], navW[NAV_ITEMS], pillX = -1.0f, pillW;
-static bool gameFound, vulkanFound, heroCustom, firstRun;
+static bool gameFound, vulkanFound, firstRun;
 static int rendererHint = -1;
 static SDL_AtomicInt vulkanState;
 static char** gameArgs;
@@ -1566,29 +1565,19 @@ static void Image_LoadHero(void) {
     SDL_snprintf(path, sizeof(path), "%s%s", basePath, ART_CUSTOM);
     file = SDL_LoadFile(path, &size);
     if (file) {
-        Image_FromJpeg(&hero, file, size, artBox[1]);
+        Image_FromJpeg(&hero, file, size, artBox);
         SDL_free(file);
-        heroCustom = hero.tex != NULL;
     }
     if (!hero.tex && install.local) {
         unsigned char* art = Pak_Read(install.zip, ART_CUSTOM, &size);
 
         if (art) {
-            Image_FromJpeg(&hero, art, size, artBox[1]);
+            Image_FromJpeg(&hero, art, size, artBox);
             free(art);
-            heroCustom = hero.tex != NULL;
         }
     }
     if (!hero.tex) {
-        file = Pak_Read(PAK_OURS, ART_HERO, &size);
-        if (file) {
-            Image_FromJpeg(&hero, file, size, artBox[0]);
-            free(file);
-        }
-    }
-    if (!hero.tex) {
-        Image_FromJpeg(&hero, launcherArt, sizeof(launcherArt), artBox[1]);
-        heroCustom = hero.tex != NULL;
+        Image_FromJpeg(&hero, launcherArt, sizeof(launcherArt), artBox);
     }
 }
 
@@ -8041,7 +8030,7 @@ static void Draw_Page(void) {
 }
 
 static void Draw_Hero(const image_t* image, float alpha) {
-    const float* box = artBox[heroCustom ? 1 : 0];
+    const float* box = artBox;
 
     Draw_ImageAt(image, box[0] - ART_PAD + artX, box[1] - ART_PAD + artY, box[2] + ART_PAD * 2.0f, box[3] + ART_PAD * 2.0f, alpha, false);
 }
