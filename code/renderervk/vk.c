@@ -273,6 +273,8 @@ static PFN_vkSetLatencySleepModeNV						qvkSetLatencySleepModeNV;
 static PFN_vkLatencySleepNV								qvkLatencySleepNV;
 static PFN_vkSetLatencyMarkerNV							qvkSetLatencyMarkerNV;
 static PFN_vkGetLatencyTimingsNV						qvkGetLatencyTimingsNV;
+
+static uint32_t lowLatency2Spec;
 static PFN_vkWaitSemaphoresKHR							qvkWaitSemaphoresKHR;
 
 static PFN_vkGetBufferMemoryRequirements2KHR			qvkGetBufferMemoryRequirements2KHR;
@@ -725,7 +727,7 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	if ( verbose ) {
 		ri.Printf( PRINT_ALL, "...selected presentation mode: %s, image count: %i\n", pmode_to_str( present_mode ), image_count );
 		ri.Printf( PRINT_ALL, "...low latency: %s, r_lowLatency %i\n",
-			vk.lowLatency2 ? "Reflex (VK_NV_low_latency2)" : ( vk.antiLag ? "Anti-Lag 2 (VK_AMD_anti_lag)" : "not offered by the driver" ),
+			vk.lowLatency2 ? va( "Reflex (VK_NV_low_latency2 v%u)", lowLatency2Spec ) : ( vk.antiLag ? "Anti-Lag 2 (VK_AMD_anti_lag)" : "not offered by the driver" ),
 			r_lowLatency->integer );
 	}
 
@@ -2003,6 +2005,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 				portabilitySubset = qtrue;
 			} else if ( strcmp( ext, VK_NV_LOW_LATENCY_2_EXTENSION_NAME ) == 0 ) {
 				lowLatency2 = qtrue;
+				lowLatency2Spec = extension_properties[i].specVersion;
 			} else if ( strcmp( ext, VK_KHR_PRESENT_ID_EXTENSION_NAME ) == 0 ) {
 				presentId = qtrue;
 			} else if ( strcmp( ext, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME ) == 0 ) {
@@ -8290,15 +8293,41 @@ void vk_low_latency_input( void )
 	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_INPUT_AMD );
 }
 
+static const VkLatencyTimingsFrameReportNV *vk_latency_owner( const VkLatencyTimingsFrameReportNV *reports, uint32_t count, const VkLatencyTimingsFrameReportNV *r )
+{
+	const VkLatencyTimingsFrameReportNV *owner = NULL;
+	uint32_t i;
+
+	if ( !r->osRenderQueueStartTimeUs ) {
+		return r;
+	}
+	for ( i = 0; i < count; i++ ) {
+		const VkLatencyTimingsFrameReportNV *f = &reports[ i ];
+
+		if ( !f->inputSampleTimeUs || !f->renderSubmitStartTimeUs || f->renderSubmitStartTimeUs > r->osRenderQueueStartTimeUs ) {
+			continue;
+		}
+		if ( !owner || f->renderSubmitStartTimeUs > owner->renderSubmitStartTimeUs ) {
+			owner = f;
+		}
+	}
+	return owner ? owner : r;
+}
+
 static void vk_latency_report( void )
 {
 	static VkLatencyTimingsFrameReportNV reports[ 64 ];
 	static int lastReport;
+	static int waitStart;
+	static uint64_t waitFrom;
+	static qboolean waitLogged;
 	VkGetLatencyMarkerInfoNV info;
+	const VkLatencyTimingsFrameReportNV *newest = NULL;
+	const VkLatencyTimingsFrameReportNV *f;
 	double pc = 0, gpu = 0, queue = 0;
 	const char *mode;
 	uint32_t i;
-	int n = 0, now;
+	int n = 0, now, recent = 0, inputs = 0, gpuEnds = 0;
 
 	if ( !r_latencyStats->integer ) {
 		return;
@@ -8334,29 +8363,61 @@ static void vk_latency_report( void )
 	for ( i = 0; i < info.timingCount && i < ARRAY_LEN( reports ); i++ ) {
 		const VkLatencyTimingsFrameReportNV *r = &reports[ i ];
 
+		if ( !newest || r->presentID > newest->presentID ) {
+			newest = r;
+		}
 		if ( r->presentID < latencyReportFrom ) {
 			continue;
 		}
-		if ( !r->inputSampleTimeUs || !r->gpuRenderEndTimeUs || r->gpuRenderEndTimeUs < r->inputSampleTimeUs ) {
+		recent++;
+		inputs += r->inputSampleTimeUs ? 1 : 0;
+		gpuEnds += r->gpuRenderEndTimeUs ? 1 : 0;
+		f = vk_latency_owner( reports, MIN( info.timingCount, ARRAY_LEN( reports ) ), r );
+		if ( !f->inputSampleTimeUs || !r->gpuRenderEndTimeUs || r->gpuRenderEndTimeUs < f->inputSampleTimeUs ) {
 			continue;
 		}
-		if ( r->gpuRenderEndTimeUs - r->inputSampleTimeUs > 1000000 ) {
+		if ( r->gpuRenderEndTimeUs - f->inputSampleTimeUs > 1000000 ) {
 			continue;
 		}
-		pc += (double)( r->gpuRenderEndTimeUs - r->inputSampleTimeUs );
+		pc += (double)( r->gpuRenderEndTimeUs - f->inputSampleTimeUs );
 		if ( r->gpuRenderEndTimeUs >= r->gpuRenderStartTimeUs ) {
 			gpu += (double)( r->gpuRenderEndTimeUs - r->gpuRenderStartTimeUs );
 		}
-		if ( r->gpuRenderStartTimeUs >= r->renderSubmitEndTimeUs ) {
-			queue += (double)( r->gpuRenderStartTimeUs - r->renderSubmitEndTimeUs );
+		if ( r->gpuRenderStartTimeUs >= f->renderSubmitEndTimeUs ) {
+			queue += (double)( r->gpuRenderStartTimeUs - f->renderSubmitEndTimeUs );
 		}
 		n++;
 	}
 
 	if ( !n ) {
-		ri.Cvar_Set( "r_latencyReport", va( "Reflex: %s (waiting for driver timings)", mode ) );
+		if ( !waitStart || waitFrom != latencyReportFrom ) {
+			waitStart = now;
+			waitFrom = latencyReportFrom;
+			waitLogged = qfalse;
+		}
+		if ( now - waitStart < 3000 && now >= waitStart ) {
+			ri.Cvar_Set( "r_latencyReport", va( "Reflex: %s (waiting for driver timings)", mode ) );
+			return;
+		}
+		if ( !waitLogged ) {
+			waitLogged = qtrue;
+			ri.Printf( PRINT_ALL, "Reflex timings (v%u): %u reports, %i recent, %i with input, %i with GPU end, frame %llu\n",
+				lowLatency2Spec, info.timingCount, recent, inputs, gpuEnds, (unsigned long long)vk.latencyFrame );
+			if ( newest ) {
+				ri.Printf( PRINT_ALL, "Reflex newest %llu: input %llu sim %llu %llu submit %llu %llu present %llu %llu driver %llu %llu queue %llu %llu gpu %llu %llu\n",
+					(unsigned long long)newest->presentID, (unsigned long long)newest->inputSampleTimeUs,
+					(unsigned long long)newest->simStartTimeUs, (unsigned long long)newest->simEndTimeUs,
+					(unsigned long long)newest->renderSubmitStartTimeUs, (unsigned long long)newest->renderSubmitEndTimeUs,
+					(unsigned long long)newest->presentStartTimeUs, (unsigned long long)newest->presentEndTimeUs,
+					(unsigned long long)newest->driverStartTimeUs, (unsigned long long)newest->driverEndTimeUs,
+					(unsigned long long)newest->osRenderQueueStartTimeUs, (unsigned long long)newest->osRenderQueueEndTimeUs,
+					(unsigned long long)newest->gpuRenderStartTimeUs, (unsigned long long)newest->gpuRenderEndTimeUs );
+			}
+		}
+		ri.Cvar_Set( "r_latencyReport", va( "Reflex: %s (the driver gives no timings)", mode ) );
 		return;
 	}
+	waitStart = 0;
 	ri.Cvar_Set( "r_latencyReport", va( "PC Latency: %.1fms | GPU: %.1fms | Queue: %.1fms | Reflex: %s",
 		pc / n / 1000.0, gpu / n / 1000.0, queue / n / 1000.0, mode ) );
 }
