@@ -489,6 +489,7 @@ void RB_SetGL2D(void) {
 
 void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty) {
     int start, end;
+    float edge;
     vec4_t quadVerts[4];
     vec2_t texCoords[4];
 
@@ -527,10 +528,11 @@ RE_UploadCinematic(w, h, cols, rows, data, client, dirty);
     VectorSet4(quadVerts[2], x + w, y + h, 0.0f, 1.0f);
     VectorSet4(quadVerts[3], x, y + h, 0.0f, 1.0f);
 
-    VectorSet2(texCoords[0], 0.5f / cols, 0.5f / rows);
-    VectorSet2(texCoords[1], (cols - 0.5f) / cols, 0.5f / rows);
-    VectorSet2(texCoords[2], (cols - 0.5f) / cols, (rows - 0.5f) / rows);
-    VectorSet2(texCoords[3], 0.5f / cols, (rows - 0.5f) / rows);
+    edge = (cols == w && rows == h) ? 0.0f : 0.5f;
+    VectorSet2(texCoords[0], edge / cols, edge / rows);
+    VectorSet2(texCoords[1], (cols - edge) / cols, edge / rows);
+    VectorSet2(texCoords[2], (cols - edge) / cols, (rows - edge) / rows);
+    VectorSet2(texCoords[3], edge / cols, (rows - edge) / rows);
 
     GLSL_BindProgram(&tr.textureColorShader);
 

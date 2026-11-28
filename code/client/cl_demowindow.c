@@ -23,8 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 
 #define DW_ENV "IOQL_DEMOWINDOW"
-#define DW_MAX_W 1920
-#define DW_MAX_H 1200
+#define DW_MAX_W 3840
+#define DW_MAX_H 2400
 #define DW_RING 1024
 #define DW_HANDLE 15
 #define DW_STRIP 31.5f
@@ -194,8 +194,8 @@ static qboolean CL_DemoWindowLaunch(const char* name) {
                           NULL};
 
     CL_DemoWindowRect(&r);
-    w = MIN(r.w, DW_MAX_W) & ~1;
-    h = MIN((int)((float)w * r.h / r.w), DW_MAX_H) & ~1;
+    w = MIN(r.w, DW_MAX_W);
+    h = MIN((int)((float)w * r.h / r.w + 0.5f), DW_MAX_H);
     Com_sprintf(sw, sizeof(sw), "%i", w);
     Com_sprintf(sh, sizeof(sh), "%i", h);
     Com_sprintf(exe, sizeof(exe), "%s%c%s", Sys_BinaryPath(), PATH_SEP, Sys_BinaryName());

@@ -884,6 +884,7 @@ static void RB_SetGL2D( void ) {
 
 void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 	int			start, end;
+	float		edge;
 
 	if ( !tr.registered ) {
 		return;
@@ -904,7 +905,8 @@ RE_UploadCinematic( w, h, cols, rows, data, client, dirty );
 	}
 
 	tr.cinematicShader->stages[0]->bundle[0].image[0] = tr.scratchImage[client];
-	RE_StretchPic( x, y, w, h, 0.5f / cols, 0.5f / rows, 1.0f - 0.5f / cols, 1.0f - 0.5 / rows, tr.cinematicShader->index );
+	edge = ( cols == w && rows == h ) ? 0.0f : 0.5f;
+	RE_StretchPic( x, y, w, h, edge / cols, edge / rows, 1.0f - edge / cols, 1.0f - edge / rows, tr.cinematicShader->index );
 }
 
 void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
