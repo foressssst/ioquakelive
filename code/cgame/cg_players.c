@@ -771,6 +771,7 @@ static qboolean CG_BuildClientInfo(int clientNum, const char* configstring, clie
 
     Q_strncpyz(newInfo.clanName, Info_ValueForKey(configstring, "xcn"), sizeof(newInfo.clanName));
     Q_strncpyz(newInfo.country, Info_ValueForKey(configstring, "c"), sizeof(newInfo.country));
+    newInfo.ioql = atoi(Info_ValueForKey(configstring, "io")) != 0;
 
     CG_ColorFromString(Info_ValueForKey(configstring, "c1"), newInfo.color1);
     CG_ColorFromString(Info_ValueForKey(configstring, "c2"), newInfo.color2);

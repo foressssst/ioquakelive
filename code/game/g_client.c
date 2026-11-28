@@ -957,6 +957,9 @@ void ClientUserinfoChanged(int clientNum) {
                client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader,
                client->pers.ready ? 1 : 0, client->sess.privileges, client->sess.specOnly,
                client->sess.playQueue, (unsigned long long)client->pers.steamId, client->pers.country);
+        if (client->pers.ioqlClient) {
+            s = va("%s\\io\\1", s);
+        }
     }
 
     trap_SetConfigstring(CS_PLAYERS + clientNum, s);

@@ -2028,6 +2028,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
     cgs.media.voiceWindowShader = trap_R_RegisterShader("ui/assets/voiceWindow");
     cgs.media.scoreMutedShader = trap_R_RegisterShader("ui/assets/score/muted");
+    cgs.media.ioqlBadgeShader = trap_R_RegisterShaderNoMip("gfx/2d/ioql_verified");
     cgs.media.scoreSpeakingShader = trap_R_RegisterShader("ui/assets/score/speaking");
 
     cgs.media.bloodExplosionShader = cgs.media.bloodSprayShaders[0];
@@ -3083,6 +3084,23 @@ static qhandle_t CG_FeederItemPrefix(float feederID, int index, int column) {
     return 0;
 }
 
+static qhandle_t CG_FeederItemBadge(float feederID, int index, int column) {
+    int scoreIndex = 0;
+    int team = -1;
+    clientInfo_t* info;
+
+    if (column != 0 || feederID == FEEDER_REDTEAM_STATS || feederID == FEEDER_BLUETEAM_STATS) {
+        return 0;
+    }
+    if (feederID == FEEDER_REDTEAM_LIST) {
+        team = TEAM_RED;
+    } else if (feederID == FEEDER_BLUETEAM_LIST) {
+        team = TEAM_BLUE;
+    }
+    info = CG_InfoFromScoreIndex(index, team, &scoreIndex);
+    return (info && info->infoValid && info->ioql) ? cgs.media.ioqlBadgeShader : 0;
+}
+
 static void CG_FeederSelection(float feederID, int index) {
     itemDef_t* list;
     itemDef_t* other;
@@ -3235,6 +3253,7 @@ void CG_LoadHudMenu(void) {
     cgDC.feederCount = &CG_FeederCount;
     cgDC.feederItemImage = &CG_FeederItemImage;
     cgDC.feederItemPrefix = &CG_FeederItemPrefix;
+    cgDC.feederItemBadge = &CG_FeederItemBadge;
     cgDC.feederItemText = &CG_FeederItemText;
     cgDC.feederSelection = &CG_FeederSelection;
     cgDC.setBinding = &CG_DC_SetBinding;

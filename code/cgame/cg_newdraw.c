@@ -2513,6 +2513,9 @@ static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
     } else if (cgs.clientinfo[clientNum].modelIcon) {
         CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.clientinfo[clientNum].modelIcon);
     }
+    if (cgs.clientinfo[clientNum].ioql) {
+        CG_DrawPic(rect->x + rect->w * 0.6f, rect->y + rect->h * 0.6f, rect->w * 0.4f, rect->h * 0.4f, cgs.media.ioqlBadgeShader);
+    }
 }
 
 static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {

@@ -3745,6 +3745,13 @@ void Item_ListBox_Paint(itemDef_t* item) {
                                 }
                             }
                             DC->drawHandlePic(ox + (box - dw) * 0.5f, oy + (box - dh) * 0.5f, dw, dh, optionalImage);
+                            if (DC->feederItemBadge) {
+                                qhandle_t badge = DC->feederItemBadge(item->special, i, j);
+
+                                if (badge) {
+                                    DC->drawHandlePic(ox + box * 0.55f, oy + box * 0.55f, box * 0.5f, box * 0.5f, badge);
+                                }
+                            }
                         } else if (text) {
                             float tx = x + 4 + listPtr->columnInfo[j].pos;
                             qhandle_t prefix = DC->feederItemPrefix ? DC->feederItemPrefix(item->special, i, j) : 0;

@@ -382,6 +382,7 @@ typedef struct {
     char clanTag[MAX_QPATH];
     char clanName[MAX_QPATH];
     char country[MAX_QPATH];
+    qboolean ioql;
     team_t team;
     uint64_t steamId;
     qhandle_t avatar;
@@ -1315,6 +1316,7 @@ typedef struct {
     qhandle_t cmdLeftShader;
     qhandle_t voiceWindowShader;
     qhandle_t scoreMutedShader;
+    qhandle_t ioqlBadgeShader;
     qhandle_t scoreSpeakingShader;
 
     qhandle_t iceShardModel;

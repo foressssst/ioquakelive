@@ -362,6 +362,7 @@ typedef struct {
     const char* (*feederItemText)(float feederID, int index, int column, qhandle_t* handle);
     qhandle_t (*feederItemImage)(float feederID, int index);
     qhandle_t (*feederItemPrefix)(float feederID, int index, int column);
+    qhandle_t (*feederItemBadge)(float feederID, int index, int column);
     void (*feederSelection)(float feederID, int index);
     void (*keynumToStringBuf)(int keynum, char* buf, int buflen);
     void (*getBindingBuf)(int keynum, char* buf, int buflen);
