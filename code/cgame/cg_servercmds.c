@@ -624,7 +624,7 @@ static void CG_ParseWarmupInfo(void) {
         cg.warmupRound++;
     }
 
-    if (warmup > 0 && cg.warmup < 1 && !cg.demoPlayback) {
+    if (warmup > 0 && cg.warmup < 1 && !cg.demoPlayback && cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR) {
         trap_MatchAlert(qtrue);
     }
 
