@@ -5699,7 +5699,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		frag_spec_data.contrast = r_contrast->value;
 	} else {
 		frag_spec_data.overbright = (float)(1 << tr.overbrightBits);
-		frag_spec_data.contrast = 1.0f;
+		frag_spec_data.contrast = r_contrast->value;
 		if ( r_ignorehwgamma->integer ) {
 			frag_spec_data.gamma = 1.0f;
 		}
