@@ -85,8 +85,9 @@
 #define NAME_RUNES 96
 #define TEXT_INK 0.7f
 #define TEXT_INK_OUTFIT 0.42f
-#define COL_W 980.0f
-#define COL_X ((UI_W - COL_W) * 0.5f)
+#define COL_WIDE 980.0f
+#define COL_W colW
+#define COL_X colX
 #define IN_X (COL_X + 24.0f)
 #define LOGO_X 24.0f
 #define TOP_MID 32.0f
@@ -208,11 +209,11 @@
 #define TOAST_MAX 4
 #define TOAST_H 42.0f
 #define TOAST_LIFE 4.0f
-#define FR_W 340.0f
-#define FR_X (UI_W - 12.0f - FR_W)
-#define FR_Y (CTRL_Y + CTRL_H + 6.0f)
-#define FR_H (UI_H - 12.0f - FR_Y)
-#define FR_HEAD 52.0f
+#define FR_W 300.0f
+#define FR_X (UI_W - LOGO_X - FR_W)
+#define FR_Y cardTop
+#define FR_H (UI_H - FR_Y)
+#define FR_HEAD HEAD_H
 #define FR_ROW 50.0f
 #define FR_ROW_GAME 68.0f
 #define FR_SECTION 30.0f
@@ -223,7 +224,6 @@
 #define FR_SPOT_EVERY 45000
 #define FR_SAMPLE_ID 76561199990000000ull
 #define BOX_INVITES 16
-#define FR_ICON 17.0f
 
 #define STABLE_API "https://api.github.com/repos/foressssst/ioquakelive/releases/latest"
 #define BETA_API "https://api.github.com/repos/foressssst/ioquakelive/releases?per_page=1"
@@ -401,8 +401,6 @@ enum {
     BTN_HUB_DEMOS_ALL,
     BTN_HUB_ROW_0,
     BTN_HUB = BTN_HUB_ROW_0 + HUB_ROWS,
-    BTN_FRIENDS,
-    BTN_FR_CLOSE,
     BTN_FR_STEAM,
     BTN_FR_FOLD,
     BTN_FR_JOIN_0,
@@ -538,7 +536,7 @@ extern const unsigned char launcherFlags[];
 
 static SDL_Window* window;
 static SDL_Renderer* renderer;
-static image_t hero, heroSoft, shade, logo, iconMore, iconCheck, iconSlash, iconGear, iconSteam, iconDiscord, iconPeople;
+static image_t hero, heroSoft, shade, logo, iconMore, iconCheck, iconSlash, iconGear, iconSteam, iconDiscord, iconPlay;
 static float artX, artY, artMidX, artMidY, artGoalX, artGoalY;
 static float uiScale = 1.0f;
 static const float artBox[4] = {-12.0f, -26.0f, UI_W + 24.0f, UI_H + 24.0f};
@@ -631,6 +629,7 @@ static int stepDir, stepFrom;
 static float setupBodyEnd;
 static Uint64 stepStart;
 static float panelTop = PANEL_LOW;
+static float colW = COL_WIDE, colX = (UI_W - COL_WIDE) * 0.5f, cardTop = PANEL_LOW;
 static bool slideClip;
 static bool optsOpen, betaChannel, startMinimized, startupOn, autoTried, prefStartup, prefBeta, prefShortcut, checkPending;
 static float optsHeat;
@@ -774,7 +773,7 @@ static SDL_Thread* frSpotThread;
 static Uint64 frSpotWhen, frCardWant, frRowId[FR_ROWS];
 static bool frOpen, frFold = true, frSample, frForce, frCardInvite;
 static Uint64 frProbeUntil;
-static float frHeat, frListGoal, frListView, frListPull, frListMost;
+static float frListGoal, frListView, frListPull, frListMost;
 static bool Friends_Over(float x, float y);
 static bool Fr_IsFriend(const char* steamId);
 static bool Fr_CanInvite(void);
@@ -1705,48 +1704,6 @@ static void Icon_Gear(image_t* image, float size) {
     free(rgba);
 }
 
-static bool People_Front(float x, float y, float grow) {
-    float hx = x - 0.38f, hy = y - 0.33f, bx = (x - 0.38f) / (0.30f + grow), by = (y - 0.95f) / (0.33f + grow);
-
-    return hx * hx + hy * hy <= (0.16f + grow) * (0.16f + grow) || (bx * bx + by * by <= 1.0f && y <= 0.88f + grow);
-}
-
-static bool People_Back(float x, float y) {
-    float hx = x - 0.69f, hy = y - 0.29f, bx = (x - 0.70f) / 0.25f, by = (y - 0.86f) / 0.29f;
-
-    return hx * hx + hy * hy <= 0.13f * 0.13f || (bx * bx + by * by <= 1.0f && y <= 0.80f);
-}
-
-static void Icon_People(image_t* image, float size) {
-    int n = (int)(size * uiScale + 0.5f), x, y, sx, sy;
-    unsigned char* rgba = n > 0 ? malloc((size_t)n * n * 4) : NULL;
-
-    if (!rgba) {
-        return;
-    }
-    for (y = 0; y < n; y++) {
-        for (x = 0; x < n; x++) {
-            int hits = 0;
-
-            for (sy = 0; sy < 4; sy++) {
-                for (sx = 0; sx < 4; sx++) {
-                    float px = (x + (sx + 0.5f) * 0.25f) / (float)n, py = (y + (sy + 0.5f) * 0.25f) / (float)n;
-
-                    if (People_Front(px, py, 0.0f) || (People_Back(px, py) && !People_Front(px, py, 0.075f))) {
-                        hits++;
-                    }
-                }
-            }
-            rgba[(y * n + x) * 4 + 0] = 255;
-            rgba[(y * n + x) * 4 + 1] = 255;
-            rgba[(y * n + x) * 4 + 2] = 255;
-            rgba[(y * n + x) * 4 + 3] = (unsigned char)(hits * 255 / 16);
-        }
-    }
-    Image_Make(image, rgba, n, n, size);
-    free(rgba);
-}
-
 static void Icons_Load(void) {
     static const float more[6] = {0.2f, 0.64f, 0.5f, 0.36f, 0.8f, 0.64f};
     static const float check[6] = {0.2f, 0.52f, 0.42f, 0.74f, 0.8f, 0.3f};
@@ -1758,7 +1715,6 @@ static void Icons_Load(void) {
     Icon_Lines(&iconSlash, CLOSE_ICON, slash, 2, 0.05f);
     Icon_Lines(&iconPlay, CHECK_ICON, play, 4, 0.065f);
     Icon_Gear(&iconGear, GEAR_ICON);
-    Icon_People(&iconPeople, FR_ICON);
 }
 
 static void Draw_Color(Uint32 rgba) {
@@ -8006,7 +7962,7 @@ static void Button_Set(int index, float x, float y, float w, float h, bool visib
 static int Button_At(float x, float y) {
     int i;
 
-    for (i = Friends_Over(x, y) ? BTN_FR_CLOSE : 0; i < BTN_COUNT; i++) {
+    for (i = Friends_Over(x, y) ? BTN_FR_STEAM : 0; i < BTN_COUNT; i++) {
         const button_t* b = &buttons[i];
 
         if (b->visible && x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h) {
@@ -8244,26 +8200,19 @@ static void Draw_Top(void) {
     Draw_Caps(FONT_BRAND, LOGO_X + LOGO + 14.0f, TOP_MID, COL_WHITE, install.active ? "ioquakelive installer" : "ioquakelive", TRACK_CAPS);
     Draw_Nav();
 
-    Button_Set(BTN_FRIENDS, UI_W - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
-    Button_Set(BTN_DISCORD, UI_W - CTRL_W * 4.0f, CTRL_Y, CTRL_W, CTRL_H, true);
-    Button_Set(BTN_OPTS, UI_W - CTRL_W * 3.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
+    Button_Set(BTN_DISCORD, UI_W - CTRL_W * 5.0f, CTRL_Y, CTRL_W, CTRL_H, true);
+    Button_Set(BTN_OPTS, UI_W - CTRL_W * 4.0f, CTRL_Y, CTRL_W, CTRL_H, gameFound && !install.active && setup.step == STEP_NONE);
+    Button_Set(BTN_LANG, UI_W - CTRL_W * 3.0f, CTRL_Y, CTRL_W, CTRL_H, langFlags[lang].tex != NULL);
     Button_Set(BTN_MIN, UI_W - CTRL_W * 2.0f, CTRL_Y, CTRL_W, CTRL_H, true);
     Button_Set(BTN_CLOSE, UI_W - CTRL_W, CTRL_Y, CTRL_W, CTRL_H, true);
-    for (i = BTN_DISCORD - 1; i <= BTN_CLOSE; i++) {
-        int index = i < BTN_DISCORD ? BTN_FRIENDS : i;
-        float lit = (index == BTN_OPTS && optsOpen) || (index == BTN_FRIENDS && frOpen) ? 1.0f : heat[index];
+    for (i = BTN_DISCORD; i <= BTN_CLOSE; i++) {
+        float lit = (i == BTN_OPTS && optsOpen) || (i == BTN_LANG && langOpen) ? 1.0f : heat[i];
 
-        if (lit <= 0.0f || !buttons[index].visible) {
+        if (lit <= 0.0f || !buttons[i].visible) {
             continue;
         }
-        b = &buttons[index];
+        b = &buttons[i];
         Draw_Round(b->x, b->y, b->w, b->h, ITEM_R, Col_Alpha(COL_HUSH, lit));
-    }
-    b = &buttons[BTN_FRIENDS];
-    if (b->visible) {
-        float ix = b->x + (b->w - FR_ICON) * 0.5f, iy = b->y + (b->h - FR_ICON) * 0.5f;
-
-        Draw_Icon(&iconPeople, ix, iy, FR_ICON, COL_WHITE);
     }
     b = &buttons[BTN_DISCORD];
     if (b->visible) {
@@ -11154,6 +11103,7 @@ static void Hub_Draw(void) {
 
     hubHitCount = 0;
     hubLive = false;
+    cardTop = PANEL_Y;
     if (k <= 0.4f || !hubFonts) {
         waveView = -1;
         return;
@@ -11161,6 +11111,7 @@ static void Hub_Draw(void) {
     e = (k - 0.4f) / 0.6f;
     e = 1.0f - (1.0f - e) * (1.0f - e) * (1.0f - e) * (1.0f - e);
     rise = (1.0f - e) * (PANEL_Y - HUB_Y);
+    cardTop = HUB_Y + rise;
     end = PANEL_END - rise;
     hubLive = k >= 1.0f && hubOpen && !boxOpen && !optsOpen && !langOpen && !leaving;
     shown = 1.0f - (1.0f - hubSwap) * (1.0f - hubSwap);
@@ -11552,7 +11503,7 @@ static void Draw_Toasts(void) {
         v = SDL_clamp(SDL_min(t / 0.3f, (TOAST_LIFE - t) / 0.35f), 0.0f, 1.0f);
         e = 1.0f - (1.0f - v) * (1.0f - v) * (1.0f - v);
         w = Text_Width(FONT_BODY, toasts[i].text, -1) + 44.0f;
-        x = (UI_W - w) * 0.5f;
+        x = COL_X + (COL_W - w) * 0.5f;
         y = toasts[i].y - (1.0f - e) * 24.0f;
         slideFade = e;
         Draw_Round(x, y + 4.0f, w, TOAST_H, TOAST_H * 0.5f, Col_Alpha(COL_BLACK, 0.35f));
@@ -11766,7 +11717,6 @@ static void Fr_Join(Uint64 id) {
         return;
     }
     SDL_strlcpy(joinNow, frList[fi].connect, sizeof(joinNow));
-    frOpen = false;
 }
 
 static const server_t* Fr_Server(const char* addr) {
@@ -11958,15 +11908,6 @@ static void Fr_InviteFailed(Uint64 id) {
         }
     }
     Toast(T(TXT_INVITE_FAILED));
-}
-
-static void Fr_Close(float x, float y) {
-    Button_Set(BTN_FR_CLOSE, x, y, 32.0f, 32.0f, frOpen);
-    if (heat[BTN_FR_CLOSE] > 0.0f) {
-        Draw_Round(x, y, 32.0f, 32.0f, ITEM_R, Col_Alpha(COL_HUSH, heat[BTN_FR_CLOSE]));
-    }
-    Draw_Spin(&iconSlash, x + (32.0f - CLOSE_ICON) * 0.5f, y + (32.0f - CLOSE_ICON) * 0.5f, 0.0f, COL_W85);
-    Draw_Spin(&iconSlash, x + (32.0f - CLOSE_ICON) * 0.5f, y + (32.0f - CLOSE_ICON) * 0.5f, 90.0f, COL_W85);
 }
 
 static void Fr_Face(int index, float x, float y, float size, float radius) {
@@ -12170,14 +12111,13 @@ static void Fr_Clip(float x, float y, float w, float h) {
 
 static void Friends_Head(float px, float py) {
     char line[48];
-    float cx = px + FR_W - 10.0f - 32.0f, mid = py + FR_HEAD * 0.5f;
+    float right = px + FR_W - 20.0f, mid = py + FR_HEAD * 0.5f;
 
     Draw_Caps(FONT_PANEL, px + 20.0f, mid, COL_WHITE, T(TXT_FR_TITLE), TRACK_HEAD);
     if (Fr_Notice() < 0) {
         SDL_snprintf(line, sizeof(line), T(TXT_FR_ONLINE), frOnline);
-        Draw_Text(FONT_SV_OF, cx - 6.0f - Text_Width(FONT_SV_OF, line, -1), Text_Mid(FONT_SV_OF, mid), COL_W70, line, -1);
+        Draw_Text(FONT_SV_OF, right - Text_Width(FONT_SV_OF, line, -1), Text_Mid(FONT_SV_OF, mid), COL_W70, line, -1);
     }
-    Fr_Close(cx, py + (FR_HEAD - 32.0f) * 0.5f);
 }
 
 static void Friends_List(float px, float py) {
@@ -12246,21 +12186,14 @@ static void Friends_List(float px, float py) {
 }
 
 static void Friends_Draw(void) {
-    float open = frHeat * frHeat * (3.0f - 2.0f * frHeat), px = FR_X + (1.0f - open) * 24.0f, py = FR_Y, keep = slideFade;
+    float px = FR_X, py = FR_Y, keep = slideFade;
 
-    if (!buttons[BTN_FRIENDS].visible) {
-        frOpen = false;
-    }
-    if (open <= 0.0f) {
+    if (!frOpen) {
         return;
     }
-    Button_Set(BTN_FR_PANEL, FR_X, FR_Y, FR_W, FR_H, frOpen);
-    slideFade = open;
-    Draw_Shadow(px, py, FR_W, FR_H, BOX_R, 1.0f);
-    Draw_Round(px - 1.0f, py - 1.0f, FR_W + 2.0f, FR_H + 2.0f, BOX_R + 1.0f, COL_RING);
-    Draw_Round(px, py, FR_W, FR_H, BOX_R, COL_P1);
-    Draw_Round(px, py, FR_W, FR_HEAD + BOX_R * 2.0f, BOX_R, COL_P3);
-    Draw_Rect(px, py + FR_HEAD, FR_W, BOX_R * 2.0f, COL_P1);
+    Button_Set(BTN_FR_PANEL, FR_X, FR_Y, FR_W, FR_H, true);
+    slideFade = hubFonts ? SDL_clamp(1.0f - hubHeat / 0.4f, 0.0f, 1.0f) : 1.0f;
+    Draw_Sheet(px, py, FR_W, FR_H, COL_P1);
     Friends_Head(px, py);
     Friends_List(px, py);
     slideFade = keep;
@@ -12286,14 +12219,15 @@ static void Fr_TakeAvatar(steamAvatar_t* a) {
 
 static void Friends_Poll(void) {
     steamAvatar_t a;
-    bool can = gameFound && !install.active && setup.step == STEP_NONE, ok;
+    bool can = gameFound && !install.active && setup.step == STEP_NONE, ok, side;
     char addr[64];
     Uint64 to;
     int version;
 
-    if (!can) {
-        frOpen = false;
-    }
+    side = can && (hubHeat <= 0.4f || !hubFonts);
+    frOpen = side;
+    colW = side ? FR_X - 12.0f - LOGO_X : COL_WIDE;
+    colX = side ? LOGO_X : (UI_W - COL_WIDE) * 0.5f;
     if (frSample) {
         return;
     }
@@ -12310,7 +12244,6 @@ static void Friends_Poll(void) {
     while (SteamF_PopJoin(addr, sizeof(addr))) {
         if (can && Fr_Addr(addr) && Play_Ready()) {
             SDL_strlcpy(joinNow, addr, sizeof(joinNow));
-            frOpen = false;
         }
     }
     while (SteamF_PopInvite(&to, &ok)) {
@@ -12322,11 +12255,7 @@ static void Friends_Poll(void) {
 }
 
 static void Friends_Press(int index) {
-    if (index == BTN_FRIENDS) {
-        frOpen = !frOpen;
-    } else if (index == BTN_FR_CLOSE) {
-        frOpen = false;
-    } else if (index == BTN_FR_FOLD) {
+    if (index == BTN_FR_FOLD) {
         frFold = !frFold;
     } else if (index == BTN_FR_STEAM) {
         SDL_OpenURL("steam://open/main");
@@ -12347,19 +12276,20 @@ static bool Friends_Wheel(float x, float y, float amount) {
 }
 
 static bool Friends_Key(SDL_Keycode key) {
-    float page = FR_H - 160.0f;
+    float page = FR_H - 160.0f, mx = 0.0f, my = 0.0f;
 
-    if (!frOpen || boxOpen) {
+    SDL_GetMouseState(&mx, &my);
+    if (!frOpen || boxOpen || !Friends_Over(mx / uiScale, my / uiScale)) {
         return false;
     }
-    if (key == SDLK_ESCAPE) {
-        frOpen = false;
-    } else if (key == SDLK_UP || key == SDLK_DOWN) {
+    if (key == SDLK_UP || key == SDLK_DOWN) {
         frListGoal = Scroll_Edge(frListGoal + (key == SDLK_DOWN ? FR_ROW : -FR_ROW), frListMost, &frListPull);
     } else if (key == SDLK_PAGEUP || key == SDLK_PAGEDOWN) {
         frListGoal = Scroll_Edge(frListGoal + (key == SDLK_PAGEDOWN ? page : -page), frListMost, &frListPull);
     } else if (key == SDLK_HOME || key == SDLK_END) {
         frListGoal = key == SDLK_HOME ? 0.0f : frListMost;
+    } else {
+        return false;
     }
     return true;
 }
@@ -12522,7 +12452,7 @@ static void Draw_Frame(void) {
     if (boxOpen) {
         Buttons_Hide(BTN_PLAY, BTN_OPTS);
         Buttons_Hide(BTN_MENU_0, BTN_SIDE_LAST);
-        Buttons_Hide(BTN_FRIENDS, BTN_FR_PANEL);
+        Buttons_Hide(BTN_FR_STEAM, BTN_FR_PANEL);
     }
     Draw_Box();
     Draw_Flashes();
@@ -12601,7 +12531,7 @@ static bool Hub_Update(float dt) {
 }
 
 static bool Friends_Update(float dt) {
-    bool moving = Ease(&frHeat, frOpen ? 1.0f : 0.0f, dt * 7.0f);
+    bool moving = false;
     float d;
     int i;
 
@@ -12878,7 +12808,7 @@ static bool Button_Press(int index) {
         Hub_Press(index);
         return false;
     }
-    if (index >= BTN_FRIENDS && index <= BTN_FR_PANEL) {
+    if (index >= BTN_FR_STEAM && index <= BTN_FR_PANEL) {
         Friends_Press(index);
         return false;
     }
@@ -13459,9 +13389,6 @@ int main(int argc, char** argv) {
                         int hit = Button_At(mx, my);
                         bool boxWas = boxOpen, hubWas = hubOpen;
 
-                        if (frOpen && !boxOpen && !Friends_Over(mx, my) && hit != BTN_FRIENDS) {
-                            frOpen = false;
-                        }
                         if (hit >= 0 && hit != BTN_VEIL && buttons[hit].w * buttons[hit].h < 200000.0f) {
                             pressAt[hit] = Anim_Now();
                         } else if (hit < 0 && Play_Refused(mx, my)) {
@@ -13619,7 +13546,6 @@ int main(int argc, char** argv) {
             }
             boxHeat = boxOpen ? 1.0f : 0.0f;
             boxView = boxGoal;
-            frHeat = frOpen ? 1.0f : 0.0f;
             frListView = frListGoal;
 #ifdef LAUNCHER_SHOT
             option = SDL_getenv("LAUNCHER_AMIGOS_Y");
