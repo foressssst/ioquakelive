@@ -11,6 +11,7 @@
 #include "../renderercommon/vulkan/vulkan_core.h"
 #include "launcher_steam.h"
 #include "launcher_art.h"
+#include "launcher_locales.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -126,6 +127,9 @@
 #define OPTS_X (UI_W - 12.0f - OPTS_W)
 #define OPTS_Y (CTRL_Y + CTRL_H + 6.0f)
 #define OPTS_H (OPTS_ROW * OPTS_ROWS + MENU_PAD * 2.0f + OPTS_GAP)
+#define LANG_W 196.0f
+#define LANG_X (UI_W - 12.0f - LANG_W)
+#define LANG_H (OPTS_ROW * LANG_COUNT + MENU_PAD * 2.0f)
 #define GEAR_ICON 16.0f
 #define SRV_MAX 40
 #define SRV_SLOTS 12
@@ -350,6 +354,7 @@ enum {
 enum { FACE_TEXT, FACE_BOLD, FACE_DISPLAY, FACE_REGULAR, FACE_MEDIUM, FACE_STRONG, FACE_COUNT };
 enum { LINE_BLANK, LINE_HEAD, LINE_BULLET, LINE_TEXT };
 enum { VULKAN_PROBING, VULKAN_USABLE, VULKAN_MISSING };
+enum { LANG_EN, LANG_ES, LANG_COUNT };
 enum {
     BTN_PLAY,
     BTN_UPDATE,
@@ -362,6 +367,7 @@ enum {
     BTN_OPT_C,
     BTN_ME,
     BTN_DISCORD,
+    BTN_LANG,
     BTN_OPTS,
     BTN_MIN,
     BTN_CLOSE,
@@ -369,6 +375,8 @@ enum {
     BTN_NAV_LAST = BTN_NAV_0 + NAV_ITEMS - 1,
     BTN_MENU_0,
     BTN_MENU_LAST = BTN_MENU_0 + OPTS_ROWS - 1,
+    BTN_LANG_0,
+    BTN_LANG_LAST = BTN_LANG_0 + LANG_COUNT - 1,
     BTN_SIDE_0,
     BTN_SIDE_LAST = BTN_SIDE_0 + SIDE_ROWS - 1,
     BTN_PLR_0,
@@ -409,271 +417,12 @@ enum { JOB_SCAN, JOB_FILES, JOB_SETTINGS, JOB_DEMOS, JOB_INSTALL, JOB_UPDATE, JO
 enum { RUN_IDLE, RUN_BUSY, RUN_OK, RUN_FAIL };
 enum { FAIL_NONE, FAIL_FOLDER, FAIL_NET, FAIL_FILE, FAIL_BUSY };
 enum { PHASE_DOWNLOAD, PHASE_INSTALL };
+#define X(id) id,
 enum {
-    TXT_PLAY,
-    TXT_UPTODATE,
-    TXT_CHECKING,
-    TXT_CHECK_FAILED,
-    TXT_PATCH_OUT,
-    TXT_DOWNLOADING,
-    TXT_INSTALLING,
-    TXT_WHATS_NEW,
-    TXT_INSTALL_TITLE,
-    TXT_INSTALL_WHERE,
-    TXT_CHANGE_FOLDER,
-    TXT_SHORTCUT,
-    TXT_GUIDE_GET,
-    TXT_GUIDE_GET_DETAIL,
-    TXT_GUIDE_FIND,
-    TXT_GUIDE_FIND_DETAIL,
-    TXT_GUIDE_BRING,
-    TXT_GUIDE_BRING_DETAIL,
-    TXT_GUIDE_PLAY,
-    TXT_GUIDE_PLAY_DETAIL,
-    TXT_PAK_EXAMPLE,
-    TXT_PAK_STEAM,
-    TXT_FROM_FILE,
-    TXT_ADOPT,
-    TXT_FAIL_FOLDER,
-    TXT_FAIL_NET,
-    TXT_FAIL_FILE,
-    TXT_FAIL_BUSY,
-    TXT_PLAY_STEAM,
-    TXT_STEAM_OPENING,
-    TXT_NO_VULKAN,
-    TXT_TITLE_FILES,
-    TXT_TITLE_SETTINGS,
-    TXT_TITLE_DEMOS,
-    TXT_TITLE_PREFS,
-    TXT_SCANNING,
-    TXT_FILES_FOUND,
-    TXT_NO_SPACE,
-    TXT_FILES_SAFE,
-    TXT_PAK_COPY,
-    TXT_INSTALL,
-    TXT_CHOOSE_OTHER,
-    TXT_FILES_MISSING,
-    TXT_FILES_HOW,
-    TXT_FIND_PAK,
-    TXT_SEARCH_AGAIN,
-    TXT_WRONG_FILE,
-    TXT_PAK_FAILED,
-    TXT_SETTINGS_INTRO,
-    TXT_CONFIG,
-    TXT_HUD,
-    TXT_FILE_ONE,
-    TXT_FILE_MANY,
-    TXT_UNCHANGED,
-    TXT_FILES_FAILED,
-    TXT_IMPORT,
-    TXT_SKIP,
-    TXT_NEXT,
-    TXT_FINISH,
-    TXT_NO_SETTINGS,
-    TXT_DEMO_ONE,
-    TXT_DEMO_MANY,
-    TXT_DEMOS_COPY,
-    TXT_DEMOS_FAILED,
-    TXT_NO_DEMOS,
-    TXT_WORKING,
-    TXT_BACK,
-    TXT_PREFS_INTRO,
-    TXT_STARTUP,
-    TXT_BETA,
-    TXT_OPEN_FOLDER,
-    TXT_RUN_SETUP,
-    TXT_REPAIR,
-    TXT_CHECK_NOW,
-    TXT_SERVERS_SIDE,
-    TXT_SEE_ALL,
-    TXT_SERVERS_TITLE,
-    TXT_SERVERS_LOADING,
-    TXT_SERVERS_FAILED,
-    TXT_COL_SERVER,
-    TXT_COL_MODE,
-    TXT_COL_PLAYERS,
-    TXT_OF,
-    TXT_STATE_PLAYING,
-    TXT_STATE_WARMUP,
-    TXT_STATE_COUNTDOWN,
-    TXT_STATE_PREGAME,
-    TXT_STATE_WAITING,
-    TXT_RED_TEAM,
-    TXT_BLUE_TEAM,
-    TXT_SPECTATORS,
-    TXT_NOBODY,
-    TXT_JOIN,
-    TXT_SEE_SERVER,
-    TXT_CLOSE,
-    TXT_TRAY_OPEN,
-    TXT_TRAY_QUIT,
-    TXT_PRO_MISSING,
-    TXT_PRO_FAILED,
-    TXT_HUB_PROFILE,
-    TXT_HUB_MATCHES,
-    TXT_HUB_RANKING,
-    TXT_HUB_SERVERS,
-    TXT_NAV_HOME,
-    TXT_NAV_MATCHES,
-    TXT_DEMOS,
-    TXT_DEMOS_OF,
-    TXT_DEMO_ALL,
-    TXT_DEMO_MINE,
-    TXT_DEMO_WATCH,
-    TXT_DEMO_GET,
-    TXT_DEMO_FAILED,
-    TXT_TOAST_DEMO_FAIL,
-    TXT_TOAST_DEMO_OK,
-    TXT_TOAST_START,
-    TXT_DEMO_BY,
-    TXT_DEMO_RESULT,
-    TXT_DEMO_TIME,
-    TXT_DEMO_SIZE,
-    TXT_DEMO_LOOKING,
-    TXT_DEMO_NO_RESULT,
-    TXT_DEMO_TODAY,
-    TXT_DEMO_YESTERDAY,
-    TXT_DEMO_EMPTY,
-    TXT_DEMO_EMPTY_MODE,
-    TXT_HUB_SITE,
-    TXT_HUB_SINCE,
-    TXT_HUB_ABOUT,
-    TXT_HUB_SEASON,
-    TXT_HUB_STATS,
-    TXT_HUB_TIER,
-    TXT_HUB_ELO,
-    TXT_HUB_CALIBRATING,
-    TXT_HUB_INACTIVE,
-    TXT_HUB_BANNED,
-    TXT_HUB_GLOBAL,
-    TXT_HUB_PLAYERS,
-    TXT_HUB_PLAYERS_IN,
-    TXT_HUB_FEWER,
-    TXT_HUB_DIDNT,
-    TXT_HUB_UNRANKED,
-    TXT_HUB_TO_ENTER,
-    TXT_HUB_COME_BACK,
-    TXT_HUB_RECORD,
-    TXT_HUB_WINRATE,
-    TXT_HUB_KD,
-    TXT_HUB_FRAGS,
-    TXT_HUB_CLUTCH,
-    TXT_HUB_CLUTCH_SOON,
-    TXT_HUB_CLUTCH_OF,
-    TXT_HUB_FAV,
-    TXT_HUB_FAV_NONE,
-    TXT_HUB_HISTORY,
-    TXT_HUB_HISTORY_S1,
-    TXT_HUB_HISTORY_FEW,
-    TXT_HUB_ELO_AT,
-    TXT_HUB_UP,
-    TXT_HUB_DOWN,
-    TXT_HUB_ACCURACY,
-    TXT_HUB_ACC,
-    TXT_HUB_NO_WEAPONS_IN,
-    TXT_HUB_NO_WEAPONS,
-    TXT_HUB_MEDALS,
-    TXT_HUB_NO_MEDALS_IN,
-    TXT_HUB_NO_MEDALS,
-    TXT_HUB_RECENT,
-    TXT_HUB_SEE_ALL,
-    TXT_HUB_COL_SERVER,
-    TXT_HUB_COL_VS,
-    TXT_HUB_COL_FRAGS,
-    TXT_HUB_COL_ELO,
-    TXT_HUB_COL_DATE,
-    TXT_HUB_GAME_FRAGS,
-    TXT_HUB_NO_GAMES_IN,
-    TXT_HUB_NO_GAMES,
-    TXT_HUB_GAMES_OF,
-    TXT_HUB_ALL,
-    TXT_HUB_COUNT_ALL,
-    TXT_HUB_COUNT_ALL_ONE,
-    TXT_HUB_COUNT_MODE,
-    TXT_HUB_COUNT_MODE_ONE,
-    TXT_HUB_NONE_YET,
-    TXT_HUB_EMPTY_ALL,
-    TXT_HUB_EMPTY_MODE,
-    TXT_HUB_PREV,
-    TXT_HUB_NEXT,
-    TXT_HUB_PAGE,
-    TXT_HUB_COL_RANK,
-    TXT_HUB_COL_PLAYER,
-    TXT_HUB_COL_GAMES,
-    TXT_HUB_COL_WINS,
-    TXT_HUB_COL_LAST,
-    TXT_HUB_COL_KD,
-    TXT_HUB_RANK_EMPTY,
-    TXT_HUB_BACK,
-    TXT_HUB_NOT_RATED,
-    TXT_HUB_WHY_ABORTED,
-    TXT_HUB_WHY_FEW,
-    TXT_HUB_WHY_SHORT,
-    TXT_HUB_WHY_RATED,
-    TXT_HUB_SUMMARY,
-    TXT_HUB_WEAPONS,
-    TXT_HUB_FLAGS,
-    TXT_HUB_RED,
-    TXT_HUB_BLUE,
-    TXT_HUB_WON,
-    TXT_HUB_LOST,
-    TXT_HUB_TIE,
-    TXT_HUB_WINNER,
-    TXT_HUB_COL_SCORE,
-    TXT_HUB_COL_PERF,
-    TXT_HUB_COL_DEATHS,
-    TXT_HUB_COL_DAMAGE,
-    TXT_HUB_COL_ACC,
-    TXT_HUB_COL_DIFF,
-    TXT_HUB_W_RL,
-    TXT_HUB_W_LG,
-    TXT_HUB_W_RG,
-    TXT_HUB_W_SG,
-    TXT_HUB_W_MG,
-    TXT_HUB_UNUSED,
-    TXT_HUB_HITS,
-    TXT_HUB_NO_MATCH_MEDALS,
-    TXT_HUB_CAPTURED,
-    TXT_HUB_RETURNED,
-    TXT_HUB_TOOK,
-    TXT_HUB_DROPPED,
-    TXT_HUB_CARRIER,
-    TXT_HUB_LOADING,
-    TXT_HUB_FAILED,
-    TXT_FR_TITLE,
-    TXT_FR_ONLINE,
-    TXT_FR_SEC_QL,
-    TXT_FR_SEC_ONLINE,
-    TXT_FR_SEC_OFFLINE,
-    TXT_FR_MATCH,
-    TXT_FR_MATCH_MAP,
-    TXT_FR_MODE_MAP,
-    TXT_FR_IN_MATCH,
-    TXT_FR_JOINING,
-    TXT_FR_DEMO,
-    TXT_FR_MENU,
-    TXT_FR_LAUNCHER,
-    TXT_FR_QL,
-    TXT_FR_OTHER,
-    TXT_FR_AVAILABLE,
-    TXT_FR_AWAY,
-    TXT_FR_BUSY,
-    TXT_FR_OFFLINE,
-    TXT_FR_MINUTES,
-    TXT_FR_HOURS,
-    TXT_FR_JOIN,
-    TXT_INVITE,
-    TXT_INVITED,
-    TXT_INVITE_NONE,
-    TXT_INVITE_FAILED,
-    TXT_FR_STEAM_CLOSED,
-    TXT_FR_OPEN_STEAM,
-    TXT_FR_CONNECTING,
-    TXT_FR_STEAM_FAILED,
-    TXT_FR_NO_STEAM,
-    TXT_FR_NONE,
+#include "launcher_text_ids.h"
     TXT_COUNT
 };
+#undef X
 
 typedef struct {
     int ax, ay, w, h, ox, oy;
@@ -1034,274 +783,18 @@ static float Box_Invite(float x, float y, float w, bool draw);
 static float Box_Friends(float x, float y, float w, bool draw);
 static void Fr_Enrich(void);
 
-static const char* const texts[TXT_COUNT] = {
-    [TXT_PLAY] = "Jugar",
-    [TXT_UPTODATE] = "Última versión",
-    [TXT_CHECKING] = "Buscando actualizaciones...",
-    [TXT_CHECK_FAILED] = "No se pudieron buscar actualizaciones",
-    [TXT_PATCH_OUT] = "Actualizar a la %s",
-    [TXT_DOWNLOADING] = "Descargando: %d%%",
-    [TXT_INSTALLING] = "Instalando...",
-    [TXT_WHATS_NEW] = "Novedades de la versión %s",
-    [TXT_INSTALL_TITLE] = "Bienvenido a ioquakelive",
-    [TXT_INSTALL_WHERE] = "El juego se instalará aquí:",
-    [TXT_CHANGE_FOLDER] = "Cambiar carpeta",
-    [TXT_SHORTCUT] = "Crear un acceso directo en el escritorio",
-    [TXT_GUIDE_GET] = "Instalación",
-    [TXT_GUIDE_GET_DETAIL] = "La última versión, en pocos minutos.",
-    [TXT_GUIDE_FIND] = "Archivos del juego",
-    [TXT_GUIDE_FIND_DETAIL] = "Los de tu Quake Live de Steam, sin modificarlos.",
-    [TXT_GUIDE_BRING] = "Configuración, HUD y demos",
-    [TXT_GUIDE_BRING_DETAIL] = "Trae lo tuyo de Quake Live, si quieres.",
-    [TXT_GUIDE_PLAY] = "Opciones adicionales",
-    [TXT_GUIDE_PLAY_DETAIL] = "Y listo para jugar.",
-    [TXT_PAK_EXAMPLE] = "Normalmente está en esta carpeta:",
-    [TXT_PAK_STEAM] = "En Steam: clic derecho en Quake Live, Administrar y Explorar archivos locales.",
-    [TXT_FROM_FILE] = "ioquakelive se instalará desde el archivo ZIP ubicado junto al launcher.",
-    [TXT_ADOPT] = "Se detectó una instalación de ioquakelive. Solo se agregará el launcher.",
-    [TXT_FAIL_FOLDER] = "No se puede utilizar esta carpeta. Elige otra.",
-    [TXT_FAIL_NET] = "La descarga falló. Comprueba tu conexión a internet e inténtalo de nuevo.",
-    [TXT_FAIL_FILE] = "No se pudieron instalar los archivos. Comprueba que haya suficiente espacio en disco.",
-    [TXT_FAIL_BUSY] = "Cierra ioquakelive e inténtalo de nuevo.",
-    [TXT_PLAY_STEAM] = "Abrir Steam y jugar",
-    [TXT_STEAM_OPENING] = "Abriendo Steam...",
-    [TXT_NO_VULKAN] = "Tu equipo no es compatible con Vulkan, así que por ahora jugarás con OpenGL. Actualizar los drivers de tu tarjeta de video puede solucionarlo.",
-    [TXT_TITLE_FILES] = "Archivos del juego",
-    [TXT_TITLE_SETTINGS] = "Configuración y HUD",
-    [TXT_TITLE_DEMOS] = "Demos",
-    [TXT_SCANNING] = "Buscando Quake Live...",
-    [TXT_FILES_FOUND] = "Necesitarás los archivos de tu Quake Live original.\nSe detectó tu instalación aquí:",
-    [TXT_NO_SPACE] = "No ocupará espacio adicional en el disco.",
-    [TXT_FILES_SAFE] = "No se modificará tu instalación de Steam ni ocupará espacio adicional.",
-    [TXT_PAK_COPY] = "Se copiará pak00.pk3 (917 MB). Tu instalación de Steam no se modificará.",
-    [TXT_INSTALL] = "Instalar",
-    [TXT_CHOOSE_OTHER] = "Buscar manualmente",
-    [TXT_FILES_MISSING] = "Necesitarás los archivos de tu Quake Live original de Steam, pero la detección automática "
-                          "no lo encontró en este equipo.",
-    [TXT_FILES_HOW] = "Si ya lo tienes instalado, pulsa Buscar manualmente y elige el archivo pak00.pk3 de la carpeta "
-                      "baseq3. Si todavía no lo tienes, instálalo desde tu biblioteca de Steam y luego pulsa Buscar de nuevo.",
-    [TXT_FIND_PAK] = "Buscar manualmente",
-    [TXT_SEARCH_AGAIN] = "Buscar de nuevo",
-    [TXT_WRONG_FILE] = "El archivo seleccionado no corresponde al pak00.pk3 de Quake Live.",
-    [TXT_PAK_FAILED] = "No se pudo instalar pak00.pk3. Comprueba que haya suficiente espacio en disco.",
-    [TXT_SETTINGS_INTRO] = "Importa tu configuración y HUD de Quake Live.",
-    [TXT_CONFIG] = "Configuración",
-    [TXT_HUD] = "HUD",
-    [TXT_FILE_ONE] = "%d archivo",
-    [TXT_FILE_MANY] = "%d archivos",
-    [TXT_UNCHANGED] = "Tu instalación original de Quake Live no se modificará.",
-    [TXT_FILES_FAILED] = "No se pudieron copiar algunos archivos.",
-    [TXT_IMPORT] = "Importar",
-    [TXT_SKIP] = "Omitir",
-    [TXT_NEXT] = "Siguiente",
-    [TXT_FINISH] = "Terminar",
-    [TXT_NO_SETTINGS] = "No se encontró ninguna configuración ni HUD en tu instalación de Quake Live.",
-    [TXT_DEMO_ONE] = "Se encontró %d demo en tu instalación de Quake Live (%s).",
-    [TXT_DEMO_MANY] = "Se encontraron %d demos en tu instalación de Quake Live (%s).",
-    [TXT_DEMOS_COPY] = "Se copiarán a ioquakelive.",
-    [TXT_DEMOS_FAILED] = "No se pudieron copiar algunas demos.",
-    [TXT_NO_DEMOS] = "No se encontraron demos en tu instalación de Quake Live.",
-    [TXT_WORKING] = "Copiando: %d%%",
-    [TXT_BACK] = "Atrás",
-    [TXT_TITLE_PREFS] = "Opciones adicionales",
-    [TXT_PREFS_INTRO] = "Si el launcher se abre al iniciar el equipo, mantiene ioquakelive actualizado sin que hagas nada. Las "
-                        "versiones experimentales traen lo nuevo antes, pero aún están en prueba. Puedes cambiar esto desde el "
-                        "menú del launcher.",
-    [TXT_STARTUP] = "Abrir al iniciar el equipo",
-    [TXT_BETA] = "Versiones experimentales",
-    [TXT_OPEN_FOLDER] = "Abrir la carpeta del juego",
-    [TXT_RUN_SETUP] = "Configuración inicial",
-    [TXT_REPAIR] = "Reparar la instalación",
-    [TXT_CHECK_NOW] = "Buscar actualizaciones",
-    [TXT_SERVERS_SIDE] = "Servidores",
-    [TXT_SEE_ALL] = "Ver todos",
-    [TXT_SERVERS_TITLE] = "Servidores de Quake Club",
-    [TXT_SERVERS_LOADING] = "Cargando servidores...",
-    [TXT_SERVERS_FAILED] = "No se pudo cargar la lista de servidores.",
-    [TXT_COL_SERVER] = "Servidor",
-    [TXT_COL_MODE] = "Modo y mapa",
-    [TXT_COL_PLAYERS] = "Jugadores",
-    [TXT_OF] = "de",
-    [TXT_STATE_PLAYING] = "En juego",
-    [TXT_STATE_WARMUP] = "Calentamiento",
-    [TXT_STATE_COUNTDOWN] = "Cuenta atrás",
-    [TXT_STATE_PREGAME] = "Previa",
-    [TXT_STATE_WAITING] = "Esperando",
-    [TXT_RED_TEAM] = "Red Team",
-    [TXT_BLUE_TEAM] = "Blue Team",
-    [TXT_SPECTATORS] = "Espectadores",
-    [TXT_NOBODY] = "No hay nadie jugando ahora.",
-    [TXT_JOIN] = "Conectar",
-    [TXT_SEE_SERVER] = "Ver el servidor",
-    [TXT_CLOSE] = "Cerrar",
-    [TXT_TRAY_OPEN] = "Abrir ioquakelive",
-    [TXT_TRAY_QUIT] = "Salir",
-    [TXT_PRO_MISSING] = "Todavía no tiene perfil en Quake Club.",
-    [TXT_PRO_FAILED] = "No se pudo cargar el perfil.",
-    [TXT_HUB_PROFILE] = "Perfil",
-    [TXT_HUB_MATCHES] = "Partidas",
-    [TXT_HUB_RANKING] = "Ranking",
-    [TXT_HUB_SERVERS] = "Servidores",
-    [TXT_NAV_HOME] = "Inicio",
-    [TXT_NAV_MATCHES] = "Mis partidas",
-    [TXT_DEMOS] = "Demos",
-    [TXT_DEMOS_OF] = "Demos de",
-    [TXT_DEMO_ALL] = "Todas",
-    [TXT_DEMO_MINE] = "Mis demos",
-    [TXT_DEMO_WATCH] = "Ver demo",
-    [TXT_DEMO_GET] = "Descargar",
-    [TXT_DEMO_FAILED] = "No se pudo descargar",
-    [TXT_TOAST_DEMO_FAIL] = "No se pudo descargar la demo.",
-    [TXT_TOAST_DEMO_OK] = "Demo descargada.",
-    [TXT_TOAST_START] = "No se pudo abrir el juego.",
-    [TXT_DEMO_BY] = "Grabada por",
-    [TXT_DEMO_RESULT] = "Resultado",
-    [TXT_DEMO_TIME] = "Hora",
-    [TXT_DEMO_SIZE] = "Peso",
-    [TXT_DEMO_LOOKING] = "Mirando",
-    [TXT_DEMO_NO_RESULT] = "Sin resultado",
-    [TXT_DEMO_TODAY] = "Hoy",
-    [TXT_DEMO_YESTERDAY] = "Ayer",
-    [TXT_DEMO_EMPTY] = "Todavía no hay demos.",
-    [TXT_DEMO_EMPTY_MODE] = "No hay demos de %s.",
-    [TXT_HUB_SITE] = "Ver en la web",
-    [TXT_HUB_SINCE] = "Miembro desde %s",
-    [TXT_HUB_ABOUT] = "Sobre mí",
-    [TXT_HUB_SEASON] = "Season %d",
-    [TXT_HUB_STATS] = "Estadísticas",
-    [TXT_HUB_TIER] = "Tier",
-    [TXT_HUB_ELO] = "%s ELO",
-    [TXT_HUB_CALIBRATING] = "Calibrando",
-    [TXT_HUB_INACTIVE] = "Inactivo",
-    [TXT_HUB_BANNED] = "Baneado",
-    [TXT_HUB_GLOBAL] = "Global Ranking",
-    [TXT_HUB_PLAYERS] = "%s jugadores",
-    [TXT_HUB_PLAYERS_IN] = "%s jugadores en %s",
-    [TXT_HUB_FEWER] = "menos de %d partidas en %s",
-    [TXT_HUB_DIDNT] = "no jugó %s",
-    [TXT_HUB_UNRANKED] = "Sin rango",
-    [TXT_HUB_TO_ENTER] = "partidas para entrar",
-    [TXT_HUB_COME_BACK] = "vuelve a jugar para reaparecer",
-    [TXT_HUB_RECORD] = "Registro de partidas",
-    [TXT_HUB_WINRATE] = "%d%% winrate",
-    [TXT_HUB_KD] = "K/D Ratio",
-    [TXT_HUB_FRAGS] = "%s frags / %s muertes",
-    [TXT_HUB_CLUTCH] = "Clutch",
-    [TXT_HUB_CLUTCH_SOON] = "se mide desde el 17 de noviembre",
-    [TXT_HUB_CLUTCH_OF] = "de %s veces último en pie",
-    [TXT_HUB_FAV] = "Mapa más jugado",
-    [TXT_HUB_FAV_NONE] = "Ninguno todavía",
-    [TXT_HUB_HISTORY] = "Rendimiento histórico",
-    [TXT_HUB_HISTORY_S1] = "El historial de ELO se guarda desde la Season 2.",
-    [TXT_HUB_HISTORY_FEW] = "Todavía no tiene suficientes partidas para dibujar su ELO.",
-    [TXT_HUB_ELO_AT] = "%s de ELO",
-    [TXT_HUB_UP] = "Subió %d",
-    [TXT_HUB_DOWN] = "Bajó %d",
-    [TXT_HUB_ACCURACY] = "Accuracy",
-    [TXT_HUB_ACC] = "%s %% ACC",
-    [TXT_HUB_NO_WEAPONS_IN] = "No registró armas en %s en la %s.",
-    [TXT_HUB_NO_WEAPONS] = "Todavía no tiene armas registradas en %s.",
-    [TXT_HUB_MEDALS] = "Medallas",
-    [TXT_HUB_NO_MEDALS_IN] = "No ganó medallas en %s en la %s.",
-    [TXT_HUB_NO_MEDALS] = "Todavía no tiene medallas en %s.",
-    [TXT_HUB_RECENT] = "Últimas partidas",
-    [TXT_HUB_SEE_ALL] = "Ver todas",
-    [TXT_HUB_COL_SERVER] = "Servidor",
-    [TXT_HUB_COL_VS] = "Contra",
-    [TXT_HUB_COL_FRAGS] = "Frags",
-    [TXT_HUB_COL_ELO] = "ELO",
-    [TXT_HUB_COL_DATE] = "Fecha",
-    [TXT_HUB_GAME_FRAGS] = "%d frags / %d muertes",
-    [TXT_HUB_NO_GAMES_IN] = "No jugó %s en la %s.",
-    [TXT_HUB_NO_GAMES] = "Todavía no tiene partidas de %s.",
-    [TXT_HUB_GAMES_OF] = "Partidas de",
-    [TXT_HUB_ALL] = "Todos",
-    [TXT_HUB_COUNT_ALL] = "%s partidas jugadas",
-    [TXT_HUB_COUNT_ALL_ONE] = "%s partida jugada",
-    [TXT_HUB_COUNT_MODE] = "%s partidas de %s",
-    [TXT_HUB_COUNT_MODE_ONE] = "%s partida de %s",
-    [TXT_HUB_NONE_YET] = "Todavía no tiene partidas registradas.",
-    [TXT_HUB_EMPTY_ALL] = "Todavía no hay partidas.",
-    [TXT_HUB_EMPTY_MODE] = "No hay partidas de %s.",
-    [TXT_HUB_PREV] = "Anterior",
-    [TXT_HUB_NEXT] = "Siguiente",
-    [TXT_HUB_PAGE] = "Página %d de %d",
-    [TXT_HUB_COL_RANK] = "#",
-    [TXT_HUB_COL_PLAYER] = "Jugador",
-    [TXT_HUB_COL_GAMES] = "Partidos jugados",
-    [TXT_HUB_COL_WINS] = "Victorias",
-    [TXT_HUB_COL_LAST] = "Último en pie",
-    [TXT_HUB_COL_KD] = "K/D",
-    [TXT_HUB_RANK_EMPTY] = "Todavía no hay jugadores clasificados en %s.",
-    [TXT_HUB_BACK] = "Volver",
-    [TXT_HUB_NOT_RATED] = "No cuenta para el ranking",
-    [TXT_HUB_WHY_ABORTED] = ": la partida se abortó.",
-    [TXT_HUB_WHY_FEW] = ": faltaron jugadores.",
-    [TXT_HUB_WHY_SHORT] = ": duró demasiado poco.",
-    [TXT_HUB_WHY_RATED] = ": no es una partida puntuada.",
-    [TXT_HUB_SUMMARY] = "Resumen",
-    [TXT_HUB_WEAPONS] = "Armas",
-    [TXT_HUB_FLAGS] = "Banderas",
-    [TXT_HUB_RED] = "Red Team",
-    [TXT_HUB_BLUE] = "Blue Team",
-    [TXT_HUB_WON] = "Ganó",
-    [TXT_HUB_LOST] = "Perdió",
-    [TXT_HUB_TIE] = "Empate",
-    [TXT_HUB_WINNER] = "Ganó %s",
-    [TXT_HUB_COL_SCORE] = "Puntos",
-    [TXT_HUB_COL_PERF] = "Performance",
-    [TXT_HUB_COL_DEATHS] = "Muertes",
-    [TXT_HUB_COL_DAMAGE] = "Daño",
-    [TXT_HUB_COL_ACC] = "ACC",
-    [TXT_HUB_COL_DIFF] = "+/-",
-    [TXT_HUB_W_RL] = "RL",
-    [TXT_HUB_W_LG] = "LG",
-    [TXT_HUB_W_RG] = "RG",
-    [TXT_HUB_W_SG] = "SG",
-    [TXT_HUB_W_MG] = "MG",
-    [TXT_HUB_UNUSED] = "No la usó",
-    [TXT_HUB_HITS] = "%d de %d",
-    [TXT_HUB_NO_MATCH_MEDALS] = "Sin medallas en esta partida",
-    [TXT_HUB_CAPTURED] = "Capturó",
-    [TXT_HUB_RETURNED] = "Devolvió",
-    [TXT_HUB_TOOK] = "Tomó",
-    [TXT_HUB_DROPPED] = "Soltó",
-    [TXT_HUB_CARRIER] = "Bajas al portador",
-    [TXT_HUB_LOADING] = "Cargando...",
-    [TXT_HUB_FAILED] = "No se pudo cargar.",
-    [TXT_FR_TITLE] = "Amigos",
-    [TXT_FR_ONLINE] = "%d en línea",
-    [TXT_FR_SEC_QL] = "En Quake Live",
-    [TXT_FR_SEC_ONLINE] = "En línea",
-    [TXT_FR_SEC_OFFLINE] = "Desconectados",
-    [TXT_FR_MATCH] = "En partida: %s en %s",
-    [TXT_FR_MATCH_MAP] = "En partida en %s",
-    [TXT_FR_MODE_MAP] = "%s en %s",
-    [TXT_FR_IN_MATCH] = "En partida",
-    [TXT_FR_JOINING] = "Entrando a una partida",
-    [TXT_FR_DEMO] = "Viendo una demo",
-    [TXT_FR_MENU] = "En el menú",
-    [TXT_FR_LAUNCHER] = "En el launcher",
-    [TXT_FR_QL] = "Jugando a Quake Live",
-    [TXT_FR_OTHER] = "Jugando a otro juego",
-    [TXT_FR_AVAILABLE] = "En línea",
-    [TXT_FR_AWAY] = "Ausente",
-    [TXT_FR_BUSY] = "Ocupado",
-    [TXT_FR_OFFLINE] = "Desconectado",
-    [TXT_FR_MINUTES] = "hace %d min",
-    [TXT_FR_HOURS] = "hace %d h",
-    [TXT_FR_JOIN] = "Unirse",
-    [TXT_INVITE] = "Invitar",
-    [TXT_INVITED] = "Invitado",
-    [TXT_INVITE_NONE] = "No hay amigos en línea para invitar.",
-    [TXT_INVITE_FAILED] = "No se pudo enviar la invitación.",
-    [TXT_FR_STEAM_CLOSED] = "Abre Steam para ver a tus amigos.",
-    [TXT_FR_OPEN_STEAM] = "Abrir Steam",
-    [TXT_FR_CONNECTING] = "Conectando con Steam...",
-    [TXT_FR_STEAM_FAILED] = "No se pudo conectar con Steam.",
-    [TXT_FR_NO_STEAM] = "No se encontró Steam en tu equipo.",
-    [TXT_FR_NONE] = "Todavía no tienes amigos en Steam.",
+static const char* textsLang[LANG_COUNT][TXT_COUNT];
+static const char** texts = textsLang[LANG_ES];
+static int lang = LANG_ES;
+static bool langChosen, langOpen;
+static float langHeat;
+static image_t langFlags[LANG_COUNT];
+
+#define X(id) #id,
+static const char* const textIds[TXT_COUNT] = {
+#include "launcher_text_ids.h"
 };
+#undef X
 
 #define T(id) texts[id]
 
@@ -3531,6 +3024,42 @@ static const char* Json_Value(const char* text, const char* key) {
     return p;
 }
 
+static void Json_Text(const char* p, char* out, int size);
+
+static void Lang_Use(int id) {
+    lang = id;
+    texts = textsLang[id];
+}
+
+static void Texts_Load(void) {
+    static const unsigned char* const files[LANG_COUNT] = {localeEn, localeEs};
+    SDL_Locale** locales;
+    char key[64], value[1024];
+    int count = 0, i, l;
+
+    for (l = 0; l < LANG_COUNT; l++) {
+        for (i = 0; i < TXT_COUNT; i++) {
+            const char* p;
+
+            SDL_snprintf(key, sizeof(key), "\"%s\"", textIds[i]);
+            p = Json_Value((const char*)files[l], key);
+            if (!p) {
+                p = Json_Value((const char*)localeEs, key);
+            }
+            Json_Text(p, value, sizeof(value));
+            textsLang[l][i] = SDL_strdup(value[0] ? value : textIds[i]);
+        }
+    }
+    locales = SDL_GetPreferredLocales(&count);
+    Lang_Use(locales && count > 0 && locales[0]->language && !SDL_strcasecmp(locales[0]->language, "en") ? LANG_EN : LANG_ES);
+    SDL_free(locales);
+#ifdef LAUNCHER_SHOT
+    if (SDL_getenv("LAUNCHER_LANG")) {
+        Lang_Use(SDL_strcmp(SDL_getenv("LAUNCHER_LANG"), "en") ? LANG_ES : LANG_EN);
+    }
+#endif
+}
+
 static void Json_Text(const char* p, char* out, int size) {
     int n = 0;
 
@@ -4390,6 +3919,15 @@ static void Settings_Load(void) {
                  : strstr(text, "setup 4") ? STEP_PREFS
                                            : STEP_NONE;
     betaChannel = text && strstr(text, "channel beta") != NULL;
+    if (text) {
+        char word[8] = "";
+
+        Cfg_Word(text, "language", word, sizeof(word));
+        if (!SDL_strcmp(word, "en") || !SDL_strcmp(word, "es")) {
+            Lang_Use(word[1] == 'n' ? LANG_EN : LANG_ES);
+            langChosen = true;
+        }
+    }
     SDL_free(text);
 }
 
@@ -4402,6 +3940,9 @@ static void Settings_Write(const char* root) {
     }
     if (betaChannel) {
         SDL_strlcat(text, "channel beta\n", sizeof(text));
+    }
+    if (langChosen) {
+        SDL_strlcat(text, lang == LANG_EN ? "language en\n" : "language es\n", sizeof(text));
     }
     SDL_snprintf(path, sizeof(path), "%sbaseq3/launcher.cfg", root);
     SDL_SaveFile(path, text, strlen(text));
@@ -5906,17 +5447,17 @@ typedef struct {
 } hubWeapon_t;
 
 typedef struct {
-    char id[48], map[32], mode[8], server[128], rival[96], date[32];
-    int kills, deaths, elo;
+    char id[48], map[32], mode[8], server[128], rival[96];
+    int kills, deaths, elo, day, month;
     bool win, draw, counts;
 } hubGame_t;
 
 typedef struct {
     int status;
-    char steamId[24], raw[128], avatar[200], banner[200], flag[200], clanName[96], title[128], since[48], country[4];
+    char steamId[24], raw[128], avatar[200], banner[200], flag[200], clanName[96], title[128], country[4];
     char bio[600];
     Uint32 titleColor;
-    int hue;
+    int hue, sinceMonth, sinceYear;
     bool clan, registered;
     int rating[HUB_MODES], wins[HUB_MODES], losses[HUB_MODES], draws[HUB_MODES], games[HUB_MODES];
     bool rated[HUB_MODES];
@@ -6035,21 +5576,20 @@ static const char* const hubTierImage[8] = {"/tiers/tier_gran_maestro@128.png", 
                                             "/tiers/tier_2@128.png", "/tiers/tier_3@128.png", "/tiers/tier_4@128.png",
                                             "/tiers/tier_5@128.png", "/tiers/tier_6@128.png"};
 static const int hubTierMin[8] = {2500, 2250, 2000, 1800, 1600, 1400, 1200, 0};
-static const char* const hubMonths[12] = {"enero", "febrero", "marzo", "abril", "mayo", "junio",
-                                          "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
-static const char* const hubCountries[][2] = {
-    {"CL", "Chile"},          {"AR", "Argentina"},       {"BR", "Brasil"},         {"PE", "Perú"},           {"CO", "Colombia"},
-    {"MX", "México"},         {"VE", "Venezuela"},       {"EC", "Ecuador"},        {"UY", "Uruguay"},        {"PY", "Paraguay"},
-    {"BO", "Bolivia"},        {"CR", "Costa Rica"},      {"PA", "Panamá"},         {"GT", "Guatemala"},      {"HN", "Honduras"},
-    {"SV", "El Salvador"},    {"NI", "Nicaragua"},       {"DO", "República Dominicana"}, {"CU", "Cuba"},     {"PR", "Puerto Rico"},
-    {"ES", "España"},         {"US", "Estados Unidos"},  {"CA", "Canadá"},         {"GB", "Reino Unido"},    {"DE", "Alemania"},
-    {"FR", "Francia"},        {"IT", "Italia"},          {"PT", "Portugal"},       {"RU", "Rusia"},          {"CN", "China"},
-    {"JP", "Japón"},          {"KR", "Corea del Sur"},   {"AU", "Australia"},      {"NZ", "Nueva Zelanda"},  {"SE", "Suecia"},
-    {"NO", "Noruega"},        {"FI", "Finlandia"},       {"DK", "Dinamarca"},      {"NL", "Países Bajos"},   {"BE", "Bélgica"},
-    {"PL", "Polonia"},        {"UA", "Ucrania"},         {"CZ", "República Checa"}, {"AT", "Austria"},       {"CH", "Suiza"},
-    {"IE", "Irlanda"},        {"ZA", "Sudáfrica"},       {"IN", "India"},          {"PH", "Filipinas"},      {"TH", "Tailandia"},
-    {"MY", "Malasia"},        {"SG", "Singapur"},        {"ID", "Indonesia"},      {"VN", "Vietnam"},        {"TR", "Turquía"},
-    {"IL", "Israel"},         {"SA", "Arabia Saudita"},  {"AE", "Emiratos Árabes"}, {"EG", "Egipto"}};
+static const struct {
+    const char* code;
+    int text;
+} hubCountries[] = {
+    {"CL", TXT_COUNTRY_CL}, {"AR", TXT_COUNTRY_AR}, {"BR", TXT_COUNTRY_BR}, {"PE", TXT_COUNTRY_PE}, {"CO", TXT_COUNTRY_CO}, {"MX", TXT_COUNTRY_MX},
+    {"VE", TXT_COUNTRY_VE}, {"EC", TXT_COUNTRY_EC}, {"UY", TXT_COUNTRY_UY}, {"PY", TXT_COUNTRY_PY}, {"BO", TXT_COUNTRY_BO}, {"CR", TXT_COUNTRY_CR},
+    {"PA", TXT_COUNTRY_PA}, {"GT", TXT_COUNTRY_GT}, {"HN", TXT_COUNTRY_HN}, {"SV", TXT_COUNTRY_SV}, {"NI", TXT_COUNTRY_NI}, {"DO", TXT_COUNTRY_DO},
+    {"CU", TXT_COUNTRY_CU}, {"PR", TXT_COUNTRY_PR}, {"ES", TXT_COUNTRY_ES}, {"US", TXT_COUNTRY_US}, {"CA", TXT_COUNTRY_CA}, {"GB", TXT_COUNTRY_GB},
+    {"DE", TXT_COUNTRY_DE}, {"FR", TXT_COUNTRY_FR}, {"IT", TXT_COUNTRY_IT}, {"PT", TXT_COUNTRY_PT}, {"RU", TXT_COUNTRY_RU}, {"CN", TXT_COUNTRY_CN},
+    {"JP", TXT_COUNTRY_JP}, {"KR", TXT_COUNTRY_KR}, {"AU", TXT_COUNTRY_AU}, {"NZ", TXT_COUNTRY_NZ}, {"SE", TXT_COUNTRY_SE}, {"NO", TXT_COUNTRY_NO},
+    {"FI", TXT_COUNTRY_FI}, {"DK", TXT_COUNTRY_DK}, {"NL", TXT_COUNTRY_NL}, {"BE", TXT_COUNTRY_BE}, {"PL", TXT_COUNTRY_PL}, {"UA", TXT_COUNTRY_UA},
+    {"CZ", TXT_COUNTRY_CZ}, {"AT", TXT_COUNTRY_AT}, {"CH", TXT_COUNTRY_CH}, {"IE", TXT_COUNTRY_IE}, {"ZA", TXT_COUNTRY_ZA}, {"IN", TXT_COUNTRY_IN},
+    {"PH", TXT_COUNTRY_PH}, {"TH", TXT_COUNTRY_TH}, {"MY", TXT_COUNTRY_MY}, {"SG", TXT_COUNTRY_SG}, {"ID", TXT_COUNTRY_ID}, {"VN", TXT_COUNTRY_VN},
+    {"TR", TXT_COUNTRY_TR}, {"IL", TXT_COUNTRY_IL}, {"SA", TXT_COUNTRY_SA}, {"AE", TXT_COUNTRY_AE}, {"EG", TXT_COUNTRY_EG}};
 static const char* const hubMaps[][2] = {
     {"theedge", "The Edge"},           {"hellsgateredux", "Hellsgate Redux"}, {"hellsgate", "Hellsgate"},
     {"hiddenfortress", "Hidden Fortress"}, {"campgrounds", "Campgrounds"},  {"wintercampgrounds", "Winter Campgrounds"},
@@ -6250,9 +5790,10 @@ static void Hub_Game(const char* item, hubGame_t* g) {
     Json_Text(Json_Value(item, "\"gameStatus\""), value, sizeof(value));
     g->counts = !Json_Value(item, "\"isRated\":false") && !Json_True(item, "\"isAborted\"") && (!value[0] || !SDL_strcmp(value, "SUCCESS"));
     Json_Text(Json_Value(item, "\"playedAt\""), value, sizeof(value));
-    g->date[0] = '\0';
+    g->month = 0;
     if (Iso_Local(value, &dt) && dt.month >= 1 && dt.month <= 12) {
-        SDL_snprintf(g->date, sizeof(g->date), "%d de %s", dt.day, hubMonths[dt.month - 1]);
+        g->day = dt.day;
+        g->month = dt.month;
     }
 }
 
@@ -6333,8 +5874,10 @@ static void Hub_LoadPlayer(const char* key, void* out) {
         SDL_strlcpy(pl->country, "CL", sizeof(pl->country));
     }
     Json_Text(Json_Value(text, "\"createdAt\""), value, sizeof(value));
+    pl->sinceMonth = 0;
     if (Iso_Local(value, &dt) && dt.month >= 1 && dt.month <= 12) {
-        SDL_snprintf(pl->since, sizeof(pl->since), "%s de %d", hubMonths[dt.month - 1], dt.year);
+        pl->sinceMonth = dt.month;
+        pl->sinceYear = dt.year;
     }
     pl->registered = !Json_Value(text, "\"isRegistered\":false");
     m = Json_Int(text, "\"profileHueEfectivo\"", &have);
@@ -7002,6 +6545,7 @@ static void Hub_Open(int tab, const char* steamId) {
     hubOpen = true;
     boxOpen = false;
     optsOpen = false;
+    langOpen = false;
     if (tab == HUB_SERVERS && SDL_GetTicks() - serversWhen > 10000) {
         Servers_Fetch();
     }
@@ -7656,6 +7200,22 @@ static void Flag_Copy(const char* code, picNew_t* n) {
                 SDL_memcpy(n->data, launcherFlags + start, n->size);
             }
             return;
+        }
+    }
+}
+
+static void Lang_Flags(void) {
+    static const char* const codes[LANG_COUNT] = {"us", "cl"};
+    int i;
+
+    for (i = 0; i < LANG_COUNT; i++) {
+        picNew_t n;
+
+        SDL_zero(n);
+        Flag_Copy(codes[i], &n);
+        if (n.data) {
+            Image_FromPng(&langFlags[i], n.data, (unsigned int)n.size, FLAG_SIDE);
+            free(n.data);
         }
     }
 }
@@ -8704,6 +8264,11 @@ static void Draw_Top(void) {
     if (b->visible) {
         Draw_Spin(&iconGear, b->x + (b->w - GEAR_ICON) * 0.5f, b->y + (b->h - GEAR_ICON) * 0.5f, 0.0f, COL_WHITE);
     }
+    b = &buttons[BTN_LANG];
+    if (b->visible) {
+        Draw_Image(&langFlags[lang], b->x + (b->w - FLAG_SIDE) * 0.5f, b->y + (b->h - FLAG_SIDE) * 0.5f, FLAG_SIDE, FLAG_SIDE, 1.0f);
+    }
+    Draw_Rect(UI_W - CTRL_W * 2.0f, TOP_MID - 8.0f, 1.0f, 16.0f, COL_LINE);
     b = &buttons[BTN_MIN];
     Draw_Rect(b->x + 16.0f, b->y + 18.0f, 12.0f, 1.0f, COL_WHITE);
     b = &buttons[BTN_CLOSE];
@@ -9388,6 +8953,36 @@ static void Draw_Options(void) {
     }
 }
 
+static void Draw_Languages(void) {
+    float open = langHeat * langHeat * (3.0f - 2.0f * langHeat);
+    float drop = (open - 1.0f) * 6.0f;
+    int i;
+
+    for (i = 0; i < LANG_COUNT; i++) {
+        Button_Set(BTN_LANG_0 + i, LANG_X + MENU_PAD, OPTS_Y + MENU_PAD + OPTS_ROW * (float)i, LANG_W - MENU_PAD * 2.0f, OPTS_ROW, langOpen);
+    }
+    if (open <= 0.0f) {
+        return;
+    }
+    Draw_Shadow(LANG_X, OPTS_Y + drop, LANG_W, LANG_H, BUTTON_R, open);
+    Draw_Round(LANG_X - 1.0f, OPTS_Y + drop - 1.0f, LANG_W + 2.0f, LANG_H + 2.0f, BUTTON_R + 1.0f, Col_Alpha(COL_RING, open));
+    Draw_Round(LANG_X, OPTS_Y + drop, LANG_W, LANG_H, BUTTON_R, Col_Alpha(COL_P3, open));
+    for (i = 0; i < LANG_COUNT; i++) {
+        const button_t* b = &buttons[BTN_LANG_0 + i];
+        float mid = b->y + drop + b->h * 0.5f, hot = heat[BTN_LANG_0 + i];
+
+        if (hot > 0.0f) {
+            Draw_Round(b->x, b->y + drop, b->w, b->h, ITEM_R, Col_Alpha(COL_P4, open * hot));
+        }
+        Draw_Image(&langFlags[i], b->x + 12.0f, mid - FLAG_SIDE * 0.5f, FLAG_SIDE, FLAG_SIDE, open);
+        Draw_Text(FONT_TEXT, b->x + 22.0f + FLAG_SIDE, Text_Mid(FONT_TEXT, mid), Col_Alpha(i == lang ? COL_WHITE : Col_Mix(COL_W70, COL_WHITE, hot), open),
+                  textsLang[i][TXT_LANG_NAME], -1);
+        if (i == lang) {
+            Draw_Spin(&iconCheck, b->x + b->w - 14.0f - CHECK_ICON, mid - CHECK_ICON * 0.5f, 0.0f, Col_Alpha(COL_WHITE, open));
+        }
+    }
+}
+
 static float Button_Width(const char* text) {
     return Caps_Width(FONT_BOXBTN, text, TRACK_BUTTON) + 40.0f;
 }
@@ -9877,8 +9472,8 @@ static const char* Country_Name(const char* code) {
     int i;
 
     for (i = 0; i < (int)SDL_arraysize(hubCountries); i++) {
-        if (!SDL_strcmp(code, hubCountries[i][0])) {
-            return hubCountries[i][1];
+        if (!SDL_strcmp(code, hubCountries[i].code)) {
+            return T(hubCountries[i].text);
         }
     }
     return code;
@@ -10066,8 +9661,9 @@ static float Hub_Header(float y) {
         Draw_Caps(FONT_HUB_DATA, x, mid, tone.ink, clean, 0.48f);
         x += Caps_Width(FONT_HUB_DATA, clean, 0.48f) + 16.0f;
     }
-    if (pl->since[0]) {
-        SDL_snprintf(line, sizeof(line), T(TXT_HUB_SINCE), pl->since);
+    if (pl->sinceMonth) {
+        SDL_snprintf(clean, sizeof(clean), T(TXT_DATE_MONTH_YEAR), T(TXT_MONTH_1 + pl->sinceMonth - 1), pl->sinceYear);
+        SDL_snprintf(line, sizeof(line), T(TXT_HUB_SINCE), clean);
         Draw_Caps(FONT_HUB_DATA, x, mid, tone.ink2, line, 0.48f);
     }
     return top + strip;
@@ -10593,7 +10189,11 @@ static void Hub_GameRow(const hubGame_t* g, int index, float x, float y, float w
     } else {
         Hub_Plain(FONT_HUB_GLOBEB, col[5], mid, tone.ink2, "-", 0.0f);
     }
-    Hub_Fit(FONT_HUB_DATO, col[6], mid, tone.ink2, g->date, col[7] - col[6]);
+    line[0] = '\0';
+    if (g->month) {
+        SDL_snprintf(line, sizeof(line), T(TXT_DATE_DAY_MONTH), g->day, T(TXT_MONTH_1 + g->month - 1));
+    }
+    Hub_Fit(FONT_HUB_DATO, col[6], mid, tone.ink2, line, col[7] - col[6]);
 }
 
 static float Hub_RecentCard(float y) {
@@ -10793,14 +10393,13 @@ static void Demo_Size(int bytes, char* out, size_t size) {
     if (bytes >= 1024 * 1024) {
         int tenths = (int)((float)bytes / (1024.0f * 1024.0f) * 10.0f + 0.5f);
 
-        SDL_snprintf(out, size, "%d,%d MB", tenths / 10, tenths % 10);
+        SDL_snprintf(out, size, T(TXT_SIZE_MB), tenths / 10, tenths % 10);
     } else {
         SDL_snprintf(out, size, "%d KB", SDL_max(1, (bytes + 512) / 1024));
     }
 }
 
 static void Demo_DayName(const char* day, char* out, size_t size) {
-    static const char* const days[7] = {"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"};
     SDL_DateTime now, ago;
     SDL_Time t;
     char today[12] = "", yesterday[12] = "";
@@ -10815,7 +10414,7 @@ static void Demo_DayName(const char* day, char* out, size_t size) {
     } else if (!SDL_strcmp(day, yesterday)) {
         SDL_strlcpy(out, T(TXT_DEMO_YESTERDAY), size);
     } else if (SDL_sscanf(day, "%d-%d-%d", &y, &m, &d) == 3 && m >= 1 && m <= 12 && (wd = SDL_GetDayOfWeek(y, m, d)) >= 0) {
-        SDL_snprintf(out, size, "%s, %d de %s", days[wd], d, hubMonths[m - 1]);
+        SDL_snprintf(out, size, T(TXT_DATE_WEEKDAY), T(TXT_DAY_0 + wd), d, T(TXT_MONTH_1 + m - 1));
     } else {
         SDL_strlcpy(out, day, size);
     }
@@ -11568,7 +11167,7 @@ static void Hub_Draw(void) {
     e = 1.0f - (1.0f - e) * (1.0f - e) * (1.0f - e) * (1.0f - e);
     rise = (1.0f - e) * (PANEL_Y - HUB_Y);
     end = PANEL_END - rise;
-    hubLive = k >= 1.0f && hubOpen && !boxOpen && !optsOpen && !leaving;
+    hubLive = k >= 1.0f && hubOpen && !boxOpen && !optsOpen && !langOpen && !leaving;
     shown = 1.0f - (1.0f - hubSwap) * (1.0f - hubSwap);
     shift = leaving ? (shown - 1.0f) * 10.0f : (1.0f - shown) * 18.0f;
     View_Shift(rise);
@@ -12925,6 +12524,7 @@ static void Draw_Frame(void) {
     Draw_Status();
     Friends_Draw();
     Draw_Options();
+    Draw_Languages();
     if (boxOpen) {
         Buttons_Hide(BTN_PLAY, BTN_OPTS);
         Buttons_Hide(BTN_MENU_0, BTN_SIDE_LAST);
@@ -13052,6 +12652,7 @@ static bool Heat_Update(float dt, bool notes) {
         moving |= Glide(&pillW, navW[Nav_Active()], dt * 14.0f, 0.05f);
     }
     moving |= Ease(&optsHeat, optsOpen ? 1.0f : 0.0f, dt * 7.0f);
+    moving |= Ease(&langHeat, langOpen ? 1.0f : 0.0f, dt * 7.0f);
     moving |= Hub_Update(dt);
     moving |= Anim_Update();
     moving |= Art_Follow(dt);
@@ -13136,7 +12737,7 @@ static SDL_HitTestResult SDLCALL Window_HitTest(SDL_Window* win, const SDL_Point
 
     (void)win;
     (void)data;
-    if (optsOpen || Button_At(x, y) >= 0) {
+    if (optsOpen || langOpen || Button_At(x, y) >= 0) {
         return SDL_HITTEST_NORMAL;
     }
     if (notesHeight > notesView + 0.5f && x >= COL_X && x < SIDE_X - 24.0f && y >= BODY_TOP) {
@@ -13255,13 +12856,27 @@ static bool Play_Refused(float x, float y) {
            !steamLaunch && x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h;
 }
 
+static void Lang_Pick(int id) {
+    Lang_Use(id);
+    langChosen = true;
+    Settings_Save();
+    Tray_Labels();
+}
+
 static bool Button_Press(int index) {
-    bool wasOpts = optsOpen;
+    bool wasOpts = optsOpen, wasLang = langOpen;
 
     optsOpen = false;
+    langOpen = false;
     if (index >= BTN_MENU_0 && index <= BTN_MENU_LAST) {
         if (wasOpts) {
             Option_Pick(index - BTN_MENU_0);
+        }
+        return false;
+    }
+    if (index >= BTN_LANG_0 && index <= BTN_LANG_LAST) {
+        if (wasLang) {
+            Lang_Pick(index - BTN_LANG_0);
         }
         return false;
     }
@@ -13325,6 +12940,9 @@ static bool Button_Press(int index) {
         case BTN_BOX_CLOSE:
         case BTN_VEIL:
             boxOpen = false;
+            break;
+        case BTN_LANG:
+            langOpen = !wasLang;
             break;
         case BTN_OPTS:
             optsOpen = !wasOpts;
@@ -13416,8 +13034,9 @@ static bool Key_Press(SDL_Keycode key) {
         }
         return false;
     }
-    if (optsOpen) {
+    if (optsOpen || langOpen) {
         optsOpen = false;
+        langOpen = false;
         return false;
     }
     if (hubOpen) {
@@ -13592,6 +13211,8 @@ int main(int argc, char** argv) {
     Uint64 last, now;
     char stale[1100], failure[256];
 
+    Texts_Load();
+
 #ifdef LAUNCHER_SHOT
     const char* option;
     bool autoUpdate = false, autoRepair = false;
@@ -13607,6 +13228,7 @@ int main(int argc, char** argv) {
     }
     option = SDL_getenv("LAUNCHER_TAB");
     optsOpen = option && option[0] == '4';
+    langOpen = option && option[0] == '9';
     hubShotTab = option && (option[0] == '5' || option[0] == '6' || option[0] == '8') ? HUB_SERVERS : -1;
     hubShotY = option && option[0] == '6' ? 10000.0f : -1.0f;
     boxWant = option && (option[0] == '7' || option[0] == '8') ? 1 : 0;
@@ -13758,6 +13380,7 @@ int main(int argc, char** argv) {
     Image_FromPng(&iconSteam, launcherSteam, launcherSteamSize, STEAM_ICON);
     Image_FromPng(&iconDiscord, launcherDiscord, launcherDiscordSize, DISCORD_ICON);
     Icons_Load();
+    Lang_Flags();
     Image_LoadHero();
     Art_Blur();
     Image_Vignette();
@@ -13996,6 +13619,7 @@ int main(int argc, char** argv) {
             }
 #endif
             optsHeat = optsOpen ? 1.0f : 0.0f;
+            langHeat = langOpen ? 1.0f : 0.0f;
             for (k = 0; k < shotCount; k++) {
                 shots[k].heat = 1.0f;
             }
